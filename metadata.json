@@ -1,0 +1,6 @@
+{
+  "name": "ESSENYA",
+  "description": "Ecosistema digital completo de ESSENYA: App de Clientes, App de Terapeutas, Panel Administrativo y Sitio Web Corporativo de masajes a domicilio de alta gama.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

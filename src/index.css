@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --bg-main: #FAF8F5;
+    --bg-card: #FFFFFF;
+    --bg-subcard: #F5F1EA;
+    --bg-active: #EFEAE1;
+    --text-primary: #1C1917;
+    --text-muted: #6B655F;
+    --border-color: #E5DFD3;
+    --gold-main: #C9A55B;
+    --gold-light: #E6CA65;
+    --gold-dark: #9A7B38;
+  }
+
+  .dark {
+    --bg-main: #0D0D0D;
+    --bg-card: #141414;
+    --bg-subcard: #1A1A1A;
+    --bg-active: #222222;
+    --text-primary: #F8F8F8;
+    --text-muted: #AAAAAA;
+    --border-color: #333333;
+    --gold-main: #C9A55B;
+    --gold-light: #E6CA65;
+    --gold-dark: #9A7B38;
+  }
+
+  body {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  #root {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.light ::-webkit-scrollbar-track {
+  background: #FAF8F5;
+}
+.dark ::-webkit-scrollbar-track {
+  background: #0D0D0D;
+}
+::-webkit-scrollbar-thumb {
+  background: #C9A55B;
+  border-radius: 9999px;
+}
+
+/* Gold Gradient Effects */
+.bg-gold-gradient {
+  background: linear-gradient(135deg, #E6CA65 0%, #C9A55B 50%, #9A7B38 100%);
+}
+
+.text-gold-gradient {
+  background: linear-gradient(135deg, #9A7B38 0%, #C9A55B 50%, #806020 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.dark .text-gold-gradient {
+  background: linear-gradient(135deg, #FFF3D1 0%, #E6CA65 30%, #C9A55B 70%, #B38F43 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.border-gold-glow {
+  box-shadow: 0 0 15px rgba(201, 165, 91, 0.15);
+  border: 1px solid rgba(201, 165, 91, 0.3);
+}
+
+.gold-glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(201, 165, 91, 0.25);
+}
+
+.dark .gold-glass {
+  background: rgba(20, 20, 20, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(201, 165, 91, 0.2);
+}
+
+.gold-button-hover {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.gold-button-hover:hover {
+  box-shadow: 0 0 25px rgba(201, 165, 91, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Subtle Shimmer for Premium Cards */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer-gold {
+  background: linear-gradient(90deg, rgba(201,165,91,0) 0%, rgba(201,165,91,0.08) 50%, rgba(201,165,91,0) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 4s infinite linear;
+}
+
+

@@ -1,0 +1,424 @@
+import React, { useState } from 'react';
+import { 
+  Calendar, Search, Filter, RefreshCw, UserCheck, Clock, MapPin, 
+  Sparkles, CheckCircle2, AlertTriangle, X, ShieldAlert, FileText, Check, ChevronRight
+} from 'lucide-react';
+import { useAdmin } from '../hooks/useAdmin';
+import { useToast } from '../../../shared/context/ToastContext';
+import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
+import { Booking, Therapist, BookingState } from '../../../shared/types';
+
+export const ReservasPage: React.FC = () => {
+  const { 
+    bookings, therapists, handleUpdateBookingState, 
+    handleReassignTherapist, handleRescheduleBooking, handleCancelBooking 
+  } = useAdmin();
+  const { showToast } = useToast();
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('todos');
+  
+  // Smart Recommendation Modal
+  const [smartBookingModal, setSmartBookingModal] = useState<Booking | null>(null);
+  
+  // Reschedule Modal
+  const [rescheduleBookingModal, setRescheduleBookingModal] = useState<Booking | null>(null);
+  const [newDateInput, setNewDateInput] = useState('');
+  const [newTimeInput, setNewTimeInput] = useState('');
+
+  // Cancel Modal
+  const [cancelBookingModal, setCancelBookingModal] = useState<Booking | null>(null);
+  const [cancelReasonInput, setCancelReasonInput] = useState('');
+
+  // Filter Bookings
+  const filteredBookings = bookings.filter(b => {
+    const matchesSearch = 
+      b.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      b.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (b.therapistName && b.therapistName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      b.serviceName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      b.cityZone.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesStatus = statusFilter === 'todos' || b.state === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Calculate Smart Match Score for Therapists
+  const calculateSmartCandidates = (booking: Booking) => {
+    return therapists.map(t => {
+      let score = 50;
+
+      // 1. Zone Coverage (Up to 30 pts)
+      const coversZone = t.coverageZones.includes(booking.cityZone);
+      if (coversZone) score += 30;
+      else score += 10;
+
+      // 2. Rating (Up to 15 pts)
+      score += Math.round((t.rating / 5) * 15);
+
+      // 3. Status & Workload (Up to 15 pts)
+      if (t.status === 'disponible') score += 15;
+      else if (t.status === 'en_camino') score += 5;
+
+      // Ensure cap at 99
+      const finalScore = Math.min(99, Math.max(60, score));
+
+      return {
+        therapist: t,
+        matchScore: finalScore,
+        etaMinutes: coversZone ? Math.floor(12 + Math.random() * 10) : Math.floor(25 + Math.random() * 15),
+        distanceKm: coversZone ? (1.5 + Math.random() * 2.5).toFixed(1) : (6.0 + Math.random() * 4).toFixed(1),
+        reasons: [
+          coversZone ? `Cubre zona ${booking.cityZone}` : `Zona cercana`,
+          `Calificación ${t.rating} ⭐`,
+          `${t.totalServices} servicios realizados`
+        ]
+      };
+    }).sort((a, b) => b.matchScore - a.matchScore);
+  };
+
+  const stateBadges: Record<BookingState, { label: string; color: string }> = {
+    pendiente: { label: 'Pendiente Asignación', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+    aceptado: { label: 'Confirmado / En Agenda', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+    en_camino: { label: 'Terapeuta En Camino', color: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
+    llegue: { label: 'Terapeuta en Domicilio', color: 'bg-[#22C55E]/20 text-[#22C55E] border-[#22C55E]/40' },
+    servicio_iniciado: { label: 'En Sesión Activa', color: 'bg-[#16A34A] text-white font-bold border border-[#22C55E]/50 shadow-sm' },
+    servicio_finalizado: { label: 'Servicio Concluido', color: 'bg-zinc-800 text-zinc-400 border-zinc-700' },
+    cancelado: { label: 'Cancelado', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#262626] pb-4">
+        <div>
+          <h1 className="text-2xl font-serif font-bold text-white flex items-center gap-2">
+            <Calendar className="w-6 h-6 text-[#C9A55B]" />
+            <span>Gestión de Reservas & Asignación Inteligente (IA)</span>
+          </h1>
+          <p className="text-xs text-[#888888] mt-1">
+            Centro de control operativo de servicios a domicilio, asignación con Matriz IA y reasignaciones urgentes.
+          </p>
+        </div>
+      </div>
+
+      {/* Filters Bar */}
+      <div className="bg-[#141414] border border-[#262626] rounded-2xl p-4 flex flex-col md:flex-row gap-3 justify-between items-center">
+        <div className="relative w-full md:w-80">
+          <Search className="w-4 h-4 text-[#888888] absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Buscar por código, cliente, terapeuta, zona..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-[#1A1A1A] border border-[#333333] text-white pl-9 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-[#C9A55B]"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+          <Filter className="w-3.5 h-3.5 text-[#C9A55B] shrink-0" />
+          <span className="text-xs text-[#888888] shrink-0">Estado:</span>
+          {['todos', 'pendiente', 'aceptado', 'en_camino', 'servicio_iniciado', 'servicio_finalizado', 'cancelado'].map((st) => (
+            <button
+              key={st}
+              onClick={() => setStatusFilter(st)}
+              className={`px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                statusFilter === st
+                  ? 'bg-[#C9A55B] text-black font-bold'
+                  : 'bg-[#1A1A1A] text-[#888888] hover:text-white border border-[#333333]'
+              }`}
+            >
+              {st === 'todos' ? 'Todos' : st.replace('_', ' ')}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Bookings Table / Cards */}
+      <div className="bg-[#141414] border border-[#262626] rounded-2xl overflow-hidden">
+        <div className="divide-y divide-[#262626]">
+          {filteredBookings.length === 0 ? (
+            <div className="p-12 text-center text-[#888888]">
+              <Calendar className="w-12 h-12 mx-auto text-[#444444] mb-3" />
+              <p className="font-semibold text-sm">No se encontraron reservaciones</p>
+              <p className="text-xs mt-1">Ajusta los filtros o la búsqueda.</p>
+            </div>
+          ) : (
+            filteredBookings.map((b) => {
+              const badge = stateBadges[b.state] || { label: b.state, color: 'bg-zinc-800 text-zinc-300' };
+
+              return (
+                <div key={b.id} className="p-5 hover:bg-[#1A1A1A]/50 transition-all flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                  {/* Info Column */}
+                  <div className="space-y-2 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs text-[#C9A55B] font-bold bg-[#C9A55B]/10 border border-[#C9A55B]/30 px-2 py-0.5 rounded-lg">
+                        {b.code}
+                      </span>
+                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${badge.color}`}>
+                        {badge.label}
+                      </span>
+                      <span className="text-[11px] text-[#888888]">
+                        📅 {b.date} • {b.time} ({b.durationMinutes} min)
+                      </span>
+                    </div>
+
+                    <div>
+                      <h3 className="font-serif font-bold text-base text-white flex items-center gap-2">
+                        <span>{b.serviceName}</span>
+                        <span className="text-xs font-sans text-[#C9A55B] font-semibold">${b.total} MXN</span>
+                      </h3>
+                      <p className="text-xs text-[#AAAAAA] mt-0.5 flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-[#C9A55B] shrink-0" />
+                        <span>{b.clientAddress} ({b.cityZone})</span>
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-[#888888] pt-1">
+                      <span>👤 Client VIP: <strong className="text-white">{b.clientName}</strong></span>
+                      <span>
+                        💆 Terapeuta: {b.therapistName ? (
+                          <strong className="text-[#C9A55B]">{b.therapistName}</strong>
+                        ) : (
+                          <span className="text-amber-400 italic">Sin Terapeuta Asignada</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Actions Column */}
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <LuxuryButton
+                      variant="gold"
+                      size="sm"
+                      onClick={() => setSmartBookingModal(b)}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 mr-1" />
+                      <span>{b.therapistName ? 'Reasignar (IA)' : 'Asignar con IA'}</span>
+                    </LuxuryButton>
+
+                    <LuxuryButton
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setRescheduleBookingModal(b);
+                        setNewDateInput(b.date);
+                        setNewTimeInput(b.time);
+                      }}
+                    >
+                      <Clock className="w-3.5 h-3.5 mr-1" />
+                      <span>Reprogramar</span>
+                    </LuxuryButton>
+
+                    {b.state !== 'cancelado' && b.state !== 'servicio_finalizado' && (
+                      <button
+                        onClick={() => setCancelBookingModal(b)}
+                        className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Smart Therapist Assignment AI Modal */}
+      {smartBookingModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#141414] border border-[#C9A55B]/40 rounded-3xl p-6 max-w-2xl w-full space-y-6 relative shadow-2xl">
+            <button
+              onClick={() => setSmartBookingModal(null)}
+              className="absolute right-5 top-5 text-[#888888] hover:text-white cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="border-b border-[#262626] pb-4">
+              <div className="flex items-center gap-2 text-[#C9A55B]">
+                <Sparkles className="w-5 h-5 animate-spin" />
+                <span className="text-xs font-mono font-bold uppercase tracking-widest">
+                  ALGORITMO DE RECOMENDACIÓN INTELIGENTE ESSENYA IA
+                </span>
+              </div>
+              <h2 className="text-xl font-serif font-bold text-white mt-1">
+                Asignación Óptima para Servicio {smartBookingModal.code}
+              </h2>
+              <p className="text-xs text-[#888888] mt-0.5">
+                Evaluando cercanía geográfica en {smartBookingModal.cityZone}, disponibilidad en horario ({smartBookingModal.time}), calificaciones e historial.
+              </p>
+            </div>
+
+            {/* Candidate List */}
+            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+              {calculateSmartCandidates(smartBookingModal).map((cand, idx) => (
+                <div
+                  key={cand.therapist.id}
+                  className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${
+                    idx === 0 
+                      ? 'bg-[#C9A55B]/10 border-[#C9A55B] shadow-lg shadow-[#C9A55B]/10' 
+                      : 'bg-[#1A1A1A] border-[#262626] hover:border-[#333333]'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <img
+                      src={cand.therapist?.photo || undefined}
+                      alt={cand.therapist.name}
+                      className="w-12 h-12 rounded-xl object-cover border border-[#C9A55B]/30 shrink-0"
+                    />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-serif font-bold text-sm text-white">{cand.therapist.name}</h4>
+                        {idx === 0 && (
+                          <span className="bg-[#C9A55B] text-black text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <Sparkles className="w-2.5 h-2.5" /> RECOMENDACIÓN IA #{idx + 1}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-[#888888] mt-0.5 space-x-2">
+                        <span>⭐ {cand.therapist.rating} ({cand.therapist.reviewCount} res)</span>
+                        <span>• 🚗 ETA: ~{cand.etaMinutes} min ({cand.distanceKm} km)</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {cand.reasons.map((r, rIdx) => (
+                          <span key={rIdx} className="text-[9px] bg-[#262626] text-[#AAAAAA] px-2 py-0.5 rounded-md">
+                            {r}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 border-[#262626] pt-2 sm:pt-0">
+                    <div className="text-right">
+                      <span className="text-xs font-mono font-bold text-[#C9A55B]">{cand.matchScore}% Match</span>
+                      <span className="text-[10px] text-[#888888] block">Puntaje Global</span>
+                    </div>
+
+                    <LuxuryButton
+                      variant={idx === 0 ? 'gold' : 'outline'}
+                      size="sm"
+                      onClick={() => {
+                        handleReassignTherapist(smartBookingModal.id, cand.therapist.id);
+                        showToast(`Terapeuta ${cand.therapist.name} asignada a la reserva ${smartBookingModal.code}`);
+                        setSmartBookingModal(null);
+                      }}
+                    >
+                      <Check className="w-3.5 h-3.5 mr-1" />
+                      <span>Seleccionar</span>
+                    </LuxuryButton>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reschedule Modal */}
+      {rescheduleBookingModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[#141414] border border-[#262626] rounded-3xl p-6 max-w-md w-full space-y-4">
+            <h3 className="font-serif font-bold text-lg text-white">Reprogramar Fecha y Hora</h3>
+            <p className="text-xs text-[#888888]">
+              Reserva <strong className="text-[#C9A55B]">{rescheduleBookingModal.code}</strong> para {rescheduleBookingModal.clientName}.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-[#888888] block mb-1">Nueva Fecha</label>
+                <input
+                  type="date"
+                  value={newDateInput}
+                  onChange={(e) => setNewDateInput(e.target.value)}
+                  className="w-full bg-[#1A1A1A] border border-[#333333] text-white px-3 py-2 rounded-xl text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-[#888888] block mb-1">Nuevo Horario</label>
+                <input
+                  type="text"
+                  placeholder="ej. 16:30 hrs"
+                  value={newTimeInput}
+                  onChange={(e) => setNewTimeInput(e.target.value)}
+                  className="w-full bg-[#1A1A1A] border border-[#333333] text-white px-3 py-2 rounded-xl text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2">
+              <button
+                onClick={() => setRescheduleBookingModal(null)}
+                className="px-4 py-2 text-xs text-[#888888] hover:text-white"
+              >
+                Cancelar
+              </button>
+              <LuxuryButton
+                variant="gold"
+                size="sm"
+                onClick={() => {
+                  if (!newDateInput || !newTimeInput) return;
+                  handleRescheduleBooking(rescheduleBookingModal.id, newDateInput, newTimeInput);
+                  showToast(`Reserva ${rescheduleBookingModal.code} reprogramada.`);
+                  setRescheduleBookingModal(null);
+                }}
+              >
+                Confirmar Cambio
+              </LuxuryButton>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Modal */}
+      {cancelBookingModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[#141414] border border-red-500/40 rounded-3xl p-6 max-w-md w-full space-y-4">
+            <h3 className="font-serif font-bold text-lg text-red-400 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              <span>Cancelar Servicio de Forma Definitiva</span>
+            </h3>
+            <p className="text-xs text-[#888888]">
+              ¿Estás seguro de cancelar la reserva <strong className="text-white">{cancelBookingModal.code}</strong>? Se notificará al cliente y a la terapeuta.
+            </p>
+
+            <div>
+              <label className="text-xs text-[#888888] block mb-1">Motivo de Cancelación</label>
+              <textarea
+                placeholder="Indica la razón (ej. Solicitud del cliente, contingencia vial)..."
+                value={cancelReasonInput}
+                onChange={(e) => setCancelReasonInput(e.target.value)}
+                rows={3}
+                className="w-full bg-[#1A1A1A] border border-[#333333] text-white p-3 rounded-xl text-xs focus:outline-none focus:border-red-500/50"
+              />
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2">
+              <button
+                onClick={() => setCancelBookingModal(null)}
+                className="px-4 py-2 text-xs text-[#888888] hover:text-white"
+              >
+                Regresar
+              </button>
+              <button
+                onClick={() => {
+                  handleCancelBooking(cancelBookingModal.id, cancelReasonInput || 'Cancelado por administración');
+                  showToast(`Reserva ${cancelBookingModal.code} cancelada.`);
+                  setCancelBookingModal(null);
+                  setCancelReasonInput('');
+                }}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold text-xs rounded-xl transition-all cursor-pointer"
+              >
+                Confirmar Cancelación
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

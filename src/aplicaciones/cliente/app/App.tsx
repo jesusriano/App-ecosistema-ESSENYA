@@ -1,0 +1,59 @@
+import React, { useState, useEffect } from 'react';
+import { ClientLayout } from '../layouts/ClientLayout';
+import { ClientRoutes } from '../routes/index';
+import { ClientRoutePath } from '../components/ClientNavigation';
+import { useCliente } from '../hooks/useCliente';
+import { ImmediateRatingModal } from '../components/ImmediateRatingModal';
+
+export const ClienteAppModule: React.FC = () => {
+  const [currentRoute, setCurrentRoute] = useState<ClientRoutePath>('/inicio');
+  const { client, bookings, activeBooking, handleRateBooking } = useCliente();
+  const [dismissedBookingIds, setDismissedBookingIds] = useState<string[]>([]);
+  const [activeRateBookingId, setActiveRateBookingId] = useState<string | null>(null);
+
+  // Detect whenever a booking becomes 'servicio_finalizado' and has not been rated yet
+  const unratedFinishedBooking = bookings.find(
+    b => b.state === 'servicio_finalizado' && !b.rating && !dismissedBookingIds.includes(b.id)
+  );
+
+  useEffect(() => {
+    if (unratedFinishedBooking) {
+      setActiveRateBookingId(unratedFinishedBooking.id);
+    }
+  }, [unratedFinishedBooking?.id]);
+
+  const targetBookingToRate = bookings.find(b => b.id === activeRateBookingId) || null;
+
+  const handleCloseModal = () => {
+    if (activeRateBookingId) {
+      setDismissedBookingIds(prev => [...prev, activeRateBookingId]);
+    }
+    setActiveRateBookingId(null);
+  };
+
+  return (
+    <ClientLayout
+      client={client}
+      currentRoute={currentRoute}
+      onNavigate={setCurrentRoute}
+      hasActiveBooking={Boolean(activeBooking)}
+    >
+      <ClientRoutes
+        currentRoute={currentRoute}
+        onNavigate={setCurrentRoute}
+      />
+
+      {/* Immediate Rating Prompt Modal when masseuse finishes massage */}
+      <ImmediateRatingModal
+        booking={targetBookingToRate}
+        isOpen={Boolean(targetBookingToRate && !targetBookingToRate.rating)}
+        onClose={handleCloseModal}
+        onRate={(id, rating, comment) => {
+          handleRateBooking(id, rating, comment);
+        }}
+      />
+    </ClientLayout>
+  );
+};
+
+export default ClienteAppModule;

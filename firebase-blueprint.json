@@ -1,0 +1,92 @@
+{
+  "entities": {
+    "User": {
+      "collectionName": "users",
+      "fields": [
+        { "name": "id", "type": "string", "required": true, "description": "ID del usuario (UID Firebase Auth)" },
+        { "name": "nombre", "type": "string", "required": true, "description": "Nombre completo del usuario" },
+        { "name": "correo", "type": "string", "required": true, "description": "Correo electrónico" },
+        { "name": "rol", "type": "string", "required": true, "description": "Rol asignado: cliente, terapeuta, admin" },
+        { "name": "fechaRegistro", "type": "string", "required": true, "description": "Fecha y hora de registro ISO" }
+      ]
+    },
+    "Cliente": {
+      "collectionName": "clientes",
+      "fields": [
+        { "name": "id", "type": "string", "required": true, "description": "ID único del cliente" },
+        { "name": "userId", "type": "string", "required": true, "description": "UID de Auth vinculado" },
+        { "name": "name", "type": "string", "required": true, "description": "Nombre completo" },
+        { "name": "email", "type": "string", "required": true, "description": "Correo electrónico" },
+        { "name": "phone", "type": "string", "required": true, "description": "Teléfono de contacto" },
+        { "name": "membershipTier", "type": "string", "required": true, "description": "Nivel de membresía VIP: Gold, Diamond, Black" },
+        { "name": "address", "type": "string", "required": true, "description": "Domicilio registrado" },
+        { "name": "cityZone", "type": "string", "required": true, "description": "Zona CDMX de cobertura" },
+        { "name": "spentTotal", "type": "number", "required": true, "description": "Consumo total acumulado en MXN" },
+        { "name": "totalBookings", "type": "number", "required": true, "description": "Total de reservas realizadas" },
+        { "name": "isBlocked", "type": "boolean", "required": true, "description": "Indica si la cuenta está suspendida" },
+        { "name": "specialNotes", "type": "string", "required": false, "description": "Observaciones especiales o de acceso a caseta" },
+        { "name": "vipPreferences", "type": "string", "required": false, "description": "Preferencias de spa y aromaterapia" }
+      ]
+    },
+    "Terapeuta": {
+      "collectionName": "terapeutas",
+      "fields": [
+        { "name": "id", "type": "string", "required": true, "description": "ID de la terapeuta" },
+        { "name": "userId", "type": "string", "required": false, "description": "UID de Auth vinculado" },
+        { "name": "name", "type": "string", "required": true, "description": "Nombre completo" },
+        { "name": "phone", "type": "string", "required": true, "description": "Teléfono celular" },
+        { "name": "email", "type": "string", "required": true, "description": "Correo electrónico" },
+        { "name": "specialties", "type": "array", "required": true, "description": "Especialidades de técnica masoterapéutica" },
+        { "name": "rating", "type": "number", "required": true, "description": "Calificación promedio (0 a 5.0)" },
+        { "name": "status", "type": "string", "required": true, "description": "Estado operativo: disponible, en_servicio, fuera_servicio" },
+        { "name": "currentZone", "type": "string", "required": true, "description": "Zona de cobertura asignada CDMX" },
+        { "name": "photo", "type": "string", "required": false, "description": "URL de la foto de perfil" },
+        { "name": "completedServices", "type": "number", "required": true, "description": "Número de servicios concluidos" },
+        { "name": "verificationStatus", "type": "string", "required": true, "description": "Estatus de verificación e identificación KYC" }
+      ]
+    },
+    "Reserva": {
+      "collectionName": "reservas",
+      "fields": [
+        { "name": "id", "type": "string", "required": true, "description": "ID único de la reserva" },
+        { "name": "code", "type": "string", "required": true, "description": "Código de seguimiento (ej. ESS-8921)" },
+        { "name": "clientId", "type": "string", "required": true, "description": "ID del cliente que reserva" },
+        { "name": "clientName", "type": "string", "required": true, "description": "Nombre completo del cliente" },
+        { "name": "therapistId", "type": "string", "required": false, "description": "ID de la terapeuta asignada" },
+        { "name": "therapistName", "type": "string", "required": false, "description": "Nombre de la terapeuta asignada" },
+        { "name": "serviceId", "type": "string", "required": true, "description": "ID del servicio de catálogo" },
+        { "name": "serviceName", "type": "string", "required": true, "description": "Nombre del masaje o ritual" },
+        { "name": "durationMinutes", "type": "number", "required": true, "description": "Duración elegida: 60, 90, 120" },
+        { "name": "date", "type": "string", "required": true, "description": "Fecha del servicio (YYYY-MM-DD)" },
+        { "name": "time", "type": "string", "required": true, "description": "Hora programada (HH:MM)" },
+        { "name": "address", "type": "string", "required": true, "description": "Dirección completa del servicio" },
+        { "name": "cityZone", "type": "string", "required": true, "description": "Zona geográfica CDMX" },
+        { "name": "total", "type": "number", "required": true, "description": "Monto total a cobrar en MXN" },
+        { "name": "state", "type": "string", "required": true, "description": "Estado: pendiente, aceptado, en_camino, llegue, servicio_iniciado, servicio_finalizado, cancelado" },
+        { "name": "paymentStatus", "type": "string", "required": true, "description": "Estado del cobro: pendiente, pagado, rechazado" },
+        { "name": "paymentMethod", "type": "string", "required": true, "description": "Método de pago: tarjeta, spei, efectivo" },
+        { "name": "etaMinutes", "type": "number", "required": false, "description": "ETA estimado de llegada en minutos" }
+      ]
+    },
+    "Pago": {
+      "collectionName": "pagos",
+      "fields": [
+        { "name": "id", "type": "string", "required": true, "description": "ID único del pago o comprobante" },
+        { "name": "bookingId", "type": "string", "required": true, "description": "ID de la reserva correspondiente" },
+        { "name": "clientId", "type": "string", "required": true, "description": "ID del cliente que realiza el pago" },
+        { "name": "amount", "type": "number", "required": true, "description": "Monto de la transacción en MXN" },
+        { "name": "paymentMethod", "type": "string", "required": true, "description": "Método empleado: tarjeta, spei, efectivo" },
+        { "name": "status", "type": "string", "required": true, "description": "Estado del pago: pendiente, completado, rechazado" },
+        { "name": "transactionDate", "type": "string", "required": true, "description": "Fecha y hora ISO de la transacción" },
+        { "name": "referenceNumber", "type": "string", "required": false, "description": "Referencia bancaria o clave de rastreo SPEI" },
+        { "name": "cfdiRequired", "type": "boolean", "required": true, "description": "Indica si solicitó comprobante fiscal CFDI" }
+      ]
+    }
+  },
+  "firestore": {
+    "securityRules": {
+      "version": "2",
+      "rules": "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    function isAuthenticated() { return request.auth != null; }\n    function getUserData() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }\n    function hasRole(role) { return isAuthenticated() && (request.auth.token.role == role || getUserData().rol == role); }\n    function isAdmin() { return hasRole('admin') || hasRole('administrador'); }\n    function isTherapist() { return hasRole('terapeuta') || isAdmin(); }\n    function isOwner(userId) { return isAuthenticated() && request.auth.uid == userId; }\n\n    match /users/{userId} {\n      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin() || isTherapist());\n      allow create: if isAuthenticated();\n      allow update, delete: if isAuthenticated() && (isOwner(userId) || isAdmin());\n    }\n    match /clientes/{clienteId} {\n      allow read: if isAuthenticated();\n      allow create, update, delete: if isAuthenticated() && (isOwner(clienteId) || isAdmin());\n    }\n    match /terapeutas/{terapeutaId} {\n      allow read: if isAuthenticated();\n      allow create, update, delete: if isAuthenticated() && (isOwner(terapeutaId) || isAdmin());\n    }\n    match /reservas/{reservaId} {\n      allow read, create, update: if isAuthenticated();\n      allow delete: if isAuthenticated() && isAdmin();\n    }\n    match /pagos/{pagoId} {\n      allow read, create: if isAuthenticated();\n      allow update, delete: if isAuthenticated() && isAdmin();\n    }\n  }\n}"
+    }
+  }
+}

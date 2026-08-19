@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: Verificar si el usuario está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper: Función isAdmin() vinculada a la colección 'usuarios'
+    function isAdmin() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'admin';
+    }
+
+    // Helper: Verificar si el usuario es dueño del documento por 'clienteId'
+    function isOwner(clienteId) {
+      return isAuthenticated() && request.auth.uid == clienteId;
+    }
+
+    // Colección 'usuarios'
+    match /usuarios/{userId} {
+      allow read, create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // Colección 'reservas' (Solo accesible si es el cliente dueño o admin)
+    match /reservas/{reservaId} {
+      allow read, write: if isAuthenticated() && (
+        isAdmin() ||
+        (resource != null && resource.data.clienteId == request.auth.uid) ||
+        (request.resource != null && request.resource.data.clienteId == request.auth.uid)
+      );
+    }
+
+    // Colección 'pagos' (Solo accesible si es el cliente dueño o admin)
+    match /pagos/{pagoId} {
+      allow read, write: if isAuthenticated() && (
+        isAdmin() ||
+        (resource != null && resource.data.clienteId == request.auth.uid) ||
+        (request.resource != null && request.resource.data.clienteId == request.auth.uid)
+      );
+    }
+
+    // Colección 'invoices' (Solo accesible si es el cliente dueño o admin)
+    match /invoices/{invoiceId} {
+      allow read, write: if isAuthenticated() && (
+        isAdmin() ||
+        (resource != null && resource.data.clienteId == request.auth.uid) ||
+        (request.resource != null && request.resource.data.clienteId == request.auth.uid)
+      );
+    }
+
+    // Denegar por defecto cualquier otro acceso no autorizado
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
