@@ -1,60 +1,217 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper: Verificar si el usuario está autenticado
-    function isAuthenticated() {
+    
+    // ==========================================
+    // GLOBAL SECURITY HELPERS & RBAC DEFINITIONS
+    // ==========================================
+    
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    // Helper: Función isAdmin() vinculada a la colección 'usuarios'
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
     function isAdmin() {
-      return isAuthenticated() && 
-        exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) && 
-        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'admin';
-    }
-
-    // Helper: Verificar si el usuario es dueño del documento por 'clienteId'
-    function isOwner(clienteId) {
-      return isAuthenticated() && request.auth.uid == clienteId;
-    }
-
-    // Colección 'usuarios'
-    match /usuarios/{userId} {
-      allow read, create: if isAuthenticated();
-      allow update, delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-    }
-
-    // Colección 'reservas' (Solo accesible si es el cliente dueño o admin)
-    match /reservas/{reservaId} {
-      allow read, write: if isAuthenticated() && (
-        isAdmin() ||
-        (resource != null && resource.data.clienteId == request.auth.uid) ||
-        (request.resource != null && request.resource.data.clienteId == request.auth.uid)
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/administradores/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol in ['administrador', 'admin'])
       );
     }
 
-    // Colección 'pagos' (Solo accesible si es el cliente dueño o admin)
-    match /pagos/{pagoId} {
-      allow read, write: if isAuthenticated() && (
-        isAdmin() ||
-        (resource != null && resource.data.clienteId == request.auth.uid) ||
-        (request.resource != null && request.resource.data.clienteId == request.auth.uid)
+    function isTherapist() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/terapeutas/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'terapeuta')
       );
     }
 
-    // Colección 'invoices' (Solo accesible si es el cliente dueño o admin)
-    match /invoices/{invoiceId} {
-      allow read, write: if isAuthenticated() && (
-        isAdmin() ||
-        (resource != null && resource.data.clienteId == request.auth.uid) ||
-        (request.resource != null && request.resource.data.clienteId == request.auth.uid)
+    function isClient() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/clientes/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'cliente')
       );
     }
 
-    // Denegar por defecto cualquier otro acceso no autorizado
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Default deny catch-all
     match /{document=**} {
       allow read, write: if false;
+    }
+
+    // ==========================================
+    // 1. ADMINISTRADORES & CONFIGURACIONES (ADMIN ONLY)
+    // ==========================================
+
+    match /administradores/{adminId} {
+      allow read: if isAdmin() || isOwner(adminId);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /admins/{adminId} {
+      allow read: if isAdmin() || isOwner(adminId);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /configuraciones/{configId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if false; // Immutable audit trail
+    }
+
+    // ==========================================
+    // 2. MASTER USER PROFILES & IDENTITIES
+    // ==========================================
+
+    match /users/{userId} {
+      // Users can only read their own master profile; admins can read all
+      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+      
+      // Self registration is restricted to 'cliente' or 'terapeuta' roles only
+      allow create: if isSignedIn() && isOwner(userId) && 
+                    request.resource.data.rol in ['cliente', 'terapeuta'] &&
+                    request.resource.data.uid == userId;
+                    
+      // Prevent role privilege escalation by clients or therapists
+      allow update: if isSignedIn() && (
+        isAdmin() || 
+        (isOwner(userId) && request.resource.data.rol == resource.data.rol)
+      );
+      
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 3. CLIENT PROFILES (CLIENTS & ADMINS)
+    // ==========================================
+
+    match /clientes/{clienteId} {
+      // Clients see their own profile; Admins see all; Therapists can only see clients assigned in bookings
+      allow read: if isSignedIn() && (isOwner(clienteId) || isAdmin());
+      allow create: if isSignedIn() && (isOwner(clienteId) || isAdmin());
+      allow update: if isSignedIn() && (isOwner(clienteId) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 4. THERAPIST PROFILES (PUBLIC DIRECTORY FOR CLIENTS, EDITABLE BY OWNER/ADMIN)
+    // ==========================================
+
+    match /terapeutas/{terapeutaId} {
+      // Signed-in users can browse therapists to book appointments
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (isOwner(terapeutaId) || isAdmin());
+      allow update: if isSignedIn() && (isOwner(terapeutaId) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 5. RESERVAS / APPOINTMENTS (STRICT ROLE ISOLATION)
+    // ==========================================
+
+    match /reservas/{reservaId} {
+      // Access strictly filtered:
+      // - Admins: full visibility across all bookings
+      // - Clients: only reservations where clientId matches auth.uid
+      // - Assigned Therapist: only reservations where therapistId matches auth.uid
+      // - Unassigned Pending bookings: available therapists can inspect dispatch queue
+      allow read: if isSignedIn() && (
+        isAdmin() || 
+        resource.data.clientId == request.auth.uid || 
+        resource.data.therapistId == request.auth.uid ||
+        (isTherapist() && resource.data.state == 'pendiente')
+      );
+      
+      // Creation:
+      // - Clients can create bookings with their own clientId
+      // - Admins can create bookings
+      allow create: if isSignedIn() && (
+        isAdmin() || 
+        request.resource.data.clientId == request.auth.uid ||
+        isClient()
+      );
+      
+      // Updates:
+      // - Client can update notes / ratings or cancel their own booking
+      // - Assigned therapist can update status (in-transit, arrived, completed)
+      // - Available therapist can accept a pending booking and assign themselves
+      // - Admin can reassign, reschedule or update any field
+      allow update: if isSignedIn() && (
+        isAdmin() || 
+        resource.data.clientId == request.auth.uid || 
+        resource.data.therapistId == request.auth.uid ||
+        (isTherapist() && resource.data.state == 'pendiente')
+      );
+      
+      // Deletion: strictly restricted to Administrators
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 6. INVOICES & PAYMENTS
+    // ==========================================
+
+    match /invoices/{invoiceId} {
+      allow read: if isSignedIn() && (isAdmin() || resource.data.clientId == request.auth.uid);
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    match /pagos/{pagoId} {
+      allow read: if isSignedIn() && (isAdmin() || resource.data.clientId == request.auth.uid);
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+
+    // ==========================================
+    // 7. CATALOGS (SERVICIOS & ZONAS)
+    // ==========================================
+
+    match /servicios/{servicioId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /zonas/{zonaId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /zones/{zoneId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ==========================================
+    // 8. EMERGENCY PANIC ALERTS & SOS LOCATION
+    // ==========================================
+
+    match /alertas_panico/{alertaId} {
+      // Alerts can be read by admins or the user who generated them
+      allow read: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && (isAdmin() || request.resource.data.userId == request.auth.uid);
+      allow update: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin();
     }
   }
 }

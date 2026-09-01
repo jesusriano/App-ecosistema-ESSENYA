@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { PortalType } from '../types';
 import { User, Shield, Globe, Sparkles, Activity, Award, Sun, Moon, Laptop, ExternalLink } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { EssenyaLogo } from './EssenyaLogo';
 
 interface HeaderProps {
@@ -17,13 +18,17 @@ export const Header: React.FC<HeaderProps> = ({
   activeBookingCount,
 }) => {
   const { themeMode, setThemeMode } = useTheme();
+  const { sessions } = useAuth();
+  const isAdminSession = !!sessions.administrador;
 
   const portals = [
     { id: 'client' as PortalType, label: 'App Clientes', icon: User, badge: activeBookingCount > 0 },
     { id: 'therapist' as PortalType, label: 'App Terapeutas', icon: Sparkles },
-    { id: 'admin' as PortalType, label: 'Panel Admin', icon: Shield },
+    // Only show admin if already in admin portal or if specifically logged in as admin
+    ...(isAdminSession || currentPortal === 'admin' ? [{ id: 'admin' as PortalType, label: 'Panel Admin', icon: Shield }] : []),
     { id: 'website' as PortalType, label: 'essenyamexico.com', icon: Globe },
   ];
+
 
   return (
     <header className="sticky top-0 z-50 bg-white/90 dark:bg-[#0D0D0D]/90 backdrop-blur-2xl border-b border-[#E5DFD3]/80 dark:border-[#262626] transition-all shadow-xs">

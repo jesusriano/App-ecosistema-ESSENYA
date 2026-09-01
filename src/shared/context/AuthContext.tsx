@@ -20,6 +20,8 @@ import {
   validateEmail,
   validatePasswordStrength
 } from '../utils/authValidations';
+import { handleFirestoreError, OperationType } from '../utils/firestoreDebug';
+import { checkIsAdminInFirestore, AdminVerificationResult } from '../services/adminAuthService';
 
 interface AuthSessions {
   cliente: UserAuthProfile | null;
@@ -31,7 +33,7 @@ interface AuthContextType {
   sessions: AuthSessions;
   loading: boolean;
   
-  // Independent Auth Actions per Portal
+  // Strict Auth Actions per Portal
   login: (role: UserRole, email: string, pass: string, rememberMe?: boolean) => Promise<{ success: boolean; error?: string }>;
   register: (role: UserRole, data: { nombre: string; apellidos: string; correo: string; telefono: string; contrasena: string }) => Promise<{ success: boolean; error?: string }>;
   logout: (role: UserRole) => Promise<void>;
@@ -43,52 +45,10 @@ interface AuthContextType {
   // Helper checks
   isAuthenticated: (role: UserRole) => boolean;
   getUser: (role: UserRole) => UserAuthProfile | null;
+  verifyAdminInFirestore: (uid?: string, email?: string) => Promise<AdminVerificationResult>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Demo pre-configured accounts for instant seamless testing
-const DEMO_PROFILES: Record<UserRole, UserAuthProfile> = {
-  cliente: {
-    id: 'demo-client-123',
-    nombre: 'Alejandro',
-    apellidos: 'De La Vega',
-    correo: 'cliente@essenya.com',
-    telefono: '+52 55 9182 3746',
-    estado: 'activo',
-    fechaRegistro: '2026-01-15T10:00:00.000Z',
-    ultimoAcceso: new Date().toISOString(),
-    correoVerificado: true,
-    rol: 'cliente',
-    fechaActualizacion: new Date().toISOString()
-  },
-  terapeuta: {
-    id: 'demo-therapist-123',
-    nombre: 'Valeria',
-    apellidos: 'Mendoza',
-    correo: 'terapeuta@essenya.com',
-    telefono: '+52 55 4839 2019',
-    estado: 'activo',
-    fechaRegistro: '2025-11-01T12:00:00.000Z',
-    ultimoAcceso: new Date().toISOString(),
-    correoVerificado: true,
-    rol: 'terapeuta',
-    fechaActualizacion: new Date().toISOString()
-  },
-  administrador: {
-    id: 'demo-admin-123',
-    nombre: 'Administrador',
-    apellidos: 'ESSENYA VIP',
-    correo: 'admin@essenya.com',
-    telefono: '+52 55 8888 9999',
-    estado: 'activo',
-    fechaRegistro: '2025-08-10T08:00:00.000Z',
-    ultimoAcceso: new Date().toISOString(),
-    correoVerificado: true,
-    rol: 'administrador',
-    fechaActualizacion: new Date().toISOString()
-  }
-};
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [sessions, setSessions] = useState<AuthSessions>(() => {
@@ -119,6 +79,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
+          // 1. Verify if user is an Admin in the 'administradores' collection in Firestore
+          const adminCheck = await checkIsAdminInFirestore({ 
+            uid: firebaseUser.uid, 
+            email: firebaseUser.email 
+          });
+
+          if (adminCheck.isAdmin && adminCheck.adminData) {
+            const adminDoc = adminCheck.adminData;
+            const adminProfile: UserAuthProfile = {
+              id: firebaseUser.uid,
+              uid: firebaseUser.uid,
+              nombre: adminDoc.nombre || 'Administrador',
+              apellidos: adminDoc.apellidos || 'ESSENYA',
+              correo: adminDoc.correo || firebaseUser.email || '',
+              telefono: adminDoc.telefono || '',
+              estado: 'activo',
+              fechaRegistro: adminDoc.fechaRegistro || new Date().toISOString(),
+              ultimoAcceso: new Date().toISOString(),
+              correoVerificado: firebaseUser.emailVerified,
+              rol: 'administrador',
+              fechaActualizacion: new Date().toISOString()
+            };
+
+            setSessions(prev => {
+              const updated = { ...prev, administrador: adminProfile };
+              localStorage.setItem('essenya_auth_administrador', JSON.stringify(adminProfile));
+              return updated;
+            });
+          }
+
+          // 2. Fetch master profile from 'users' collection
           const userDocRef = doc(db, 'users', firebaseUser.uid);
           const docSnap = await getDoc(userDocRef);
           
@@ -133,8 +124,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
           }
         } catch (err) {
-          console.warn('Firestore user fetch note:', err);
+          console.warn('Firestore user synchronization note:', err);
         }
+      } else {
+        // Clear all sessions on logout from Firebase Auth
+        setSessions({
+          cliente: null,
+          terapeuta: null,
+          administrador: null,
+        });
+        localStorage.removeItem('essenya_auth_cliente');
+        localStorage.removeItem('essenya_auth_terapeuta');
+        localStorage.removeItem('essenya_auth_administrador');
       }
     });
 
@@ -154,28 +155,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   }, []);
 
-  // Inactivity Auto Logout Monitor (30 mins)
-  useEffect(() => {
-    let inactivityTimer: NodeJS.Timeout;
-    
-    const resetTimer = () => {
-      clearTimeout(inactivityTimer);
-      inactivityTimer = setTimeout(() => {
-        // Option to warn or handle session expiration
-      }, 30 * 60 * 1000);
-    };
-
-    window.addEventListener('mousemove', resetTimer);
-    window.addEventListener('keydown', resetTimer);
-    resetTimer();
-
-    return () => {
-      clearTimeout(inactivityTimer);
-      window.removeEventListener('mousemove', resetTimer);
-      window.removeEventListener('keydown', resetTimer);
-    };
-  }, []);
-
   // Register Handler
   const register = async (
     role: UserRole, 
@@ -192,16 +171,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: false, error: 'El correo electrónico ingresado no tiene un formato válido.' };
     }
 
+    // 1. Initial Validation
+    const trimmedEmail = correo.trim().toLowerCase();
+    if (!validateEmail(trimmedEmail)) {
+      return { success: false, error: 'El formato del correo electrónico no es válido.' };
+    }
+
     const strength = validatePasswordStrength(contrasena);
     if (!strength.isValid) {
-      return { success: false, error: 'La contraseña debe incluir al menos 8 caracteres, mayúscula, minúscula, número y carácter especial.' };
+      return { success: false, error: 'La contraseña debe incluir al menos 8 caracteres, una mayúscula, una minúscula, un número y un carácter especial.' };
+    }
+
+    if (!nombre.trim() || !apellidos.trim()) {
+      return { success: false, error: 'Por favor, ingresa tu nombre y apellidos completos.' };
     }
 
     setLoading(true);
 
     try {
-      // 1. Create Firebase Auth user
-      const userCredential = await createUserWithEmailAndPassword(auth, correo.trim(), contrasena);
+      // 2. Create Firebase Auth user
+      const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, contrasena);
       const uid = userCredential.user.uid;
 
       // 2. Build User Profile for Firestore
@@ -209,6 +198,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       const newProfile: UserAuthProfile = {
         id: uid,
+        uid: uid,
         nombre: nombre.trim(),
         apellidos: apellidos.trim(),
         correo: correo.trim().toLowerCase(),
@@ -226,7 +216,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await setDoc(doc(db, 'users', uid), newProfile);
         
         if (role === 'cliente') {
-          await setDoc(doc(db, 'clientes', uid), {
+          const clientData = {
             id: uid,
             userId: uid,
             name: `${nombre.trim()} ${apellidos.trim()}`,
@@ -239,9 +229,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             totalBookings: 0,
             isBlocked: false,
             createdAt: new Date().toISOString()
-          });
+          };
+          await setDoc(doc(db, 'clientes', uid), clientData);
         } else if (role === 'terapeuta') {
-          await setDoc(doc(db, 'terapeutas', uid), {
+          const therapistData = {
             id: uid,
             userId: uid,
             nombre: nombre.trim(),
@@ -255,10 +246,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             resenasCount: 0,
             serviciosCompletados: 0,
             fechaAlta: new Date().toISOString()
-          });
+          };
+          await setDoc(doc(db, 'terapeutas', uid), therapistData);
         }
-      } catch (dbErr) {
-        console.warn('Firestore setDoc warning:', dbErr);
+      } catch (dbErr: any) {
+        const errorInfo = handleFirestoreError(
+          dbErr, 
+          OperationType.CREATE, 
+          role === 'cliente' ? `clientes/${uid}` : (role === 'terapeuta' ? `terapeutas/${uid}` : `users/${uid}`),
+          newProfile
+        );
+        return { 
+          success: false, 
+          error: `Error de base de datos (${errorInfo.diagnosis || dbErr.message}). Revisa la consola del navegador para ver el campo y la consulta detallada.` 
+        };
       }
 
       // 4. Update session
@@ -269,31 +270,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: true };
     } catch (err: any) {
       setLoading(false);
-
-      // Fallback for offline or local preview if Firebase auth credentials fail or match demo
+      console.error('Registration failed:', err);
       if (err.code === 'auth/email-already-in-use') {
         return { success: false, error: 'Ya existe una cuenta registrada con este correo electrónico.' };
       }
-
-      // Offline fallback profile creation
-      const fallbackUid = `user-${Date.now()}`;
-      const fallbackStatus: AccountStatus = role === 'terapeuta' ? 'pendiente' : 'activo';
-      const newProfile: UserAuthProfile = {
-        id: fallbackUid,
-        nombre: nombre.trim(),
-        apellidos: apellidos.trim(),
-        correo: correo.trim().toLowerCase(),
-        telefono: telefono.trim(),
-        estado: fallbackStatus,
-        fechaRegistro: new Date().toISOString(),
-        ultimoAcceso: new Date().toISOString(),
-        correoVerificado: true,
-        rol: role,
-        fechaActualizacion: new Date().toISOString()
-      };
-
-      updateSession(role, newProfile);
-      return { success: true };
+      if (err.code === 'auth/operation-not-allowed') {
+        return { success: false, error: 'El método de registro por correo/contraseña no está habilitado en tu proyecto de Firebase. Ve a Authentication > Sign-in method y habilítalo.' };
+      }
+      return { success: false, error: getFriendlyErrorMessage(err) };
     }
   };
 
@@ -331,37 +315,90 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, pass);
       const uid = userCredential.user.uid;
 
-      // 2. Fetch Profile from Firestore
-      let userProfile: UserAuthProfile | null = null;
-      try {
-        const userDocRef = doc(db, 'users', uid);
-        const docSnap = await getDoc(userDocRef);
-        if (docSnap.exists()) {
-          userProfile = docSnap.data() as UserAuthProfile;
-        }
-      } catch (dbErr) {
-        console.warn('Firestore read error:', dbErr);
-      }
+      // 2. Specialized Check for Administrator Role in Firestore 'administradores' Collection
+      if (role === 'administrador') {
+        const adminCheck = await checkIsAdminInFirestore({ uid, email: trimmedEmail });
 
-      if (!userProfile) {
-        // Construct basic profile if document missing
-        userProfile = {
+        if (!adminCheck.isAdmin) {
+          await signOut(auth);
+          setLoading(false);
+          return {
+            success: false,
+            error: 'Acceso Denegado: Tu usuario no cuenta con el rol de Administrador asignado en la colección "administradores" de Firestore.'
+          };
+        }
+
+        const adminDoc = adminCheck.adminData;
+        const adminProfile: UserAuthProfile = {
           id: uid,
-          nombre: userCredential.user.displayName || 'Usuario',
-          apellidos: 'ESSENYA',
-          correo: trimmedEmail,
-          telefono: userCredential.user.phoneNumber || '',
+          uid: uid,
+          nombre: adminDoc?.nombre || 'Administrador',
+          apellidos: adminDoc?.apellidos || 'ESSENYA',
+          correo: adminDoc?.correo || trimmedEmail,
+          telefono: adminDoc?.telefono || '',
           estado: 'activo',
-          fechaRegistro: new Date().toISOString(),
+          fechaRegistro: adminDoc?.fechaRegistro || new Date().toISOString(),
           ultimoAcceso: new Date().toISOString(),
           correoVerificado: userCredential.user.emailVerified,
-          rol: role,
+          rol: 'administrador',
           fechaActualizacion: new Date().toISOString()
+        };
+
+        // Update last access in Firestore
+        try {
+          await updateDoc(doc(db, 'administradores', uid), {
+            ultimoAcceso: new Date().toISOString()
+          });
+        } catch {}
+
+        try {
+          await updateDoc(doc(db, 'users', uid), {
+            ultimoAcceso: new Date().toISOString()
+          });
+        } catch {}
+
+        clearFailedAttempts(role, trimmedEmail);
+        updateSession(role, adminProfile);
+        setLoading(false);
+        return { success: true };
+      }
+
+      // 3. Fetch Profile from Firestore and Verify Role for Clients & Therapists
+      const userDocRef = doc(db, 'users', uid);
+      let docSnap;
+      try {
+        docSnap = await getDoc(userDocRef);
+      } catch (getErr) {
+        handleFirestoreError(getErr, OperationType.GET, `users/${uid}`);
+        throw getErr;
+      }
+      
+      if (!docSnap.exists()) {
+        await signOut(auth);
+        setLoading(false);
+        return { success: false, error: 'Perfil de usuario no encontrado en la base de datos.' };
+      }
+
+      const userProfile = docSnap.data() as UserAuthProfile;
+
+      // STRICT ROLE VALIDATION
+      if (userProfile.rol !== role) {
+        await signOut(auth);
+        setLoading(false);
+        const roleNames: Record<UserRole, string> = {
+          cliente: 'Cliente',
+          terapeuta: 'Terapeuta',
+          administrador: 'Administrador'
+        };
+        return { 
+          success: false, 
+          error: `Esta cuenta está registrada como ${roleNames[userProfile.rol as UserRole] || userProfile.rol}. No tienes permiso para acceder al portal de ${roleNames[role]}.` 
         };
       }
 
       // Check account status
       if (userProfile.estado === 'bloqueado') {
+        await signOut(auth);
         setLoading(false);
         return { success: false, error: 'Tu cuenta ha sido suspendida temporalmente. Contacta a soporte.' };
       }
@@ -371,7 +408,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await updateDoc(doc(db, 'users', uid), {
           ultimoAcceso: new Date().toISOString()
         });
-      } catch {}
+      } catch (updateErr) {
+        handleFirestoreError(updateErr, OperationType.UPDATE, `users/${uid}`, { ultimoAcceso: new Date().toISOString() });
+      }
 
       clearFailedAttempts(role, trimmedEmail);
       updateSession(role, userProfile);
@@ -379,14 +418,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: true };
     } catch (err: any) {
       setLoading(false);
-
-      // Handle demo login credentials fallback if offline or testing
-      const isDemoMatch = DEMO_PROFILES[role] && DEMO_PROFILES[role].correo.toLowerCase() === trimmedEmail;
-      if (isDemoMatch || pass === 'Essenya2026!') {
-        clearFailedAttempts(role, trimmedEmail);
-        updateSession(role, { ...DEMO_PROFILES[role], ultimoAcceso: new Date().toISOString() });
-        return { success: true };
-      }
 
       // Register failed attempt for lockout
       const failed = registerFailedAttempt(role, trimmedEmail);
@@ -401,6 +432,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: false, error: friendlyMsg };
     }
   };
+
 
   // Logout Handler
   const logout = async (role: UserRole): Promise<void> => {
@@ -515,6 +547,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return sessions[role];
   };
 
+  const verifyAdminInFirestore = useCallback(async (uid?: string, email?: string): Promise<AdminVerificationResult> => {
+    return checkIsAdminInFirestore({ uid, email });
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -528,7 +564,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         completeFirstLoginPasswordChange,
         updateUserProfile,
         isAuthenticated,
-        getUser
+        getUser,
+        verifyAdminInFirestore
       }}
     >
       {children}

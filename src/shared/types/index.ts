@@ -175,3 +175,27 @@ export interface SystemAuditLog {
   action: string;
   details: string;
 }
+
+export interface PanicAlert {
+  id: string;
+  userId?: string;
+  userName: string;
+  userRole: 'cliente' | 'terapeuta' | 'client' | 'therapist' | 'administrador';
+  bookingCode?: string;
+  userLocation: string;
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  altitude?: number | null;
+  speed?: number | null;
+  status: 'activa' | 'en_atencion' | 'resuelta';
+  emergencyType: 'sos_panico' | 'asistencia_medica' | 'incidente_seguridad' | 'asistencia_urgente';
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  resolvedBy?: string;
+  resolvedAt?: string;
+  attendedBy?: string;
+  attendedAt?: string;
+  isSimulated?: boolean;
+}

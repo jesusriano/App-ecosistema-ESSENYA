@@ -112,36 +112,55 @@ export const clearFailedAttempts = (portal: string, email: string) => {
 export const getFriendlyErrorMessage = (error: any): string => {
   if (!error) return 'Ocurrió un error inesperado. Inténtalo de nuevo.';
   
-  const msg = typeof error === 'string' ? error : error.message || error.code || '';
+  const errorCode = error.code || '';
+  const errorMsg = error.message || '';
+  const combinedMsg = (errorCode + ' ' + errorMsg).toLowerCase();
   
-  if (msg.includes('auth/invalid-email') || msg.includes('email-invalid')) {
-    return 'El formato del correo electrónico ingresado no es válido.';
+  // Specific Firebase Auth Errors
+  if (combinedMsg.includes('auth/invalid-email') || combinedMsg.includes('email-invalid')) {
+    return 'El formato del correo electrónico ingresado no es válido. Asegúrate de incluir el "@" y un dominio válido.';
   }
-  if (msg.includes('auth/user-not-found') || msg.includes('auth/invalid-credential')) {
-    return 'El correo o la contraseña ingresada es incorrecta, o la cuenta no existe.';
+  if (combinedMsg.includes('auth/user-not-found') || combinedMsg.includes('auth/invalid-credential')) {
+    return 'El correo o la contraseña ingresada es incorrecta, o la cuenta no existe. Si acabas de registrarte, espera un momento.';
   }
-  if (msg.includes('auth/wrong-password')) {
-    return 'La contraseña ingresada es incorrecta.';
+  if (combinedMsg.includes('auth/wrong-password')) {
+    return 'La contraseña ingresada es incorrecta. Por favor verifica que no tengas activado el bloqueo de mayúsculas.';
   }
-  if (msg.includes('auth/email-already-in-use')) {
-    return 'Ya existe una cuenta registrada con este correo electrónico.';
+  if (combinedMsg.includes('auth/email-already-in-use')) {
+    return 'Ya existe una cuenta registrada con este correo electrónico. Intenta iniciar sesión en su lugar.';
   }
-  if (msg.includes('auth/weak-password')) {
-    return 'La contraseña proporcionada es demasiado débil. Cumple con los requisitos de seguridad.';
+  if (combinedMsg.includes('auth/weak-password')) {
+    return 'La contraseña proporcionada es demasiado débil. Debe tener al menos 8 caracteres y ser difícil de adivinar.';
   }
-  if (msg.includes('auth/too-many-requests') || msg.includes('too-many-requests')) {
-    return 'Demasiados intentos fallidos. Por seguridad, el acceso ha sido bloqueado temporalmente.';
+  if (combinedMsg.includes('auth/too-many-requests') || combinedMsg.includes('too-many-requests')) {
+    return 'Demasiados intentos fallidos. Por seguridad, el acceso ha sido bloqueado temporalmente. Inténtalo en 15 minutos.';
   }
-  if (msg.includes('auth/network-request-failed') || msg.includes('network-error') || !navigator.onLine) {
-    return 'No hay conexión a Internet. Por favor verifica tu red e inténtalo nuevamente.';
+  if (combinedMsg.includes('auth/network-request-failed') || combinedMsg.includes('network-error') || !navigator.onLine) {
+    return 'No hay conexión a Internet o el servidor de autenticación no responde. Por favor verifica tu red.';
   }
-  if (msg.includes('auth/user-disabled')) {
-    return 'Esta cuenta ha sido deshabilitada temporalmente por un administrador.';
+  if (combinedMsg.includes('auth/user-disabled')) {
+    return 'Esta cuenta ha sido deshabilitada por un administrador. Si crees que es un error, contáctanos.';
   }
-  if (msg.includes('auth/session-expired') || msg.includes('token-expired')) {
-    return 'Tu sesión ha expirado por seguridad. Ingresa tus credenciales nuevamente.';
+  if (combinedMsg.includes('auth/configuration-not-found')) {
+    return 'Firebase Authentication no está inicializado o configurado en este proyecto (essenya-ecosistema). Ve a la Consola de Firebase > Authentication > pestaña "Sign-in method" y habilita el proveedor "Correo electrónico/contraseña".';
+  }
+  if (combinedMsg.includes('auth/operation-not-allowed')) {
+    return 'El método de autenticación por correo/contraseña no está habilitado en la consola de Firebase. Debes activarlo en Authentication > Sign-in method > Correo electrónico/contraseña.';
+  }
+  if (combinedMsg.includes('has been suspended') || (combinedMsg.includes('consumer') && combinedMsg.includes('suspended'))) {
+    return 'El proyecto de Google Cloud / Firebase o su API Key ha sido suspendido. Revisa la Consola de Google Cloud para reactivarlo.';
+  }
+  if (combinedMsg.includes('auth/popup-blocked')) {
+    return 'El navegador bloqueó la ventana emergente de autenticación. Por favor permite las ventanas emergentes para este sitio.';
+  }
+  if (combinedMsg.includes('permission-denied') || combinedMsg.includes('insufficient permissions')) {
+    return 'Error de base de datos: No tienes permisos para realizar esta acción. Verifica las Reglas de Firestore.';
   }
 
+  // System error detail for debugging
+  const systemDetail = errorCode ? ` (Error: ${errorCode})` : (errorMsg ? ` (${errorMsg})` : '');
+  
   // Custom friendly fallback
-  return 'No fue posible completar la solicitud. Por favor verifica tus datos e inténtalo nuevamente.';
+  const fallback = 'No fue posible completar la solicitud. Por favor verifica tus datos e inténtalo nuevamente.';
+  return systemDetail ? `${fallback}${systemDetail}` : fallback;
 };

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Lock, Mail, User, Phone, KeyRound, ShieldCheck, ArrowRight, 
-  Eye, EyeOff, AlertTriangle, CheckCircle2, RefreshCw, Sparkles, UserCheck, Shield, Clock
+  Eye, EyeOff, AlertTriangle, CheckCircle2, RefreshCw, Sparkles, UserCheck, Shield, Clock,
+  ShieldAlert, LogOut, ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole, AuthFormMode } from '../../types/auth';
@@ -12,6 +14,7 @@ import { CaptchaChallenge } from './CaptchaChallenge';
 import { PasswordStrengthMeter } from './PasswordStrengthMeter';
 import { TherapistRegistrationForm } from './TherapistRegistrationForm';
 import { getLockoutInfo } from '../../utils/authValidations';
+import { checkIsAdminInFirestore } from '../../services/adminAuthService';
 
 interface PortalAuthGuardProps {
   role: UserRole;
@@ -19,12 +22,19 @@ interface PortalAuthGuardProps {
 }
 
 export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children }) => {
-  const { isAuthenticated, getUser, login, register, sendPasswordReset, logout, completeFirstLoginPasswordChange } = useAuth();
+  const { sessions, isAuthenticated, getUser, login, register, sendPasswordReset, logout, completeFirstLoginPasswordChange } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   
   const [mode, setMode] = useState<AuthFormMode>('login');
   const [showPassword, setShowPassword] = useState(false);
   const [isCaptchaVerified, setIsCaptchaVerified] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [forceShowLogin, setForceShowLogin] = useState(false);
+
+  // Real-time Firestore admin verification state
+  const [adminFirestoreStatus, setAdminFirestoreStatus] = useState<'idle' | 'checking' | 'verified' | 'unauthorized'>('idle');
+  const [adminVerificationMsg, setAdminVerificationMsg] = useState<string | null>(null);
 
   // Form State
   const [email, setEmail] = useState('');
@@ -48,234 +58,462 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
 
   const currentUser = getUser(role);
 
-  // Check if therapist is pending approval or rejected
-  if (role === 'terapeuta' && currentUser) {
-    const therapistStatus = currentUser.estado || currentUser.therapistProfile?.estado;
-    if (therapistStatus === 'pendiente') {
-      return (
-        <div className="min-h-[85vh] flex items-center justify-center p-4 bg-[#FAF8F5] dark:bg-[#0D0D0D]">
-          <div className="w-full max-w-lg bg-white dark:bg-[#141414] border border-[#C9A55B]/40 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 text-center relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#C9A55B] via-[#DFBF7A] to-[#806020]" />
-            <div className="w-16 h-16 rounded-3xl bg-[#C9A55B]/10 border border-[#C9A55B]/30 text-[#C9A55B] flex items-center justify-center mx-auto animate-pulse">
-              <Clock className="w-8 h-8" />
-            </div>
+  // Role names in Spanish for display
+  const roleDisplayNames: Record<UserRole, string> = {
+    cliente: 'Cliente VIP',
+    terapeuta: 'Terapeuta Certificado',
+    administrador: 'Administrador del Sistema'
+  };
 
-            <div className="space-y-2">
-              <span className="bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B] text-xs font-bold px-3 py-1 rounded-full border border-[#C9A55B]/30 uppercase tracking-widest">
-                Estado: Pendiente de Aprobación
-              </span>
-              <h2 className="text-xl font-serif font-bold text-[#1C1917] dark:text-white pt-2">
-                Solicitud en Evaluación Técnica
-              </h2>
-              <p className="text-sm font-semibold text-[#1C1917] dark:text-white leading-relaxed">
-                Tu solicitud está siendo revisada por el equipo de ESSENYA.
-              </p>
-              <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA]">
-                Un administrador validará tus documentos, CURP e Identificación INE para activar tu cuenta.
-              </p>
-            </div>
+  const rolePaths: Record<UserRole, string> = {
+    cliente: '/cliente',
+    terapeuta: '/terapeuta',
+    administrador: '/admin'
+  };
 
-            <div className="bg-[#F5F1EA] dark:bg-[#1A1A1A] p-4 rounded-2xl border border-[#E5DFD3] dark:border-[#2A2A2A] text-left text-xs space-y-2">
-              <p className="font-bold text-[#1C1917] dark:text-white">Resumen de Expediente Enviado:</p>
-              <p className="text-[#6B655F] dark:text-[#AAAAAA]"><strong>Terapeuta:</strong> {currentUser.nombre} {currentUser.apellidos}</p>
-              <p className="text-[#6B655F] dark:text-[#AAAAAA]"><strong>Correo:</strong> {currentUser.correo}</p>
-              <p className="text-[#6B655F] dark:text-[#AAAAAA]"><strong>Teléfono:</strong> {currentUser.telefono}</p>
-            </div>
+  // Real-time Firestore admin verification effect
+  useEffect(() => {
+    let isMounted = true;
 
-            <div className="pt-2 flex justify-center">
-              <button
-                onClick={() => logout('terapeuta')}
-                className="text-xs text-[#888888] hover:text-red-400 font-semibold underline"
-              >
-                Cerrar sesión de seguridad
-              </button>
-            </div>
-          </div>
-        </div>
-      );
+    if (role === 'administrador') {
+      if (currentUser) {
+        setAdminFirestoreStatus('checking');
+        checkIsAdminInFirestore({ uid: currentUser.uid, email: currentUser.correo })
+          .then((result) => {
+            if (!isMounted) return;
+            if (result.isAdmin) {
+              setAdminFirestoreStatus('verified');
+            } else {
+              setAdminFirestoreStatus('unauthorized');
+              setAdminVerificationMsg(
+                result.error || 'El usuario autenticado no tiene asignado el rol de Administrador en la colección administradores de Firestore.'
+              );
+            }
+          })
+          .catch((err) => {
+            if (!isMounted) return;
+            setAdminFirestoreStatus('unauthorized');
+            setAdminVerificationMsg(err?.message || 'Error de conexión con Firestore.');
+          });
+      } else {
+        setAdminFirestoreStatus('idle');
+      }
+    } else {
+      setAdminFirestoreStatus('idle');
     }
 
-    if (therapistStatus === 'rechazado') {
+    return () => {
+      isMounted = false;
+    };
+  }, [role, currentUser?.uid, currentUser?.correo]);
+
+  // 1. Role Integrity Validation: If logged in with the target role
+  if (currentUser) {
+    // Security check: ensure user role matches expected portal role
+    if (currentUser.rol !== role) {
       return (
         <div className="min-h-[85vh] flex items-center justify-center p-4 bg-[#FAF8F5] dark:bg-[#0D0D0D]">
           <div className="w-full max-w-lg bg-white dark:bg-[#141414] border border-red-500/40 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 text-center">
             <div className="w-16 h-16 rounded-3xl bg-red-500/10 border border-red-500/30 text-red-500 flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-8 h-8" />
+              <ShieldAlert className="w-8 h-8" />
             </div>
-
             <div className="space-y-2">
               <span className="bg-red-500/15 text-red-600 dark:text-red-400 text-xs font-bold px-3 py-1 rounded-full border border-red-500/30 uppercase tracking-widest">
-                Estado: Solicitud No Aprobada
+                Fallo de Integridad de Rol
               </span>
               <h2 className="text-xl font-serif font-bold text-[#1C1917] dark:text-white pt-2">
-                Atención a Expediente
+                Inconsistencia de Permisos
               </h2>
-              <div className="text-xs text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 p-3.5 rounded-2xl text-left">
-                <strong className="block font-bold">Motivo de no aprobación:</strong>
-                <p className="mt-1">{currentUser.therapistProfile?.motivoRechazoAccount || 'La documentación proporcionada requiere actualización o no cumple con los criterios de certificación vigentes.'}</p>
+              <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA]">
+                Se detectó una discrepancia entre tu perfil ({currentUser.rol}) y el rol exigido ({role}) para la ruta actual ({location.pathname}).
+              </p>
+            </div>
+            <button
+              onClick={() => logout(role)}
+              className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-all shadow-md"
+            >
+              Cerrar Sesión Insegura
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Specific Firestore Role Validation for Administrators in 'administradores' collection
+    if (role === 'administrador') {
+      if (adminFirestoreStatus === 'checking') {
+        return (
+          <div className="min-h-[85vh] flex items-center justify-center p-4 bg-[#FAF8F5] dark:bg-[#0D0D0D]">
+            <div className="w-full max-w-md bg-white dark:bg-[#141414] border border-[#C9A55B]/40 rounded-3xl p-8 shadow-2xl text-center space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-[#C9A55B]/10 border border-[#C9A55B]/30 text-[#C9A55B] flex items-center justify-center mx-auto animate-spin">
+                <RefreshCw className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-[#C9A55B]">
+                  Firestore Security Guard
+                </span>
+                <h3 className="font-serif font-bold text-lg text-[#1C1917] dark:text-white">
+                  Verificando Privilegios de Administrador
+                </h3>
+                <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA]">
+                  Validando rol en la colección <code className="text-[#C9A55B] font-mono">administradores</code> de Firestore...
+                </p>
               </div>
             </div>
+          </div>
+        );
+      }
 
-            <div className="pt-2 flex justify-center">
+      if (adminFirestoreStatus === 'unauthorized') {
+        return (
+          <div className="min-h-[85vh] flex items-center justify-center p-4 bg-[#FAF8F5] dark:bg-[#0D0D0D]">
+            <div className="w-full max-w-lg bg-white dark:bg-[#141414] border border-red-500/40 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 text-center">
+              <div className="w-16 h-16 rounded-3xl bg-red-500/10 border border-red-500/30 text-red-500 flex items-center justify-center mx-auto">
+                <ShieldAlert className="w-8 h-8" />
+              </div>
+              <div className="space-y-2">
+                <span className="bg-red-500/15 text-red-600 dark:text-red-400 text-xs font-bold px-3 py-1 rounded-full border border-red-500/30 uppercase tracking-widest">
+                  Acceso Denegado en Firestore
+                </span>
+                <h2 className="text-xl font-serif font-bold text-[#1C1917] dark:text-white pt-2">
+                  Rol de Administrador No Encontrado
+                </h2>
+                <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA]">
+                  El usuario <span className="font-semibold text-[#1C1917] dark:text-white">{currentUser.correo}</span> no cuenta con un documento con rol de <code className="text-red-400 font-mono">administrador</code> en la colección <code className="text-[#C9A55B] font-mono">administradores</code> de Firestore.
+                </p>
+                {adminVerificationMsg && (
+                  <p className="text-[11px] font-mono text-red-400 bg-red-950/40 p-2.5 rounded-xl border border-red-500/20">
+                    {adminVerificationMsg}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminFirestoreStatus('checking');
+                    checkIsAdminInFirestore({ uid: currentUser.uid, email: currentUser.correo })
+                      .then((res) => {
+                        if (res.isAdmin) setAdminFirestoreStatus('verified');
+                        else {
+                          setAdminFirestoreStatus('unauthorized');
+                          setAdminVerificationMsg(res.error || 'No se encontró en administradores.');
+                        }
+                      });
+                  }}
+                  className="px-5 py-2.5 bg-[#C9A55B] hover:bg-[#D8B46B] text-black text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Reintentar Verificación</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => logout(role)}
+                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
+                >
+                  Cerrar Sesión
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+    }
+
+    // Check if therapist is pending approval or rejected
+    if (role === 'terapeuta') {
+      const therapistStatus = currentUser.estado || currentUser.therapistProfile?.estado;
+      if (therapistStatus === 'pendiente') {
+        return (
+          <div className="min-h-[85vh] flex items-center justify-center p-4 bg-[#FAF8F5] dark:bg-[#0D0D0D]">
+            <div className="w-full max-w-lg bg-white dark:bg-[#141414] border border-[#C9A55B]/40 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 text-center relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#C9A55B] via-[#DFBF7A] to-[#806020]" />
+              <div className="w-16 h-16 rounded-3xl bg-[#C9A55B]/10 border border-[#C9A55B]/30 text-[#C9A55B] flex items-center justify-center mx-auto animate-pulse">
+                <Clock className="w-8 h-8" />
+              </div>
+
+              <div className="space-y-2">
+                <span className="bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B] text-xs font-bold px-3 py-1 rounded-full border border-[#C9A55B]/30 uppercase tracking-widest">
+                  Estado: Pendiente de Aprobación
+                </span>
+                <h2 className="text-xl font-serif font-bold text-[#1C1917] dark:text-white pt-2">
+                  Solicitud en Evaluación Técnica
+                </h2>
+                <p className="text-sm font-semibold text-[#1C1917] dark:text-white leading-relaxed">
+                  Tu solicitud está siendo revisada por el equipo de ESSENYA.
+                </p>
+                <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA]">
+                  Un administrador validará tus documentos, CURP e Identificación INE para activar tu cuenta.
+                </p>
+              </div>
+
+              <div className="bg-[#F5F1EA] dark:bg-[#1A1A1A] p-4 rounded-2xl border border-[#E5DFD3] dark:border-[#2A2A2A] text-left text-xs space-y-2">
+                <p className="font-bold text-[#1C1917] dark:text-white">Resumen de Expediente Enviado:</p>
+                <p className="text-[#6B655F] dark:text-[#AAAAAA]"><strong>Terapeuta:</strong> {currentUser.nombre} {currentUser.apellidos}</p>
+                <p className="text-[#6B655F] dark:text-[#AAAAAA]"><strong>Correo:</strong> {currentUser.correo}</p>
+                <p className="text-[#6B655F] dark:text-[#AAAAAA]"><strong>Teléfono:</strong> {currentUser.telefono}</p>
+              </div>
+
+              <div className="pt-2 flex justify-center">
+                <button
+                  onClick={() => logout('terapeuta')}
+                  className="text-xs text-[#888888] hover:text-red-400 font-semibold underline"
+                >
+                  Cerrar sesión de seguridad
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      if (therapistStatus === 'rechazado') {
+        return (
+          <div className="min-h-[85vh] flex items-center justify-center p-4 bg-[#FAF8F5] dark:bg-[#0D0D0D]">
+            <div className="w-full max-w-lg bg-white dark:bg-[#141414] border border-red-500/40 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 text-center">
+              <div className="w-16 h-16 rounded-3xl bg-red-500/10 border border-red-500/30 text-red-500 flex items-center justify-center mx-auto">
+                <AlertTriangle className="w-8 h-8" />
+              </div>
+
+              <div className="space-y-2">
+                <span className="bg-red-500/15 text-red-600 dark:text-red-400 text-xs font-bold px-3 py-1 rounded-full border border-red-500/30 uppercase tracking-widest">
+                  Estado: Solicitud No Aprobada
+                </span>
+                <h2 className="text-xl font-serif font-bold text-[#1C1917] dark:text-white pt-2">
+                  Atención a Expediente
+                </h2>
+                <div className="text-xs text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 p-3.5 rounded-2xl text-left">
+                  <strong className="block font-bold">Motivo de no aprobación:</strong>
+                  <p className="mt-1">{currentUser.therapistProfile?.motivoRechazoAccount || 'La documentación proporcionada requiere actualización o no cumple con los criterios de certificación vigentes.'}</p>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-center">
+                <button
+                  onClick={() => logout('terapeuta')}
+                  className="text-xs text-[#888888] hover:text-red-400 font-semibold underline"
+                >
+                  Cerrar sesión de seguridad
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+    }
+
+    // Forced First Login Password Change
+    if (currentUser.mustChangePassword) {
+      const handleFirstPasswordChange = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setErrorMessage(null);
+        setSuccessMessage(null);
+
+        if (newFirstPassword !== confirmFirstPassword) {
+          setErrorMessage('Las contraseñas no coinciden.');
+          return;
+        }
+
+        setIsSubmitting(true);
+        const res = await completeFirstLoginPasswordChange(role, newFirstPassword);
+        setIsSubmitting(false);
+
+        if (!res.success) {
+          setErrorMessage(res.error || 'Error al actualizar la contraseña.');
+        } else {
+          setSuccessMessage('Contraseña actualizada exitosamente. Ingresando a tu panel...');
+        }
+      };
+
+      return (
+        <div className="min-h-[85vh] flex items-center justify-center p-4 md:p-8 bg-[#FAF8F5] dark:bg-[#0D0D0D]">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-lg bg-white dark:bg-[#141414] border border-[#C9A55B]/40 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 relative overflow-hidden"
+          >
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#C9A55B] via-[#DFBF7A] to-[#806020]" />
+            
+            <div className="text-center space-y-2 pt-2">
+              <div className="w-12 h-12 rounded-2xl bg-[#C9A55B]/10 border border-[#C9A55B]/30 text-[#C9A55B] flex items-center justify-center mx-auto">
+                <KeyRound className="w-6 h-6" />
+              </div>
+              <h2 className="text-xl font-serif font-bold text-[#1C1917] dark:text-white">
+                Primer Inicio de Sesión Obligatorio
+              </h2>
+              <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] max-w-sm mx-auto">
+                Hola, <span className="font-bold text-[#1C1917] dark:text-white">{currentUser.nombre}</span>. Por normatividad de ciberseguridad ESSENYA, debes actualizar tu clave temporal por una nueva contraseña personal.
+              </p>
+            </div>
+
+            {errorMessage && (
+              <div className="bg-red-500/10 border border-red-500/30 p-3.5 rounded-2xl flex items-start space-x-3 text-red-600 dark:text-red-400 text-xs">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="bg-emerald-500/10 border border-emerald-500/30 p-3.5 rounded-2xl flex items-start space-x-3 text-emerald-600 dark:text-emerald-400 text-xs">
+                <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{successMessage}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleFirstPasswordChange} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-[#6B655F] dark:text-[#AAAAAA] uppercase tracking-wider">
+                  Nueva Contraseña *
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3 top-3 text-[#A8A29E]" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={newFirstPassword}
+                    onChange={(e) => setNewFirstPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full pl-9 pr-10 py-2.5 text-xs rounded-xl border border-[#E5DFD3] dark:border-[#333333] bg-white dark:bg-[#0D0D0D] text-[#1C1917] dark:text-white placeholder:text-[#A8A29E] focus:outline-none focus:border-[#C9A55B]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-3 text-[#A8A29E]"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <PasswordStrengthMeter password={newFirstPassword} />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-[#6B655F] dark:text-[#AAAAAA] uppercase tracking-wider">
+                  Confirmar Nueva Contraseña *
+                </label>
+                <div className="relative">
+                  <KeyRound className="w-4 h-4 absolute left-3 top-3 text-[#A8A29E]" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={confirmFirstPassword}
+                    onChange={(e) => setConfirmFirstPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full pl-9 pr-3 py-2.5 text-xs rounded-xl border border-[#E5DFD3] dark:border-[#333333] bg-white dark:bg-[#0D0D0D] text-[#1C1917] dark:text-white placeholder:text-[#A8A29E] focus:outline-none focus:border-[#C9A55B]"
+                  />
+                </div>
+              </div>
+
+              <LuxuryButton
+                type="submit"
+                disabled={isSubmitting}
+                variant="gold"
+                className="w-full py-3 text-xs tracking-wider font-bold shadow-lg"
+              >
+                {isSubmitting ? 'Guardando Nueva Contraseña...' : 'Establecer Contraseña y Acceder'}
+              </LuxuryButton>
+            </form>
+
+            <div className="text-center pt-2 border-t border-[#E5DFD3] dark:border-[#262626]">
               <button
-                onClick={() => logout('terapeuta')}
+                onClick={() => logout(role)}
                 className="text-xs text-[#888888] hover:text-red-400 font-semibold underline"
               >
                 Cerrar sesión de seguridad
               </button>
             </div>
-          </div>
+          </motion.div>
         </div>
       );
     }
+
+    // All verifications passed - grant access to this portal
+    return <>{children}</>;
   }
 
-  // Handle Forced First Login Password Change
-  const handleFirstPasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-    setSuccessMessage(null);
+  // 2. Middleware Check: Detect active foreign session in another role (Insufficient Permissions)
+  const activeOtherRoles = (['administrador', 'terapeuta', 'cliente'] as UserRole[])
+    .filter(r => r !== role)
+    .map(r => ({ roleKey: r, user: sessions[r] }))
+    .filter(item => item.user !== null);
 
-    if (newFirstPassword !== confirmFirstPassword) {
-      setErrorMessage('Las contraseñas no coinciden.');
-      return;
-    }
+  const activeOtherSession = activeOtherRoles.length > 0 ? activeOtherRoles[0] : null;
 
-    setIsSubmitting(true);
-    const res = await completeFirstLoginPasswordChange(role, newFirstPassword);
-    setIsSubmitting(false);
+  // If user has a session in another role, and hasn't explicitly clicked "Iniciar sesión con otra cuenta"
+  if (activeOtherSession && activeOtherSession.user && !forceShowLogin) {
+    const loggedUser = activeOtherSession.user;
+    const loggedRoleName = roleDisplayNames[activeOtherSession.roleKey];
+    const requiredRoleName = roleDisplayNames[role];
+    const destinationPath = rolePaths[activeOtherSession.roleKey];
 
-    if (!res.success) {
-      setErrorMessage(res.error || 'Error al actualizar la contraseña.');
-    } else {
-      setSuccessMessage('Contraseña actualizada exitosamente. Ingresando a tu panel...');
-    }
-  };
-
-  // Sync lockout countdown
-  useEffect(() => {
-    if (!email) {
-      setLockoutTimer(0);
-      return;
-    }
-    const info = getLockoutInfo(role, email);
-    if (info.isLocked) {
-      setLockoutTimer(info.remainingSeconds);
-    } else {
-      setLockoutTimer(0);
-    }
-  }, [email, role]);
-
-  useEffect(() => {
-    if (lockoutTimer <= 0) return;
-    const interval = setInterval(() => {
-      setLockoutTimer((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [lockoutTimer]);
-
-  // If user is authenticated AND needs first login password change
-  if (currentUser && currentUser.mustChangePassword) {
     return (
-      <div className="min-h-[85vh] flex items-center justify-center p-4 md:p-8 bg-[#FAF8F5] dark:bg-[#0D0D0D]">
+      <div className="min-h-[85vh] flex items-center justify-center p-4 md:p-8 bg-[#FAF8F5] dark:bg-[#0D0D0D] transition-colors">
         <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-lg bg-white dark:bg-[#141414] border border-[#C9A55B]/40 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 relative overflow-hidden"
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-lg bg-white dark:bg-[#141414] border border-[#C9A55B]/40 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden space-y-6"
         >
-          <div className="absolute top-0 left-0 right-0 h-1.5 bg-linear-to-r from-[#C9A55B] via-[#DFBF7A] to-[#806020]" />
-          
-          <div className="text-center space-y-2 pt-2">
-            <div className="w-12 h-12 rounded-2xl bg-[#C9A55B]/10 border border-[#C9A55B]/30 text-[#C9A55B] flex items-center justify-center mx-auto">
-              <KeyRound className="w-6 h-6" />
+          <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-500 via-[#C9A55B] to-amber-700" />
+
+          {/* Header */}
+          <div className="text-center space-y-3 pt-2">
+            <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto shadow-inner">
+              <ShieldAlert className="w-8 h-8" />
             </div>
+
+            <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] font-bold uppercase tracking-wider">
+              <Lock className="w-3.5 h-3.5" />
+              <span>Acceso Restringido por Rol</span>
+            </div>
+
             <h2 className="text-xl font-serif font-bold text-[#1C1917] dark:text-white">
-              Primer Inicio de Sesión Obligatorio
+              Privilegios Insuficientes para esta URL
             </h2>
-            <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] max-w-sm mx-auto">
-              Hola, <span className="font-bold text-[#1C1917] dark:text-white">{currentUser.nombre}</span>. Por normatividad de ciberseguridad ESSENYA, debes actualizar tu clave temporal por una nueva contraseña personal.
+
+            <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] leading-relaxed max-w-sm mx-auto">
+              La dirección actual <code className="px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10 font-mono text-[#C9A55B]">{location.pathname}</code> requiere privilegios exclusivos de <strong className="text-[#1C1917] dark:text-white">{requiredRoleName}</strong>.
             </p>
           </div>
 
-          {errorMessage && (
-            <div className="bg-red-500/10 border border-red-500/30 p-3.5 rounded-2xl flex items-start space-x-3 text-red-600 dark:text-red-400 text-xs">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{errorMessage}</span>
+          {/* Active Session Info Box */}
+          <div className="bg-[#FAF8F5] dark:bg-[#1C1C1C] p-4 rounded-2xl border border-[#E5DFD3] dark:border-[#2E2E2E] space-y-2 text-xs">
+            <div className="flex justify-between items-center text-[11px] text-[#888888]">
+              <span>Sesión activa detectada:</span>
+              <span className="font-semibold px-2 py-0.5 rounded-full bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B]">
+                {loggedRoleName}
+              </span>
             </div>
-          )}
+            <p className="font-bold text-[#1C1917] dark:text-white text-sm">
+              {loggedUser.nombre} {loggedUser.apellidos}
+            </p>
+            <p className="text-[#6B655F] dark:text-[#AAAAAA] text-[11px]">
+              {loggedUser.correo}
+            </p>
+          </div>
 
-          {successMessage && (
-            <div className="bg-emerald-500/10 border border-emerald-500/30 p-3.5 rounded-2xl flex items-start space-x-3 text-emerald-600 dark:text-emerald-400 text-xs">
-              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{successMessage}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleFirstPasswordChange} className="space-y-4">
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-[#6B655F] dark:text-[#AAAAAA] uppercase tracking-wider">
-                Nueva Contraseña *
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3 top-3 text-[#A8A29E]" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={newFirstPassword}
-                  onChange={(e) => setNewFirstPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  className="w-full pl-9 pr-10 py-2.5 text-xs rounded-xl border border-[#E5DFD3] dark:border-[#333333] bg-white dark:bg-[#0D0D0D] text-[#1C1917] dark:text-white placeholder:text-[#A8A29E] focus:outline-none focus:border-[#C9A55B]"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3 text-[#A8A29E]"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              <PasswordStrengthMeter password={newFirstPassword} />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-[#6B655F] dark:text-[#AAAAAA] uppercase tracking-wider">
-                Confirmar Nueva Contraseña *
-              </label>
-              <div className="relative">
-                <KeyRound className="w-4 h-4 absolute left-3 top-3 text-[#A8A29E]" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={confirmFirstPassword}
-                  onChange={(e) => setConfirmFirstPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  className="w-full pl-9 pr-3 py-2.5 text-xs rounded-xl border border-[#E5DFD3] dark:border-[#333333] bg-white dark:bg-[#0D0D0D] text-[#1C1917] dark:text-white placeholder:text-[#A8A29E] focus:outline-none focus:border-[#C9A55B]"
-                />
-              </div>
-            </div>
-
+          {/* Action Options */}
+          <div className="space-y-3 pt-2">
             <LuxuryButton
-              type="submit"
-              disabled={isSubmitting}
+              onClick={() => navigate(destinationPath)}
               variant="gold"
-              className="w-full py-3 text-xs tracking-wider font-bold shadow-lg"
+              className="w-full py-3 text-xs tracking-wider font-bold shadow-lg flex items-center justify-center space-x-2"
             >
-              {isSubmitting ? 'Guardando Nueva Contraseña...' : 'Establecer Contraseña y Acceder'}
+              <span>Ir a mi Portal ({loggedRoleName})</span>
+              <ExternalLink className="w-4 h-4" />
             </LuxuryButton>
-          </form>
 
-          <div className="text-center pt-2 border-t border-[#E5DFD3] dark:border-[#262626]">
             <button
-              onClick={() => logout(role)}
-              className="text-xs text-[#888888] hover:text-red-400 font-semibold underline"
+              onClick={() => setForceShowLogin(true)}
+              className="w-full py-2.5 px-4 text-xs font-bold rounded-xl border border-[#E5DFD3] dark:border-[#333333] hover:border-[#C9A55B] text-[#1C1917] dark:text-white bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-all text-center"
             >
-              Cerrar sesión de seguridad
+              Iniciar sesión con cuenta de {requiredRoleName}
+            </button>
+
+            <button
+              onClick={() => logout(activeOtherSession.roleKey)}
+              className="w-full text-center text-xs text-red-500 hover:text-red-600 font-semibold py-1 flex items-center justify-center space-x-1.5 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Cerrar sesión de {loggedRoleName}</span>
             </button>
           </div>
         </motion.div>
@@ -283,11 +521,7 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
     );
   }
 
-  // If user is authenticated for this role, render children
-  if (currentUser) {
-    return <>{children}</>;
-  }
-
+  // 3. Render Login / Register Gateway for this portal
   const roleTitles: Record<UserRole, { title: string; subtitle: string; icon: any }> = {
     cliente: {
       title: 'Portal Privado Clientes ESSENYA',
@@ -370,18 +604,6 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
     }
   };
 
-  // Fast Demo Login option for smooth evaluator testing
-  const handleDemoAccess = async () => {
-    setErrorMessage(null);
-    setIsSubmitting(true);
-    const demoEmail = role === 'cliente' ? 'cliente@essenya.com' : role === 'terapeuta' ? 'terapeuta@essenya.com' : 'admin@essenya.com';
-    const res = await login(role, demoEmail, 'Essenya2026!');
-    setIsSubmitting(false);
-    if (!res.success) {
-      setErrorMessage(res.error || 'Error en acceso demo.');
-    }
-  };
-
   return (
     <div className="min-h-[85vh] flex items-center justify-center p-4 md:p-8 bg-[#FAF8F5] dark:bg-[#0D0D0D] transition-colors">
       <motion.div 
@@ -390,7 +612,7 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
         className="w-full max-w-lg bg-white dark:bg-[#141414] border border-[#E5DFD3] dark:border-[#262626] rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden space-y-6"
       >
         {/* Top Gold Accent Bar */}
-        <div className="absolute top-0 left-0 right-0 h-1.5 bg-linear-to-r from-[#C9A55B] via-[#DFBF7A] to-[#806020]" />
+        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#C9A55B] via-[#DFBF7A] to-[#806020]" />
 
         {/* Header Logo & Title */}
         <div className="text-center space-y-3 pt-2">
@@ -406,6 +628,12 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
           <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] max-w-sm mx-auto leading-relaxed">
             {currentRoleInfo.subtitle}
           </p>
+
+          {/* Secure Route Badge */}
+          <div className="flex items-center justify-center space-x-2 pt-1 text-[11px] text-[#888888]">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#C9A55B]" />
+            <span>Ruta Protegida: <span className="font-mono text-[#C9A55B] font-bold">{location.pathname}</span></span>
+          </div>
         </div>
 
         {/* Lockout Banner */}
@@ -426,9 +654,21 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
 
         {/* Error Banner */}
         {errorMessage && (
-          <div className="bg-red-500/10 border border-red-500/30 p-3.5 rounded-2xl flex items-start space-x-3 text-red-600 dark:text-red-400 text-xs">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span className="leading-relaxed font-medium">{errorMessage}</span>
+          <div className="bg-red-500/10 border border-red-500/30 p-3.5 rounded-2xl flex flex-col space-y-2 text-red-600 dark:text-red-400 text-xs">
+            <div className="flex items-start space-x-3">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span className="leading-relaxed font-bold">{errorMessage}</span>
+            </div>
+            {(errorMessage.includes('Error:') || errorMessage.includes('Código:') || errorMessage.includes('Firebase') || errorMessage.includes('Authentication')) && (
+              <div className="ml-7 pt-1 border-t border-red-500/20">
+                <p className="text-[10px] opacity-70 uppercase tracking-tighter font-bold">
+                  Instrucción de Configuración:
+                </p>
+                <p className="text-[10px] leading-tight">
+                  Asegúrate de haber hecho clic en "Comenzar" en la pestaña Authentication de la consola de Firebase y haber activado el proveedor "Correo electrónico/contraseña".
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -559,10 +799,15 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="correo@ejemplo.com"
+                placeholder="tu-correo@gmail.com"
                 className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-[#E5DFD3] dark:border-[#333333] bg-white dark:bg-[#0D0D0D] text-[#1C1917] dark:text-white placeholder:text-[#A8A29E] focus:outline-none focus:border-[#C9A55B]"
               />
             </div>
+            <p className="text-[10px] text-[#888888] dark:text-[#666666] mt-1 pl-1">
+              {role === 'cliente' 
+                ? 'Puedes usar tu correo personal (Gmail, Outlook, Yahoo, etc.)' 
+                : 'Usa el correo con el que te registraste en ESSENYA.'}
+            </p>
           </div>
 
           {/* Password Field */}
@@ -674,23 +919,10 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
           </LuxuryButton>
         </form>
         )}
-
-        {/* Demo Fast Access Option */}
-        <div className="pt-2 border-t border-[#E5DFD3] dark:border-[#262626] text-center space-y-2">
-          <p className="text-[11px] text-[#806020] dark:text-[#C9A55B] font-medium">
-            ¿Deseas probar la plataforma directamente?
-          </p>
-          <button
-            type="button"
-            onClick={handleDemoAccess}
-            disabled={isSubmitting}
-            className="w-full py-2 px-3 rounded-xl border border-[#C9A55B]/40 bg-[#C9A55B]/10 hover:bg-[#C9A55B]/20 text-[#806020] dark:text-[#C9A55B] text-xs font-bold transition-all flex items-center justify-center space-x-2"
-          >
-            <ShieldCheck className="w-4 h-4 text-[#C9A55B]" />
-            <span>Ingreso Rápido Demo ({role.toUpperCase()})</span>
-          </button>
-        </div>
       </motion.div>
     </div>
   );
 };
+
+export default PortalAuthGuard;
+

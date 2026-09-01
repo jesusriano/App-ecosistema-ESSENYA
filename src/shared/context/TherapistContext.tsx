@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc, onSnapshot } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { doc, setDoc, updateDoc, collection, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { db, auth } from '../../lib/firebase';
 import { TherapistFullProfile, TherapistDocument, DocumentStatus, AccountStatus } from '../types/auth';
+import { handleFirestoreError, OperationType } from '../utils/firestoreDebug';
 
 interface AuditLog {
   id: string;
@@ -42,7 +44,7 @@ interface TherapistContextType {
   
   updateTherapist: (id: string, updates: Partial<TherapistFullProfile>) => Promise<{ success: boolean; error?: string }>;
   changeTherapistStatus: (id: string, status: AccountStatus, reason?: string) => Promise<{ success: boolean; error?: string }>;
-  resetTherapistPassword: (id: string) => Promise<{ success: boolean; tempPassword?: string; error?: string }>;
+  resetTherapistPassword: (id: string) => Promise<{ success: boolean; message?: string; tempPassword?: string; error?: string }>;
   deleteTherapist: (id: string) => Promise<{ success: boolean; error?: string }>;
   
   // Document Verification (Admin)
@@ -50,6 +52,8 @@ interface TherapistContextType {
   
   // Therapist Self Operations
   uploadDocument: (therapistId: string, docData: Omit<TherapistDocument, 'id' | 'estado' | 'fechaSubida'>) => Promise<{ success: boolean; error?: string }>;
+  replaceDocument: (therapistId: string, documentId: string, docData: Partial<Omit<TherapistDocument, 'id' | 'estado' | 'fechaSubida'>>) => Promise<{ success: boolean; error?: string }>;
+  deleteDocument: (therapistId: string, documentId: string) => Promise<{ success: boolean; error?: string }>;
   updateSelfProfile: (therapistId: string, updates: Partial<TherapistFullProfile>) => Promise<{ success: boolean; error?: string }>;
   
   getTherapistById: (id: string) => TherapistFullProfile | undefined;
@@ -92,7 +96,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         setTherapists(loaded);
       }
     }, (err) => {
-      console.warn('Therapists onSnapshot note:', err);
+      handleFirestoreError(err, OperationType.LIST, 'terapeutas');
     });
 
     return () => unsubscribe();
@@ -218,12 +222,9 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       fechaActualizacion: new Date().toISOString()
     };
 
-    setTherapists(prev => [newTherapist, ...prev]);
-    logAudit(newId, `${nombre} ${apellidos}`, initialStatus === 'pendiente' ? 'Postulación de Terapeuta Registrada' : 'Creación de Cuenta por Administradora', `Estado Inicial: ${initialStatus.toUpperCase()}`);
-
-    // Try save to Firestore
+    // Save to Firestore
     try {
-      await setDoc(doc(db, 'users', newId), {
+      const userPayload = {
         id: newId,
         nombre,
         apellidos,
@@ -235,39 +236,59 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         correoVerificado: true,
         rol: 'terapeuta',
         fechaActualizacion: new Date().toISOString(),
-        mustChangePassword: initialStatus === 'activo',
-        therapistProfile: newTherapist
-      });
-    } catch {}
-
-    return { success: true, tempPassword: tempPass };
+        mustChangePassword: initialStatus === 'activo'
+      };
+      await setDoc(doc(db, 'users', newId), userPayload);
+      await setDoc(doc(db, 'terapeutas', newId), newTherapist);
+      
+      setTherapists(prev => [newTherapist, ...prev]);
+      logAudit(newId, `${nombre} ${apellidos}`, initialStatus === 'pendiente' ? 'Postulación de Terapeuta Registrada' : 'Creación de Cuenta por Administradora', `Estado Inicial: ${initialStatus.toUpperCase()}`);
+      
+      return { success: true, tempPassword: tempPass };
+    } catch (err: any) {
+      handleFirestoreError(err, OperationType.CREATE, `terapeutas/${newId}`, newTherapist);
+      return { success: false, error: err?.message || 'Error al registrar la terapeuta en la base de datos.' };
+    }
   };
 
   // Admin Operation: Update Therapist
   const updateTherapist = async (id: string, updates: Partial<TherapistFullProfile>): Promise<{ success: boolean; error?: string }> => {
     let updatedName = '';
-    setTherapists(prev => prev.map(t => {
-      if (t.id === id) {
-        updatedName = `${updates.nombre || t.nombre} ${updates.apellidos || t.apellidos}`;
-        return {
-          ...t,
-          ...updates,
-          fechaActualizacion: new Date().toISOString()
-        };
-      }
-      return t;
-    }));
+    const target = therapists.find(t => t.id === id);
+    if (!target) return { success: false, error: 'Terapeuta no encontrada.' };
 
-    logAudit(id, updatedName || 'Terapeuta', 'Modificación de Expediente', 'Perfil actualizado por la Administradora.');
+    updatedName = `${updates.nombre || target.nombre} ${updates.apellidos || target.apellidos}`;
+
+    const updatePayload = {
+      ...updates,
+      fechaActualizacion: new Date().toISOString()
+    };
 
     try {
-      await updateDoc(doc(db, 'users', id), {
-        ...updates,
-        fechaActualizacion: new Date().toISOString()
-      });
-    } catch {}
+      await updateDoc(doc(db, 'terapeutas', id), updatePayload);
+      try {
+        await updateDoc(doc(db, 'users', id), {
+          fechaActualizacion: new Date().toISOString()
+        });
+      } catch {}
 
-    return { success: true };
+      setTherapists(prev => prev.map(t => {
+        if (t.id === id) {
+          return {
+            ...t,
+            ...updates,
+            fechaActualizacion: new Date().toISOString()
+          };
+        }
+        return t;
+      }));
+
+      logAudit(id, updatedName, 'Modificación de Expediente', 'Perfil actualizado por la Administradora.');
+      return { success: true };
+    } catch (err: any) {
+      handleFirestoreError(err, OperationType.UPDATE, `terapeutas/${id}`, updatePayload);
+      return { success: false, error: err?.message || 'Error al actualizar terapeuta en Firestore.' };
+    }
   };
 
   // Admin Operation: Change Status (Activo, Inactivo, Bloqueado, Pendiente, Rechazado)
@@ -277,70 +298,111 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     const rejectionReason = status === 'rechazado' ? (reason || 'No cumple con los requisitos de acreditación.') : undefined;
 
-    setTherapists(prev => prev.map(t => {
-      if (t.id === id) {
-        return { 
-          ...t, 
-          estado: status, 
-          motivoRechazoAccount: rejectionReason,
-          fechaActualizacion: new Date().toISOString() 
-        };
-      }
-      return t;
-    }));
-
     const statusLabel = 
       status === 'activo' ? 'Aprobada / Activada' : 
       status === 'rechazado' ? 'Rechazada' : 
       status === 'pendiente' ? 'Puesta en Revisión Pendiente' : 
       status === 'inactivo' ? 'Desactivada' : 'Suspendida / Bloqueada';
 
-    logAudit(id, `${target.nombre} ${target.apellidos}`, `Estado Cambiado a: ${statusLabel}`, reason || 'Acción ejecutada por Administradora.');
+    const statusPayload = {
+      estado: status,
+      motivoRechazoAccount: rejectionReason || null,
+      fechaActualizacion: new Date().toISOString()
+    };
 
     try {
-      await updateDoc(doc(db, 'users', id), {
-        estado: status,
-        motivoRechazoAccount: rejectionReason || null,
-        fechaActualizacion: new Date().toISOString()
-      });
-    } catch {}
+      await updateDoc(doc(db, 'terapeutas', id), statusPayload);
+      try {
+        await updateDoc(doc(db, 'users', id), {
+          estado: status,
+          fechaActualizacion: new Date().toISOString()
+        });
+      } catch {}
 
-    return { success: true };
+      setTherapists(prev => prev.map(t => {
+        if (t.id === id) {
+          return { 
+            ...t, 
+            estado: status, 
+            motivoRechazoAccount: rejectionReason, 
+            fechaActualizacion: new Date().toISOString() 
+          };
+        }
+        return t;
+      }));
+
+      logAudit(id, `${target.nombre} ${target.apellidos}`, `Estado Cambiado a: ${statusLabel}`, reason || 'Acción ejecutada por Administradora.');
+      return { success: true };
+    } catch (err: any) {
+      handleFirestoreError(err, OperationType.UPDATE, `terapeutas/${id}`, statusPayload);
+      return { success: false, error: err?.message || 'Error al modificar el estado de la cuenta.' };
+    }
   };
 
   // Admin Operation: Reset Password
-  const resetTherapistPassword = async (id: string): Promise<{ success: boolean; tempPassword?: string; error?: string }> => {
+  const resetTherapistPassword = async (id: string): Promise<{ success: boolean; message?: string; tempPassword?: string; error?: string }> => {
     const target = therapists.find(t => t.id === id);
     if (!target) return { success: false, error: 'Terapeuta no encontrada.' };
 
-    const newTempPass = `Reset${Math.floor(1000 + Math.random() * 9000)}!`;
-
-    setTherapists(prev => prev.map(t => {
-      if (t.id === id) {
-        return { ...t, mustChangePassword: true, fechaActualizacion: new Date().toISOString() };
+    try {
+      // 1. Send official Firebase Authentication password reset email
+      if (target.correo) {
+        await sendPasswordResetEmail(auth, target.correo.trim().toLowerCase());
       }
-      return t;
-    }));
 
-    logAudit(id, `${target.nombre} ${target.apellidos}`, 'Restablecimiento de Contraseña', `Nueva clave temporal generada: ${newTempPass}`);
+      // 2. Mark mustChangePassword in Firestore
+      await updateDoc(doc(db, 'terapeutas', id), {
+        mustChangePassword: true,
+        fechaActualizacion: new Date().toISOString()
+      });
+      try {
+        await updateDoc(doc(db, 'users', id), {
+          mustChangePassword: true,
+          fechaActualizacion: new Date().toISOString()
+        });
+      } catch {}
 
-    return { success: true, tempPassword: newTempPass };
+      setTherapists(prev => prev.map(t => {
+        if (t.id === id) {
+          return { ...t, mustChangePassword: true, fechaActualizacion: new Date().toISOString() };
+        }
+        return t;
+      }));
+
+      logAudit(id, `${target.nombre} ${target.apellidos}`, 'Restablecimiento Oficial de Contraseña', `Enlace de recuperación emitido y enviado a ${target.correo}.`);
+
+      return { 
+        success: true, 
+        message: `Se ha enviado el enlace oficial de restablecimiento a ${target.correo}.` 
+      };
+    } catch (err: any) {
+      console.error('Password reset failed for therapist:', err);
+      return { 
+        success: false, 
+        error: err?.message || 'No se pudo enviar el correo de restablecimiento de contraseña.' 
+      };
+    }
   };
 
   // Admin Operation: Delete Therapist
   const deleteTherapist = async (id: string): Promise<{ success: boolean; error?: string }> => {
     const target = therapists.find(t => t.id === id);
-    if (target) {
-      logAudit(id, `${target.nombre} ${target.apellidos}`, 'Eliminación de Cuenta', 'Cuenta eliminada permanentemente del sistema.');
-    }
-
-    setTherapists(prev => prev.filter(t => t.id !== id));
+    if (!target) return { success: false, error: 'Terapeuta no encontrada.' };
 
     try {
-      await deleteDoc(doc(db, 'users', id));
-    } catch {}
+      await deleteDoc(doc(db, 'terapeutas', id));
+      try {
+        await deleteDoc(doc(db, 'users', id));
+      } catch {}
 
-    return { success: true };
+      setTherapists(prev => prev.filter(t => t.id !== id));
+      logAudit(id, `${target.nombre} ${target.apellidos}`, 'Eliminación de Cuenta', 'Cuenta eliminada permanentemente del sistema.');
+
+      return { success: true };
+    } catch (err: any) {
+      handleFirestoreError(err, OperationType.DELETE, `terapeutas/${id}`);
+      return { success: false, error: err?.message || 'Error al eliminar terapeuta de Firestore.' };
+    }
   };
 
   // Admin Document Review (Approve or Reject with Reason)
@@ -353,31 +415,47 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     const target = therapists.find(t => t.id === therapistId);
     if (!target) return { success: false, error: 'Terapeuta no encontrada.' };
 
-    setTherapists(prev => prev.map(t => {
-      if (t.id === therapistId) {
-        const updatedDocs = t.documentos.map(doc => {
-          if (doc.id === documentId) {
-            return {
-              ...doc,
-              estado: status,
-              motivoRechazo: status === 'rechazado' ? motivoRechazo || 'Documento ilegible o vencido.' : undefined
-            };
-          }
-          return doc;
-        });
-        return { ...t, documentos: updatedDocs, fechaActualizacion: new Date().toISOString() };
+    const statusNormalized = status === 'aprobado' ? 'validado' : status;
+    const updatedDocs = target.documentos.map(doc => {
+      if (doc.id === documentId) {
+        return {
+          ...doc,
+          estado: statusNormalized,
+          fechaRevision: new Date().toISOString(),
+          revisadoPor: 'Administradora ESSENYA',
+          motivoRechazo: statusNormalized === 'rechazado' ? motivoRechazo || 'Documento ilegible o vencido.' : undefined
+        };
       }
-      return t;
-    }));
+      return doc;
+    });
 
-    logAudit(
-      therapistId, 
-      `${target.nombre} ${target.apellidos}`, 
-      `Revisión de Documento (${status.toUpperCase()})`, 
-      status === 'rechazado' ? `Motivo: ${motivoRechazo}` : 'Documento verificado y aprobado.'
-    );
+    const updatePayload = {
+      documentos: updatedDocs,
+      fechaActualizacion: new Date().toISOString()
+    };
 
-    return { success: true };
+    try {
+      await updateDoc(doc(db, 'terapeutas', therapistId), updatePayload);
+
+      setTherapists(prev => prev.map(t => {
+        if (t.id === therapistId) {
+          return { ...t, documentos: updatedDocs, fechaActualizacion: new Date().toISOString() };
+        }
+        return t;
+      }));
+
+      logAudit(
+        therapistId, 
+        `${target.nombre} ${target.apellidos}`, 
+        `Revisión de Documento (${statusNormalized.toUpperCase()})`, 
+        statusNormalized === 'rechazado' ? `Motivo: ${motivoRechazo}` : 'Documento validado y certificado por Admin.'
+      );
+
+      return { success: true };
+    } catch (err: any) {
+      handleFirestoreError(err, OperationType.UPDATE, `terapeutas/${therapistId}`, updatePayload);
+      return { success: false, error: err?.message || 'Error al guardar la revisión en Firestore.' };
+    }
   };
 
   // Therapist Operation: Upload Document
@@ -385,6 +463,9 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     therapistId: string, 
     docData: Omit<TherapistDocument, 'id' | 'estado' | 'fechaSubida'>
   ): Promise<{ success: boolean; error?: string }> => {
+    const target = therapists.find(t => t.id === therapistId);
+    if (!target) return { success: false, error: 'Terapeuta no encontrada.' };
+
     const newDoc: TherapistDocument = {
       ...docData,
       id: `doc-${Date.now()}`,
@@ -392,18 +473,116 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       fechaSubida: new Date().toISOString()
     };
 
-    setTherapists(prev => prev.map(t => {
-      if (t.id === therapistId) {
+    const updatedDocs = [...target.documentos, newDoc];
+    const updatePayload = {
+      documentos: updatedDocs,
+      fechaActualizacion: new Date().toISOString()
+    };
+
+    try {
+      await updateDoc(doc(db, 'terapeutas', therapistId), updatePayload);
+
+      setTherapists(prev => prev.map(t => {
+        if (t.id === therapistId) {
+          return {
+            ...t,
+            documentos: updatedDocs,
+            fechaActualizacion: new Date().toISOString()
+          };
+        }
+        return t;
+      }));
+
+      return { success: true };
+    } catch (err: any) {
+      handleFirestoreError(err, OperationType.UPDATE, `terapeutas/${therapistId}`, updatePayload);
+      return { success: false, error: err?.message || 'Error al subir documento.' };
+    }
+  };
+
+  // Therapist Operation: Replace Document (e.g. resubmitting a rejected or updated document)
+  const replaceDocument = async (
+    therapistId: string,
+    documentId: string,
+    docData: Partial<Omit<TherapistDocument, 'id' | 'estado' | 'fechaSubida'>>
+  ): Promise<{ success: boolean; error?: string }> => {
+    const target = therapists.find(t => t.id === therapistId);
+    if (!target) return { success: false, error: 'Terapeuta no encontrada.' };
+
+    const updatedDocs = target.documentos.map(d => {
+      if (d.id === documentId) {
         return {
-          ...t,
-          documentos: [...t.documentos, newDoc],
-          fechaActualizacion: new Date().toISOString()
+          ...d,
+          ...docData,
+          estado: 'pendiente' as DocumentStatus,
+          motivoRechazo: undefined,
+          fechaSubida: new Date().toISOString(),
+          fechaRevision: undefined,
+          revisadoPor: undefined
         };
       }
-      return t;
-    }));
+      return d;
+    });
 
-    return { success: true };
+    const updatePayload = {
+      documentos: updatedDocs,
+      fechaActualizacion: new Date().toISOString()
+    };
+
+    try {
+      await updateDoc(doc(db, 'terapeutas', therapistId), updatePayload);
+
+      setTherapists(prev => prev.map(t => {
+        if (t.id === therapistId) {
+          return {
+            ...t,
+            documentos: updatedDocs,
+            fechaActualizacion: new Date().toISOString()
+          };
+        }
+        return t;
+      }));
+
+      return { success: true };
+    } catch (err: any) {
+      handleFirestoreError(err, OperationType.UPDATE, `terapeutas/${therapistId}`, updatePayload);
+      return { success: false, error: err?.message || 'Error al reemplazar documento.' };
+    }
+  };
+
+  // Therapist Operation: Delete Document
+  const deleteDocument = async (
+    therapistId: string,
+    documentId: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const target = therapists.find(t => t.id === therapistId);
+    if (!target) return { success: false, error: 'Terapeuta no encontrada.' };
+
+    const updatedDocs = target.documentos.filter(d => d.id !== documentId);
+    const updatePayload = {
+      documentos: updatedDocs,
+      fechaActualizacion: new Date().toISOString()
+    };
+
+    try {
+      await updateDoc(doc(db, 'terapeutas', therapistId), updatePayload);
+
+      setTherapists(prev => prev.map(t => {
+        if (t.id === therapistId) {
+          return {
+            ...t,
+            documentos: updatedDocs,
+            fechaActualizacion: new Date().toISOString()
+          };
+        }
+        return t;
+      }));
+
+      return { success: true };
+    } catch (err: any) {
+      handleFirestoreError(err, OperationType.UPDATE, `terapeutas/${therapistId}`, updatePayload);
+      return { success: false, error: err?.message || 'Error al eliminar documento.' };
+    }
   };
 
   // Therapist Operation: Update Self Profile
@@ -411,18 +590,30 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     therapistId: string, 
     updates: Partial<TherapistFullProfile>
   ): Promise<{ success: boolean; error?: string }> => {
-    setTherapists(prev => prev.map(t => {
-      if (t.id === therapistId) {
-        return {
-          ...t,
-          ...updates,
-          fechaActualizacion: new Date().toISOString()
-        };
-      }
-      return t;
-    }));
+    const updatePayload = {
+      ...updates,
+      fechaActualizacion: new Date().toISOString()
+    };
 
-    return { success: true };
+    try {
+      await updateDoc(doc(db, 'terapeutas', therapistId), updatePayload);
+
+      setTherapists(prev => prev.map(t => {
+        if (t.id === therapistId) {
+          return {
+            ...t,
+            ...updates,
+            fechaActualizacion: new Date().toISOString()
+          };
+        }
+        return t;
+      }));
+
+      return { success: true };
+    } catch (err: any) {
+      handleFirestoreError(err, OperationType.UPDATE, `terapeutas/${therapistId}`, updatePayload);
+      return { success: false, error: err?.message || 'Error al actualizar perfil.' };
+    }
   };
 
   const getTherapistById = (id: string) => {
@@ -442,6 +633,8 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         deleteTherapist,
         reviewDocument,
         uploadDocument,
+        replaceDocument,
+        deleteDocument,
         updateSelfProfile,
         getTherapistById
       }}
@@ -458,3 +651,4 @@ export const useTherapistContext = () => {
   }
   return context;
 };
+

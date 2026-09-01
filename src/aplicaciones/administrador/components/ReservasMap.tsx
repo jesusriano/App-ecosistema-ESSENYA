@@ -16,6 +16,12 @@ const getEffectiveApiKey = (): string => {
     if (localKey && localKey.trim().length > 10) {
       return localKey.trim();
     }
+
+    // Use environment variable if available
+    const envKey = (process.env as any).GOOGLE_MAPS_PLATFORM_KEY;
+    if (envKey && envKey.trim().length > 10) {
+      return envKey.trim();
+    }
   }
   return '';
 };

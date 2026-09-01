@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ClientLayout } from '../layouts/ClientLayout';
 import { ClientRoutes } from '../routes/index';
 import { ClientRoutePath } from '../components/ClientNavigation';
@@ -6,7 +7,22 @@ import { useCliente } from '../hooks/useCliente';
 import { ImmediateRatingModal } from '../components/ImmediateRatingModal';
 
 export const ClienteAppModule: React.FC = () => {
-  const [currentRoute, setCurrentRoute] = useState<ClientRoutePath>('/inicio');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Derive current sub-route directly from URL path (e.g. /cliente/reservas -> /reservas)
+  const currentRoute: ClientRoutePath = useMemo(() => {
+    const path = location.pathname.replace(/^\/cliente/, '') || '/inicio';
+    if (path === '/' || path === '') return '/inicio';
+    const validRoutes: ClientRoutePath[] = ['/inicio', '/reservas', '/facturas', '/promociones', '/perfil'];
+    const matched = validRoutes.find(r => path.startsWith(r));
+    return matched || '/inicio';
+  }, [location.pathname]);
+
+  const handleNavigate = (route: ClientRoutePath) => {
+    navigate(`/cliente${route}`);
+  };
+
   const { client, bookings, activeBooking, handleRateBooking } = useCliente();
   const [dismissedBookingIds, setDismissedBookingIds] = useState<string[]>([]);
   const [activeRateBookingId, setActiveRateBookingId] = useState<string | null>(null);
@@ -35,12 +51,12 @@ export const ClienteAppModule: React.FC = () => {
     <ClientLayout
       client={client}
       currentRoute={currentRoute}
-      onNavigate={setCurrentRoute}
+      onNavigate={handleNavigate}
       hasActiveBooking={Boolean(activeBooking)}
     >
       <ClientRoutes
         currentRoute={currentRoute}
-        onNavigate={setCurrentRoute}
+        onNavigate={handleNavigate}
       />
 
       {/* Immediate Rating Prompt Modal when masseuse finishes massage */}
@@ -57,3 +73,4 @@ export const ClienteAppModule: React.FC = () => {
 };
 
 export default ClienteAppModule;
+

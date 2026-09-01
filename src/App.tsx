@@ -1,70 +1,91 @@
-import React, { useState } from 'react';
-import { PortalType } from './types';
-import { Header } from './components/Header';
-import { CorporateWebsite } from './components/CorporateWebsite';
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { InvoiceModal } from './components/InvoiceModal';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
 import { EcosystemProvider, useEcosystem } from './shared/context/EcosystemContext';
 import { AuthProvider } from './shared/context/AuthContext';
 import { TherapistProvider } from './shared/context/TherapistContext';
+import { PortalAuthGuard } from './shared/components/auth/PortalAuthGuard';
 
 // Lazy loading the three independent application modules
-const ClientApp = React.lazy(() => import('./apps/client/ClientApp'));
-const TherapistApp = React.lazy(() => import('./apps/therapist/TherapistApp'));
-const AdminApp = React.lazy(() => import('./apps/admin/AdminApp'));
+const ClienteAppModule = React.lazy(() => import('./aplicaciones/cliente/App'));
+const TerapeutaAppModule = React.lazy(() => import('./aplicaciones/terapeuta/App'));
+const AdminAppModule = React.lazy(() => import('./aplicaciones/administrador/App'));
 
-const LoadingFallback = () => (
-  <div className="flex items-center justify-center min-h-[60vh] p-8">
+const LoadingFallback: React.FC<{ moduleName: string }> = ({ moduleName }) => (
+  <div className="flex items-center justify-center min-h-screen bg-[#FAF8F5] dark:bg-[#0D0D0D] p-8">
     <div className="flex flex-col items-center space-y-4">
       <div className="w-12 h-12 rounded-full border-2 border-[#C9A55B] border-t-transparent animate-spin" />
       <span className="text-xs uppercase font-semibold tracking-widest text-[#806020] dark:text-[#C9A55B]">
-        Cargando Módulo ESSENYA...
+        Cargando {moduleName}...
       </span>
     </div>
   </div>
 );
 
 function MainAppContent() {
-  const [currentPortal, setCurrentPortal] = useState<PortalType>('website');
   const {
-    services,
-    bookings,
     activeInvoice,
     setActiveInvoice,
   } = useEcosystem();
 
-  const activeBookingCount = bookings.filter(b => b.state !== 'servicio_finalizado' && b.state !== 'cancelado').length;
-
   return (
     <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#0D0D0D] text-[#1C1917] dark:text-white flex flex-col font-sans transition-colors duration-300 selection:bg-[#C9A55B] selection:text-black">
-      {/* Header & Portal Switcher */}
-      <Header 
-        currentPortal={currentPortal} 
-        onSelectPortal={setCurrentPortal}
-        activeBookingCount={activeBookingCount}
-      />
-
-      {/* Main Portal View with Lazy Loading */}
+      {/* Independent Application Modules on dedicated URLs - NO global header */}
       <div className="flex-1">
-        <React.Suspense fallback={<LoadingFallback />}>
-          {currentPortal === 'website' && (
-            <CorporateWebsite 
-              services={services}
-              onStartBooking={() => setCurrentPortal('client')}
-              onSelectPortal={setCurrentPortal}
-            />
-          )}
+        <Routes>
+          {/* 1. App de Clientes (URL dedicada: /cliente) */}
+          <Route 
+            path="/cliente/*" 
+            element={
+              <React.Suspense fallback={<LoadingFallback moduleName="App Clientes ESSENYA" />}>
+                <PortalAuthGuard role="cliente">
+                  <ClienteAppModule />
+                </PortalAuthGuard>
+              </React.Suspense>
+            } 
+          />
+          <Route path="/clientes/*" element={<Navigate to="/cliente" replace />} />
+          <Route path="/reservar/*" element={<Navigate to="/cliente" replace />} />
+          <Route path="/app-cliente/*" element={<Navigate to="/cliente" replace />} />
 
-          {currentPortal === 'client' && <ClientApp />}
+          {/* 2. App de Terapeutas (URL dedicada: /terapeuta) */}
+          <Route 
+            path="/terapeuta/*" 
+            element={
+              <React.Suspense fallback={<LoadingFallback moduleName="App Terapeutas ESSENYA" />}>
+                <PortalAuthGuard role="terapeuta">
+                  <TerapeutaAppModule />
+                </PortalAuthGuard>
+              </React.Suspense>
+            } 
+          />
+          <Route path="/terapeutas/*" element={<Navigate to="/terapeuta" replace />} />
+          <Route path="/app-terapeuta/*" element={<Navigate to="/terapeuta" replace />} />
 
-          {currentPortal === 'therapist' && <TherapistApp />}
+          {/* 3. App de Administración (URL dedicada: /admin) */}
+          <Route 
+            path="/admin/*" 
+            element={
+              <React.Suspense fallback={<LoadingFallback moduleName="Panel Administrador ESSENYA" />}>
+                <PortalAuthGuard role="administrador">
+                  <AdminAppModule />
+                </PortalAuthGuard>
+              </React.Suspense>
+            } 
+          />
+          <Route path="/administrador/*" element={<Navigate to="/admin" replace />} />
+          <Route path="/administracion/*" element={<Navigate to="/admin" replace />} />
+          <Route path="/panel-admin/*" element={<Navigate to="/admin" replace />} />
 
-          {currentPortal === 'admin' && <AdminApp />}
-        </React.Suspense>
+          {/* Entrada principal por defecto -> /cliente */}
+          <Route path="/" element={<Navigate to="/cliente" replace />} />
+          <Route path="*" element={<Navigate to="/cliente" replace />} />
+        </Routes>
       </div>
 
-      {/* Invoice Viewer Modal */}
+      {/* Shared Invoice Viewer Modal (triggered when viewing invoices across ecosystems) */}
       <InvoiceModal 
         invoice={activeInvoice}
         onClose={() => setActiveInvoice(null)}
@@ -80,7 +101,9 @@ export default function App() {
         <AuthProvider>
           <TherapistProvider>
             <EcosystemProvider>
-              <MainAppContent />
+              <BrowserRouter>
+                <MainAppContent />
+              </BrowserRouter>
             </EcosystemProvider>
           </TherapistProvider>
         </AuthProvider>

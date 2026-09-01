@@ -15,10 +15,20 @@ import { AdminStatsPanel } from '../components/AdminStatsPanel';
 export const DashboardPage: React.FC = () => {
   const { 
     bookings, therapists, clients, zones, auditLogs, 
-    handleReassignTherapist 
+    handleReassignTherapist, panicAlerts, activePanicAlertsCount,
+    handleResolvePanicAlert, handleAttendPanicAlert
   } = useAdmin();
   const { therapists: fullTherapists } = useTherapistContext();
   const { showToast } = useToast();
+
+  const activePanicAlerts = panicAlerts.filter(a => a.status === 'activa' || a.status === 'en_atencion');
+  const [selectedPanicAlert, setSelectedPanicAlert] = useState<any>(null);
+
+  useEffect(() => {
+    if (activePanicAlerts.length > 0 && !selectedPanicAlert) {
+      setSelectedPanicAlert(activePanicAlerts[0]);
+    }
+  }, [panicAlerts]);
 
   const pendingTherapistsCount = fullTherapists.filter(t => t.estado === 'pendiente').length;
   const approvedTherapistsCount = fullTherapists.filter(t => t.estado === 'activo').length;
@@ -101,6 +111,156 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* SOS Panic Alerts Realtime Panel (High Priority) */}
+      {panicAlerts.length > 0 && (
+        <div className={`rounded-3xl p-5 border transition-all ${
+          activePanicAlerts.length > 0
+            ? 'bg-gradient-to-r from-red-950/70 via-[#1F1212] to-[#141414] border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.2)]'
+            : 'bg-[#141414] border-[#262626]'
+        }`}>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-red-500/30 pb-3">
+            <div className="flex items-center space-x-3">
+              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
+                activePanicAlerts.length > 0
+                  ? 'bg-red-600 text-white animate-bounce shadow-lg shadow-red-600/40'
+                  : 'bg-[#222222] text-[#888888]'
+              }`}>
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-serif font-bold text-base text-white">
+                    Central de Telemetría SOS & Solicitudes de Ubicación
+                  </h3>
+                  {activePanicAlerts.length > 0 ? (
+                    <span className="bg-red-600 text-white text-[10px] font-mono font-black px-2 py-0.5 rounded-full animate-pulse">
+                      {activePanicAlerts.length} ALERTA{activePanicAlerts.length > 1 ? 'S' : ''} ACTIVA{activePanicAlerts.length > 1 ? 'S' : ''}
+                    </span>
+                  ) : (
+                    <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      Sin Alertas Pendientes
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-[#AAAAAA]">
+                  Transmisión continua de coordenadas GPS vía Firestore desde el botón de pánico del cliente/terapeuta.
+                </p>
+              </div>
+            </div>
+
+            <div className="text-right text-[11px] font-mono text-emerald-400 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>Satelital Firestore 24/7</span>
+            </div>
+          </div>
+
+          {/* List of Recent & Active Alerts */}
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {panicAlerts.slice(0, 3).map((alert) => {
+              const isActive = alert.status === 'activa';
+              const isAttending = alert.status === 'en_atencion';
+              const isResolved = alert.status === 'resuelta';
+
+              return (
+                <div
+                  key={alert.id}
+                  className={`p-4 rounded-2xl border flex flex-col justify-between space-y-3 transition-all ${
+                    isActive
+                      ? 'bg-red-950/40 border-red-500 shadow-md ring-1 ring-red-500/50'
+                      : isAttending
+                      ? 'bg-amber-950/30 border-amber-500/50'
+                      : 'bg-[#1A1A1A] border-[#262626] opacity-75'
+                  }`}
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-start">
+                      <span className="font-mono text-[10px] text-[#C9A55B] font-bold">
+                        {alert.id}
+                      </span>
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                        isActive
+                          ? 'bg-red-600 text-white animate-pulse'
+                          : isAttending
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      }`}>
+                        {alert.status.replace('_', ' ')}
+                      </span>
+                    </div>
+
+                    <h4 className="font-bold text-sm text-white flex items-center gap-1.5">
+                      <span>{alert.userName}</span>
+                      <span className="text-[10px] font-normal text-[#AAAAAA] capitalize">
+                        ({alert.userRole})
+                      </span>
+                    </h4>
+
+                    <p className="text-xs text-[#CCCCCC] flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                      <span className="truncate">{alert.userLocation}</span>
+                    </p>
+
+                    {/* GPS Exact Coordinates Display */}
+                    <div className="bg-black/40 p-2 rounded-xl text-[11px] font-mono flex items-center justify-between text-emerald-400 border border-white/5">
+                      <span>Lat: {alert.latitude?.toFixed(5) || '19.4326'}</span>
+                      <span>Lng: {alert.longitude?.toFixed(5) || '-99.1913'}</span>
+                      <span className="text-[9px] text-[#888888]">±{Math.round(alert.accuracy || 10)}m</span>
+                    </div>
+
+                    {alert.notes && (
+                      <p className="text-[10px] text-[#888888] italic line-clamp-2">
+                        "{alert.notes}"
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Actions for Admin */}
+                  <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2">
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${alert.latitude},${alert.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold rounded-lg transition-all flex items-center gap-1"
+                    >
+                      <Navigation className="w-3 h-3 text-[#C9A55B]" />
+                      <span>Ver Mapa</span>
+                    </a>
+
+                    <div className="flex items-center gap-1.5">
+                      {isActive && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleAttendPanicAlert(alert.id);
+                            showToast('Alerta en Atención', `Personal del S.O.C. asignado a la alerta ${alert.id}`, 'info');
+                          }}
+                          className="px-2 py-1 bg-amber-600/30 hover:bg-amber-600/50 text-amber-300 text-[10px] font-bold rounded-lg border border-amber-500/40 transition-all"
+                        >
+                          Atender
+                        </button>
+                      )}
+
+                      {!isResolved && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleResolvePanicAlert(alert.id);
+                            showToast('Alerta Resuelta', `La alerta ${alert.id} fue archivada como atendida.`, 'success');
+                          }}
+                          className="px-2 py-1 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 text-[10px] font-bold rounded-lg border border-emerald-500/40 transition-all"
+                        >
+                          Resolver
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

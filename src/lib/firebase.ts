@@ -1,15 +1,17 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import firebaseConfigData from '../../firebase-applet-config.json';
+import appletConfig from '../../firebase-applet-config.json';
 
+// Single source of truth for Firebase Production Configuration
 const firebaseConfig = {
-  apiKey: firebaseConfigData.apiKey,
-  authDomain: firebaseConfigData.authDomain,
-  projectId: firebaseConfigData.projectId,
-  storageBucket: firebaseConfigData.storageBucket,
-  messagingSenderId: firebaseConfigData.messagingSenderId,
-  appId: firebaseConfigData.appId
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || appletConfig.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || appletConfig.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || appletConfig.projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || appletConfig.storageBucket,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || appletConfig.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || appletConfig.appId,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || appletConfig.measurementId || ""
 };
 
 // Initialize Firebase App safely
@@ -17,9 +19,9 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // Initialize Auth & Firestore with specific database ID from config
 export const auth = getAuth(app);
-export const db = getFirestore(
-  app, 
-  firebaseConfigData.firestoreDatabaseId || undefined
-);
+export const db = appletConfig.firestoreDatabaseId
+  ? getFirestore(app, appletConfig.firestoreDatabaseId)
+  : getFirestore(app);
 
 export default app;
+

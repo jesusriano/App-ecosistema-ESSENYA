@@ -910,14 +910,29 @@ export const TerapeutasPage: React.FC = () => {
                             </p>
                           </div>
 
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${
-                            doc.estado === 'aprobado'
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border tracking-wider flex items-center gap-1 ${
+                            doc.estado === 'validado' || doc.estado === 'aprobado'
                               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                               : doc.estado === 'rechazado'
                               ? 'bg-red-500/10 text-red-400 border-red-500/30'
                               : 'bg-amber-500/10 text-amber-400 border-amber-500/30 animate-pulse'
                           }`}>
-                            {doc.estado}
+                            {doc.estado === 'validado' || doc.estado === 'aprobado' ? (
+                              <>
+                                <ShieldCheck className="w-3 h-3" />
+                                <span>Validado</span>
+                              </>
+                            ) : doc.estado === 'rechazado' ? (
+                              <>
+                                <XCircle className="w-3 h-3" />
+                                <span>Rechazado</span>
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="w-3 h-3" />
+                                <span>Pendiente de revisión</span>
+                              </>
+                            )}
                           </span>
                         </div>
 
@@ -970,13 +985,13 @@ export const TerapeutasPage: React.FC = () => {
                             </div>
                           ) : (
                             <>
-                              {doc.estado !== 'aprobado' && (
+                              {doc.estado !== 'validado' && doc.estado !== 'aprobado' && (
                                 <button
                                   onClick={() => handleApproveDoc(showDocModal.id, doc.id)}
                                   className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-bold rounded-xl flex items-center gap-1 cursor-pointer"
                                 >
                                   <CheckCircle2 className="w-3.5 h-3.5" />
-                                  <span>Aprobar Documento</span>
+                                  <span>Validar Documento</span>
                                 </button>
                               )}
 

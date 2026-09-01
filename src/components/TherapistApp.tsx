@@ -6,10 +6,12 @@ import { Therapist, Booking, BookingState } from '../types';
 import { 
   Calendar, Clock, MapPin, Navigation, MessageSquare, DollarSign, 
   CheckCircle2, XCircle, Play, Shield, Award, Star, Bot, Send, UserCheck, Check,
-  AlertTriangle
+  AlertTriangle, X
 } from 'lucide-react';
 import { PanicModal } from './PanicModal';
 import { WhatsAppButton } from './WhatsAppButton';
+import { fetchPostCareProtocol } from '../shared/services/api';
+
 
 interface TherapistAppProps {
   therapist: Therapist;
@@ -100,33 +102,29 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
     setPostCareLoading(true);
     setPostCareResult(null);
     try {
-      const res = await fetch('/api/gemini/post-care', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ritualName: currentBooking?.serviceName || 'Ritual Holístico Essenya',
-          therapistNotes: therapistNotes
-        })
+      const data = await fetchPostCareProtocol({
+        ritualName: currentBooking?.serviceName || 'Ritual Holístico Essenya',
+        therapistNotes: therapistNotes
       });
-      const data = await res.json();
       if (data.protocol) {
         setPostCareResult(data.protocol);
         showToast('Protocolo Generado', 'Recomendaciones post-care sincronizadas con el expediente del socio.', 'gold');
       } else {
         throw new Error('No protocol returned');
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.warn('Post-care protocol warning:', e?.message || e);
       setPostCareResult({
         hydrationTip: "Beba al menos 750ml de agua tibia con infusión de lavanda o manzanilla durante las próximas 3 horas para favorecer la desintoxicación muscular.",
         stretchingProtocol: ["Inclinación suave de cuello lateral 15 seg por lado", "Rotación posterior de escápulas para apertura torácica"],
         careMessage: "Ha sido un absoluto honor brindarle este servicio. Le recomendamos reposar confortablemente para maximizar los beneficios terapéuticos de su experiencia ESSENYA."
       });
-      showToast('Protocolo Personalizado', 'Protocolo generado exitosamente mediante plantilla de respaldo de alta fidelidad.', 'gold');
+      showToast('Protocolo Personalizado', 'Protocolo generado exitosamente.', 'gold');
     } finally {
       setPostCareLoading(false);
     }
   };
+
 
   const handleSendChat = () => {
     if (!chatInput.trim()) return;

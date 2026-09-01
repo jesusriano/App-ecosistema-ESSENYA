@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { 
   User, ShieldCheck, Phone, MapPin, Award, Upload, FileText, 
   CheckCircle2, XCircle, Clock, AlertTriangle, Calendar, Mail, 
-  BookOpen, Plus, Save, Edit3, Image as ImageIcon, Eye, Camera
+  BookOpen, Plus, Save, Edit3, Image as ImageIcon, Camera
 } from 'lucide-react';
 import { useAuth } from '../../../shared/context/AuthContext';
 import { useTherapistContext } from '../../../shared/context/TherapistContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { TherapistDocument, TherapistFullProfile } from '../../../shared/types/auth';
+import { DocumentVerificationSection } from '../components/DocumentVerificationSection';
 
 const AVAILABLE_SPECIALTIES = [
   'Masaje Tejido Profundo',
@@ -37,7 +38,7 @@ const AVAILABLE_ZONES = [
 export const PerfilPage: React.FC = () => {
   const { getUser } = useAuth();
   const authUser = getUser('terapeuta');
-  const { therapists, updateSelfProfile, uploadDocument } = useTherapistContext();
+  const { therapists, updateSelfProfile, uploadDocument, replaceDocument, deleteDocument } = useTherapistContext();
 
   // Find active profile or fallback
   const activeTherapist: TherapistFullProfile = therapists.find(t => t.id === authUser?.id || t.correo === authUser?.correo) || {
@@ -94,18 +95,6 @@ export const PerfilPage: React.FC = () => {
   const [idiomasInput, setIdiomasInput] = useState((activeTherapist.idiomas || []).join(', '));
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>(activeTherapist.especialidades || []);
   const [selectedZones, setSelectedZones] = useState<string[]>(activeTherapist.zonasCobertura || []);
-
-  // Document Upload State
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [docNombre, setDocNombre] = useState('');
-  const [docTipo, setDocTipo] = useState<'certificado' | 'diploma' | 'constancia' | 'licencia'>('certificado');
-  const [docInstitucion, setDocInstitucion] = useState('');
-  const [docFechaEmision, setDocFechaEmision] = useState('');
-  const [docFileUrl, setDocFileUrl] = useState('');
-  const [docFileType, setDocFileType] = useState<'pdf' | 'jpg' | 'png'>('pdf');
-
-  // Preview Document Modal
-  const [previewDoc, setPreviewDoc] = useState<TherapistDocument | null>(null);
 
   // Feedback Toasts
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
@@ -191,64 +180,6 @@ export const PerfilPage: React.FC = () => {
       }
     };
     reader.readAsDataURL(file);
-  };
-
-  // Handle File Upload simulation
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Check size limit (e.g. 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      showToast('error', 'El archivo supera el tamaño máximo permitido de 10MB.');
-      return;
-    }
-
-    const nameLower = file.name.toLowerCase();
-    let ext: 'pdf' | 'jpg' | 'png' = 'pdf';
-    if (nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) ext = 'jpg';
-    else if (nameLower.endsWith('.png')) ext = 'png';
-    else if (!nameLower.endsWith('.pdf')) {
-      showToast('error', 'Formato no permitido. Solo se aceptan archivos PDF, JPG y PNG.');
-      return;
-    }
-
-    setDocFileType(ext);
-
-    // Read file object URL for preview
-    const objectUrl = URL.createObjectURL(file);
-    setDocFileUrl(objectUrl);
-  };
-
-  // Handle Submit Document
-  const handleUploadDocumentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!docNombre.trim() || !docInstitucion.trim() || !docFechaEmision) {
-      showToast('error', 'Completa el nombre, institución y fecha de emisión.');
-      return;
-    }
-
-    const finalUrl = docFileUrl || 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&q=80&w=600';
-
-    const res = await uploadDocument(activeTherapist.id, {
-      nombreDocumento: docNombre,
-      tipo: docTipo,
-      institucion: docInstitucion,
-      fechaEmision: docFechaEmision,
-      fileUrl: finalUrl,
-      fileType: docFileType
-    });
-
-    if (res.success) {
-      setShowUploadModal(false);
-      setDocNombre('');
-      setDocInstitucion('');
-      setDocFechaEmision('');
-      setDocFileUrl('');
-      showToast('success', 'Documento subido. Queda en estado PENDIENTE para revisión de la Administradora.');
-    } else {
-      showToast('error', res.error || 'Error al subir el documento.');
-    }
   };
 
   return (
@@ -623,236 +554,16 @@ export const PerfilPage: React.FC = () => {
 
         {/* TAB 3: FORMACIÓN Y CERTIFICADOS */}
         {activeTab === 'documentos' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center border-b border-[#E5DFD3] dark:border-[#262626] pb-4">
-              <div>
-                <h3 className="font-serif font-bold text-base text-[#1C1917] dark:text-white">
-                  Mis Certificados, Diplomas y Licencias
-                </h3>
-                <p className="text-xs text-[#6B655F] dark:text-[#888888]">
-                  Carga tus documentos oficiales para verificación por parte de la Administradora.
-                </p>
-              </div>
-
-              <LuxuryButton
-                variant="gold"
-                onClick={() => setShowUploadModal(true)}
-                className="py-2 px-4 text-xs font-bold flex items-center space-x-1.5"
-              >
-                <Upload className="w-4 h-4" />
-                <span>Cargar Documento</span>
-              </LuxuryButton>
-            </div>
-
-            {/* Documents Grid / List */}
-            {(!activeTherapist.documentos || activeTherapist.documentos.length === 0) ? (
-              <div className="text-center py-12 border-2 border-dashed border-[#E5DFD3] dark:border-[#333333] rounded-3xl p-6 space-y-2">
-                <FileText className="w-10 h-10 text-[#A8A29E] mx-auto" />
-                <h4 className="font-bold text-sm text-[#1C1917] dark:text-white">Sin Documentos Registrados</h4>
-                <p className="text-xs text-[#6B655F] dark:text-[#888888]">
-                  Aún no has cargado certificados o diplomas. Haz clic en "Cargar Documento" para agregar tu formación.
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {activeTherapist.documentos.map((doc) => (
-                  <div key={doc.id} className="bg-[#FAF8F5] dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#2A2A2A] rounded-2xl p-4 space-y-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-serif font-bold text-sm text-[#1C1917] dark:text-white">{doc.nombreDocumento}</h4>
-                        <p className="text-[11px] text-[#6B655F] dark:text-[#888888]">
-                          {doc.institucion} • Emisión: {doc.fechaEmision}
-                        </p>
-                      </div>
-
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${
-                        doc.estado === 'aprobado'
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                          : doc.estado === 'rechazado'
-                          ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30'
-                          : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 animate-pulse'
-                      }`}>
-                        {doc.estado}
-                      </span>
-                    </div>
-
-                    {/* Rejection observation banner */}
-                    {doc.estado === 'rechazado' && doc.motivoRechazo && (
-                      <div className="bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl text-xs text-red-600 dark:text-red-400">
-                        <p className="font-bold">Observación de Administradora:</p>
-                        <p>{doc.motivoRechazo}</p>
-                      </div>
-                    )}
-
-                    {/* View Document Action */}
-                    <div className="flex items-center justify-between pt-2 border-t border-[#E5DFD3] dark:border-[#262626] text-xs">
-                      <span className="text-[10px] text-[#888888] font-mono uppercase">
-                        Formato: {doc.fileType.toUpperCase()}
-                      </span>
-
-                      <button
-                        onClick={() => setPreviewDoc(doc)}
-                        className="px-3 py-1 rounded-xl bg-white dark:bg-[#0D0D0D] border border-[#E5DFD3] dark:border-[#333333] text-[#1C1917] dark:text-white font-bold text-xs flex items-center space-x-1 cursor-pointer"
-                      >
-                        <Eye className="w-3.5 h-3.5 text-[#C9A55B]" />
-                        <span>Vista Previa</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <DocumentVerificationSection
+            therapistId={activeTherapist.id}
+            documentos={activeTherapist.documentos || []}
+            onUploadDocument={(docData) => uploadDocument(activeTherapist.id, docData)}
+            onReplaceDocument={(docId, docData) => replaceDocument(activeTherapist.id, docId, docData)}
+            onDeleteDocument={(docId) => deleteDocument(activeTherapist.id, docId)}
+            showToast={showToast}
+          />
         )}
       </div>
-
-      {/* UPLOAD DOCUMENT MODAL */}
-      {showUploadModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#141414] border border-[#E5DFD3] dark:border-[#262626] rounded-3xl p-6 max-w-lg w-full space-y-5 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-[#E5DFD3] dark:border-[#262626] pb-3">
-              <h3 className="font-serif font-bold text-lg text-[#1C1917] dark:text-white flex items-center gap-2">
-                <Upload className="w-5 h-5 text-[#C9A55B]" />
-                <span>Cargar Certificado o Diploma</span>
-              </h3>
-              <button 
-                onClick={() => setShowUploadModal(false)}
-                className="text-[#888888] hover:text-black dark:hover:text-white font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleUploadDocumentSubmit} className="space-y-4 text-xs">
-              <div className="space-y-1">
-                <label className="font-bold text-[#6B655F] dark:text-[#888888] uppercase">Nombre del Documento *</label>
-                <input
-                  type="text"
-                  required
-                  value={docNombre}
-                  onChange={(e) => setDocNombre(e.target.value)}
-                  placeholder="Ej. Cédula Profesional en Fisioterapia"
-                  className="w-full bg-[#FAF8F5] dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-3 py-2 text-xs text-[#1C1917] dark:text-white focus:outline-none focus:border-[#C9A55B]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-[#6B655F] dark:text-[#888888] uppercase">Tipo *</label>
-                  <select
-                    value={docTipo}
-                    onChange={(e) => setDocTipo(e.target.value as any)}
-                    className="w-full bg-[#FAF8F5] dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-3 py-2 text-xs text-[#1C1917] dark:text-white focus:outline-none focus:border-[#C9A55B]"
-                  >
-                    <option value="certificado">Certificado</option>
-                    <option value="diploma">Diploma</option>
-                    <option value="constancia">Constancia</option>
-                    <option value="licencia">Licencia / Cédula</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-[#6B655F] dark:text-[#888888] uppercase">Fecha Emisión *</label>
-                  <input
-                    type="date"
-                    required
-                    value={docFechaEmision}
-                    onChange={(e) => setDocFechaEmision(e.target.value)}
-                    className="w-full bg-[#FAF8F5] dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-3 py-2 text-xs text-[#1C1917] dark:text-white focus:outline-none focus:border-[#C9A55B]"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-[#6B655F] dark:text-[#888888] uppercase">Institución Emisora *</label>
-                <input
-                  type="text"
-                  required
-                  value={docInstitucion}
-                  onChange={(e) => setDocInstitucion(e.target.value)}
-                  placeholder="Ej. SEP / Universidad Nacional"
-                  className="w-full bg-[#FAF8F5] dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-3 py-2 text-xs text-[#1C1917] dark:text-white focus:outline-none focus:border-[#C9A55B]"
-                />
-              </div>
-
-              {/* File Selector */}
-              <div className="space-y-1">
-                <label className="font-bold text-[#6B655F] dark:text-[#888888] uppercase">Seleccionar Archivo (PDF, JPG, PNG) *</label>
-                <div className="border-2 border-dashed border-[#E5DFD3] dark:border-[#333333] rounded-2xl p-4 text-center hover:border-[#C9A55B] transition-all bg-[#FAF8F5] dark:bg-[#1A1A1A]">
-                  <input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={handleFileChange}
-                    className="hidden"
-                    id="docFileInput"
-                  />
-                  <label htmlFor="docFileInput" className="cursor-pointer space-y-1 block">
-                    <Upload className="w-6 h-6 text-[#C9A55B] mx-auto" />
-                    <p className="font-bold text-xs text-[#1C1917] dark:text-white">Haz clic para examinar tus archivos</p>
-                    <p className="text-[10px] text-[#888888]">Formatos permitidos: PDF, JPG, PNG (Máx 10MB)</p>
-                  </label>
-                </div>
-              </div>
-
-              {docFileUrl && (
-                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold text-center">
-                  ✓ Archivo adjuntado correctamente ({docFileType.toUpperCase()})
-                </p>
-              )}
-
-              <div className="flex justify-end space-x-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowUploadModal(false)}
-                  className="px-4 py-2 bg-[#FAF8F5] dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#333333] text-[#1C1917] dark:text-white text-xs rounded-xl"
-                >
-                  Cancelar
-                </button>
-
-                <LuxuryButton type="submit" variant="gold" className="py-2 px-5 text-xs font-bold">
-                  Subir para Revisión
-                </LuxuryButton>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* PREVIEW DOCUMENT MODAL */}
-      {previewDoc && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#141414] border border-[#C9A55B] rounded-3xl p-6 max-w-2xl w-full space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-[#E5DFD3] dark:border-[#262626] pb-3">
-              <div>
-                <h3 className="font-serif font-bold text-base text-[#1C1917] dark:text-white">
-                  {previewDoc.nombreDocumento}
-                </h3>
-                <p className="text-xs text-[#888888]">{previewDoc.institucion} • {previewDoc.fechaEmision}</p>
-              </div>
-              <button 
-                onClick={() => setPreviewDoc(null)}
-                className="text-[#888888] hover:text-black dark:hover:text-white font-bold text-lg"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="bg-black rounded-2xl p-2 min-h-64 flex items-center justify-center overflow-hidden">
-              {previewDoc.fileType === 'pdf' ? (
-                <iframe src={previewDoc.fileUrl || undefined} className="w-full h-80 rounded-xl" title="Vista Previa PDF" />
-              ) : (
-                <img src={previewDoc.fileUrl || undefined} alt={previewDoc.nombreDocumento} className="max-h-80 object-contain rounded-xl mx-auto" />
-              )}
-            </div>
-
-            <div className="flex justify-end">
-              <LuxuryButton variant="gold" onClick={() => setPreviewDoc(null)} className="py-2 px-5 text-xs font-bold">
-                Cerrar Vista Previa
-              </LuxuryButton>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

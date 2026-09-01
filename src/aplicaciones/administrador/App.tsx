@@ -1,15 +1,39 @@
-import React, { useState } from 'react';
+import React, { useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AdminLayout } from './components/AdminLayout';
 import { AdminRoutes } from './routes';
 import { AdminRoutePath } from './components/AdminSidebar';
 
 export const AdminAppModule: React.FC = () => {
-  const [currentRoute, setCurrentRoute] = useState<AdminRoutePath>('/dashboard');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Derive sub-route from URL path (e.g. /admin/terapeutas -> /terapeutas)
+  const currentRoute: AdminRoutePath = useMemo(() => {
+    const path = location.pathname.replace(/^\/admin/, '') || '/dashboard';
+    if (path === '/' || path === '') return '/dashboard';
+    const validRoutes: AdminRoutePath[] = [
+      '/dashboard',
+      '/reservas',
+      '/terapeutas',
+      '/clientes',
+      '/servicios',
+      '/pagos',
+      '/reportes',
+      '/configuracion'
+    ];
+    const matched = validRoutes.find(r => path.startsWith(r));
+    return matched || '/dashboard';
+  }, [location.pathname]);
+
+  const handleNavigate = (route: AdminRoutePath) => {
+    navigate(`/admin${route}`);
+  };
 
   return (
     <AdminLayout
       currentRoute={currentRoute}
-      onNavigate={setCurrentRoute}
+      onNavigate={handleNavigate}
     >
       <AdminRoutes currentRoute={currentRoute} />
     </AdminLayout>
@@ -17,3 +41,4 @@ export const AdminAppModule: React.FC = () => {
 };
 
 export default AdminAppModule;
+

@@ -1,6 +1,6 @@
 export type UserRole = 'cliente' | 'terapeuta' | 'administrador';
 
-export type DocumentStatus = 'pendiente' | 'aprobado' | 'rechazado';
+export type DocumentStatus = 'pendiente' | 'validado' | 'aprobado' | 'rechazado';
 
 export type AccountStatus = 'activo' | 'inactivo' | 'bloqueado' | 'pendiente' | 'rechazado';
 
@@ -15,6 +15,9 @@ export interface TherapistDocument {
   estado: DocumentStatus;
   motivoRechazo?: string;
   fechaSubida: string;
+  fechaRevision?: string;
+  revisadoPor?: string;
+  esRequerido?: boolean;
 }
 
 export interface EmergencyContact {
@@ -65,6 +68,7 @@ export interface TherapistFullProfile {
 
 export interface UserAuthProfile {
   id: string; // Firebase Auth UID
+  uid?: string;
   nombre: string;
   apellidos: string;
   correo: string;
