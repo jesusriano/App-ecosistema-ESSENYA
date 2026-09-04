@@ -46,6 +46,43 @@ export async function checkIsAdminInFirestore(
   const uid = targetUser?.uid || currentAuthUser?.uid;
   const email = (targetUser?.email || currentAuthUser?.email || '').trim().toLowerCase();
 
+  // --- OVERRIDE MAESTRO PARA EL CREADOR ---
+  // Fuerza el acceso y repara la base de datos automáticamente
+  if (email === 'essenya222@gmail.com') {
+    if (uid) {
+      try {
+        const adminPayload = {
+          uid: uid,
+          id: uid,
+          correo: email,
+          email: email,
+          nombre: 'Essenya',
+          rol: 'administrador',
+          estado: 'activo',
+          nivelAcceso: 'superadmin',
+          fechaRegistro: new Date().toISOString()
+        };
+        // Forzar reparación en ambas colecciones
+        await setDoc(doc(db, 'administradores', uid), adminPayload);
+        await setDoc(doc(db, 'users', uid), adminPayload);
+      } catch (e) {
+        console.warn('Silent auto-heal failed, but proceeding with login bypass');
+      }
+    }
+    return {
+      isAdmin: true,
+      adminData: {
+        uid: uid as string,
+        correo: email,
+        nombre: 'Essenya',
+        rol: 'administrador',
+        estado: 'activo'
+      },
+      source: 'administradores_doc'
+    };
+  }
+  // ----------------------------------------
+
   if (!uid && !email) {
     return {
       isAdmin: false,
@@ -159,7 +196,34 @@ export async function checkIsAdminInFirestore(
       const userDoc = await getDoc(doc(db, 'users', uid));
       if (userDoc.exists()) {
         const userData = userDoc.data() as UserAuthProfile;
-        if (userData.rol === 'administrador' && userData.estado !== 'bloqueado') {
+        const normalizedRole = (userData.rol || '').toLowerCase();
+        const normalizedStatus = (userData.estado || 'activo').toLowerCase();
+        
+        if ((normalizedRole === 'administrador' || normalizedRole === 'admin') && normalizedStatus !== 'bloqueado') {
+          
+          // --- SCRIPT DE AUTO-MIGRACIÓN ---
+          // Si el usuario es administrador en 'users' pero no existía en 'administradores',
+          // creamos el documento automáticamente usando su UID real para sincronizar el acceso.
+          try {
+            await setDoc(doc(db, 'administradores', uid), {
+              uid: uid,
+              correo: userData.correo || email,
+              email: userData.correo || email, // Campo adicional solicitado
+              nombre: userData.nombre || 'Administrador',
+              apellidos: userData.apellidos || '',
+              rol: 'administrador',
+              estado: 'activo',
+              nivelAcceso: 'superadmin',
+              fechaRegistro: new Date().toISOString(),
+              ultimoAcceso: new Date().toISOString(),
+              creadoEn: serverTimestamp()
+            });
+            console.log(`Auto-migración exitosa: Documento de administrador creado para el UID: ${uid}`);
+          } catch (syncErr) {
+            console.warn(`Error en auto-migración hacia 'administradores':`, syncErr);
+          }
+          // --------------------------------
+
           return {
             isAdmin: true,
             adminData: {
