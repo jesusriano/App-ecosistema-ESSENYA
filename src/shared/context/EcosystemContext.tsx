@@ -129,10 +129,10 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }).length;
 
     let computedTier: MembershipTier = 'Platino';
-    if (finishedAndPaid >= 10) computedTier = 'Imperial VIP';
-    else if (finishedAndPaid >= 6) computedTier = 'Black Diamond';
-    else if (finishedAndPaid >= 3) computedTier = 'Diamante';
-    else if (finishedAndPaid >= 1) computedTier = 'Gold';
+    if (finishedAndPaid >= 5) computedTier = 'Diamond';
+    
+    else if (finishedAndPaid >= 3) computedTier = 'Gold';
+    
     else computedTier = 'Platino';
 
     if (client.membershipTier !== computedTier) {

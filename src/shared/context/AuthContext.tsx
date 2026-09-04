@@ -126,6 +126,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
              if (therapistDoc.exists()) {
                const tData = therapistDoc.data();
                profile = {
+                  id: firebaseUser.uid,
                   uid: firebaseUser.uid,
                   nombre: tData.nombre || '',
                   apellidos: tData.apellidos || '',
@@ -133,13 +134,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                   telefono: tData.telefono || '',
                   rol: 'terapeuta',
                   estado: tData.estado || 'activo',
-                  fechaRegistro: tData.fechaAlta || new Date().toISOString()
+                  fechaRegistro: tData.fechaAlta || new Date().toISOString(),
+                  ultimoAcceso: new Date().toISOString(),
+                  correoVerificado: firebaseUser.emailVerified || false,
+                  fechaActualizacion: new Date().toISOString()
                };
              } else {
                const clientDoc = await getDoc(doc(db, 'clientes', firebaseUser.uid));
                if (clientDoc.exists()) {
                  const cData = clientDoc.data();
                  profile = {
+                    id: firebaseUser.uid,
                     uid: firebaseUser.uid,
                     nombre: cData.nombre || '',
                     apellidos: cData.apellidos || '',
@@ -147,7 +152,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     telefono: cData.telefono || '',
                     rol: 'cliente',
                     estado: cData.estado || 'activo',
-                    fechaRegistro: cData.createdAt || new Date().toISOString()
+                    fechaRegistro: cData.createdAt || new Date().toISOString(),
+                    ultimoAcceso: new Date().toISOString(),
+                    correoVerificado: firebaseUser.emailVerified || false,
+                    fechaActualizacion: new Date().toISOString()
                  };
                }
              }
@@ -423,6 +431,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (therapistDoc.exists()) {
             const tData = therapistDoc.data();
             userProfile = {
+              id: uid,
               uid,
               nombre: tData.nombre || '',
               apellidos: tData.apellidos || '',
@@ -430,7 +439,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               telefono: tData.telefono || '',
               rol: 'terapeuta',
               estado: tData.estado || 'activo',
-              fechaRegistro: tData.fechaAlta || new Date().toISOString()
+              fechaRegistro: tData.fechaAlta || new Date().toISOString(),
+              ultimoAcceso: new Date().toISOString(),
+              correoVerificado: false,
+              fechaActualizacion: new Date().toISOString()
             };
           }
         } else if (role === 'cliente') {
@@ -438,6 +450,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (clientDoc.exists()) {
             const cData = clientDoc.data();
             userProfile = {
+              id: uid,
               uid,
               nombre: cData.nombre || '',
               apellidos: cData.apellidos || '',
@@ -445,7 +458,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               telefono: cData.telefono || '',
               rol: 'cliente',
               estado: cData.estado || 'activo',
-              fechaRegistro: cData.createdAt || new Date().toISOString()
+              fechaRegistro: cData.createdAt || new Date().toISOString(),
+              ultimoAcceso: new Date().toISOString(),
+              correoVerificado: false,
+              fechaActualizacion: new Date().toISOString()
             };
           }
         }
