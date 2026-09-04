@@ -15,7 +15,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ invoice, onClose }) 
 
   const handleDownloadPdf = () => {
     if (!invoice) return;
-    showToast('Factura Fiscal Descargada', `Archivo PDF y XML de la factura ${invoice.invoiceNumber} guardado.`, 'gold');
+    showToast('Factura Descargada', `Comprobante de factura ${invoice.invoiceNumber} guardado.`, 'gold');
   };
 
   return (
@@ -40,7 +40,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ invoice, onClose }) 
             <div className="flex justify-between items-start border-b border-[#E5DFD3] dark:border-[#262626] pb-4">
               <div>
                 <EssenyaLogo size="xs" showText={true} align="left" />
-                <p className="text-[10px] text-[#6B655F] dark:text-[#888888] mt-1">Factura Electrónica Fiscal (CFDI 4.0)</p>
+                <p className="text-[10px] text-[#6B655F] dark:text-[#888888] mt-1">Factura y Comprobante de Servicio</p>
               </div>
 
               <div className="text-right">
@@ -60,10 +60,10 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ invoice, onClose }) 
                 <span className="font-mono font-bold text-[#806020] dark:text-[#C9A55B]">{invoice.rfc}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#6B655F] dark:text-[#888888]">Estado Fiscal:</span>
+                <span className="text-[#6B655F] dark:text-[#888888]">Estado del Comprobante:</span>
                 <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center space-x-1">
                   <ShieldCheck className="w-3.5 h-3.5 mr-0.5" />
-                  <span>Timbrada SAT - Validada</span>
+                  <span>Factura Emitida y Registrada</span>
                 </span>
               </div>
             </div>

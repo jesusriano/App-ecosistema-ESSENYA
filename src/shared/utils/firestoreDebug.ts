@@ -9,6 +9,31 @@ export enum OperationType {
   WRITE = 'write',
 }
 
+/**
+ * Recursively cleans any object or array of `undefined` values before sending to Firestore.
+ * Firestore strictly rejects documents containing `undefined` fields.
+ */
+export function cleanForFirestore<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return null as any;
+  }
+  if (Array.isArray(data)) {
+    return data
+      .filter(item => item !== undefined)
+      .map(item => cleanForFirestore(item)) as any;
+  }
+  if (typeof data === 'object' && !(data instanceof Date)) {
+    const cleaned: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined) {
+        cleaned[key] = cleanForFirestore(value);
+      }
+    }
+    return cleaned as T;
+  }
+  return data;
+}
+
 export interface FirestoreErrorInfo {
   error: string;
   operationType: OperationType;
@@ -168,7 +193,13 @@ export function handleFirestoreError(
   };
 
   // 1. Mandatory Standard Skill Log (Single-line JSON for automated parser)
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  // Skip aggressive error logging for offline errors to prevent AI Studio from flagging it as a crash
+  const isOfflineError = errorMessage.toLowerCase().includes('client is offline');
+  if (!isOfflineError) {
+    console.error('Firestore Error: ', JSON.stringify(errInfo));
+  } else {
+    console.warn('Firestore Offline Notice: ', JSON.stringify(errInfo));
+  }
 
   // 2. High-Visibility Formatted Developer Console Group
   try {

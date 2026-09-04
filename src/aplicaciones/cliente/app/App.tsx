@@ -14,7 +14,7 @@ export const ClienteAppModule: React.FC = () => {
   const currentRoute: ClientRoutePath = useMemo(() => {
     const path = location.pathname.replace(/^\/cliente/, '') || '/inicio';
     if (path === '/' || path === '') return '/inicio';
-    const validRoutes: ClientRoutePath[] = ['/inicio', '/reservas', '/facturas', '/promociones', '/perfil'];
+    const validRoutes: ClientRoutePath[] = ['/inicio', '/reservas', '/billetera', '/facturas', '/promociones', '/perfil'];
     const matched = validRoutes.find(r => path.startsWith(r));
     return matched || '/inicio';
   }, [location.pathname]);

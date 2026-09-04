@@ -27,6 +27,7 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
       <ClientHeader 
         client={client} 
         onOpenPanicModal={() => setShowPanicModal(true)} 
+        onNavigate={onNavigate}
       />
 
       {/* Navegación y Rutas independientes de Cliente */}

@@ -3,7 +3,7 @@ export type PortalType = 'client' | 'therapist' | 'admin' | 'website';
 export type PressureLevel = 'Suave' | 'Media' | 'Firme' | 'Profunda';
 export type EssentialOil = 'Aceite de olor' | 'Aceite neutro' | 'Lavanda Francesa' | 'Eucalipto Silvestre' | 'Ylang Ylang Dorado' | 'Menta & Romero';
 export type MusicStyle = 'Sonido de la naturaleza' | 'Un mantra' | 'Otra música' | 'Acoustic Zen' | 'Ambient Gold' | 'Frecuencias 432Hz' | 'Silencio Absoluto';
-export type MembershipTier = 'Gold' | 'Diamond' | 'Black';
+export type MembershipTier = 'Platino' | 'Gold' | 'Diamante' | 'Diamond' | 'Black' | 'Black Diamond' | 'Imperial VIP' | string;
 
 export type BookingState = 
   | 'pendiente' 
@@ -117,8 +117,8 @@ export interface Booking {
   etaMinutes: number;
   liveLat?: number;
   liveLng?: number;
-  paymentMethod: 'Tarjeta de Crédito / Débito' | 'Tarjeta Crédito VIP' | 'Transferencia Interbancaria (SPEI)' | 'Transferencia Bank VIP' | 'Efectivo (Pago al Recibir)';
-  paymentStatus: 'pagado' | 'pendiente' | 'reembolsado';
+  paymentMethod: 'Tarjeta de Crédito / Débito' | 'Tarjeta Crédito VIP' | 'Transferencia Interbancaria (SPEI)' | 'Transferencia Bank VIP' | 'Efectivo (Pago al Recibir)' | 'Tarjeta de Regalo (Saldo Billetera)';
+  paymentStatus: 'pagado' | 'pendiente' | 'reembolsado' | 'rechazado';
   painPoints?: string;
   arrivalInstructions?: string;
   createdAt: string;
@@ -156,6 +156,7 @@ export interface ChatMessage {
 export interface Invoice {
   id: string;
   bookingId: string;
+  clientId?: string;
   invoiceNumber: string;
   date: string;
   rfc: string;

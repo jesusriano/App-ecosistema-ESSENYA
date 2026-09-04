@@ -17,8 +17,10 @@ const firebaseConfig = {
 // Initialize Firebase App safely
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Auth & Firestore with specific database ID from config
+// Initialize Auth
 export const auth = getAuth(app);
+
+// Initialize Firestore with specific database ID from config
 export const db = appletConfig.firestoreDatabaseId
   ? getFirestore(app, appletConfig.firestoreDatabaseId)
   : getFirestore(app);

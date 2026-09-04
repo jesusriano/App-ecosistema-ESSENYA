@@ -1,8 +1,8 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Home, Calendar, FileText, Gift, User } from 'lucide-react';
+import { Home, Calendar, Wallet, FileText, Gift, User } from 'lucide-react';
 
-export type ClientRoutePath = '/inicio' | '/reservas' | '/facturas' | '/promociones' | '/perfil';
+export type ClientRoutePath = '/inicio' | '/reservas' | '/billetera' | '/facturas' | '/promociones' | '/perfil';
 
 interface ClientNavigationProps {
   currentRoute: ClientRoutePath;
@@ -18,7 +18,8 @@ export const ClientNavigation: React.FC<ClientNavigationProps> = ({
   const navItems = [
     { path: '/inicio' as ClientRoutePath, label: 'Inicio', icon: Home },
     { path: '/reservas' as ClientRoutePath, label: 'Reservar Masaje', icon: Calendar, badge: activeBookingBadge },
-    { path: '/facturas' as ClientRoutePath, label: 'Facturación SAT', icon: FileText },
+    { path: '/billetera' as ClientRoutePath, label: 'Billetera', icon: Wallet },
+    { path: '/facturas' as ClientRoutePath, label: 'Facturas', icon: FileText },
     { path: '/promociones' as ClientRoutePath, label: 'Promociones VIP', icon: Gift },
     { path: '/perfil' as ClientRoutePath, label: 'Mi Perfil', icon: User },
   ];

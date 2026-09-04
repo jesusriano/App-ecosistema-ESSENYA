@@ -1,7 +1,25 @@
 import express, { Request, Response, NextFunction } from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+
+// Load active Firebase configuration
+function getActiveFirebaseApiKey(): string {
+  if (process.env.VITE_FIREBASE_API_KEY) {
+    return process.env.VITE_FIREBASE_API_KEY;
+  }
+  try {
+    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+    if (fs.existsSync(configPath)) {
+      const parsed = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      if (parsed.apiKey) return parsed.apiKey;
+    }
+  } catch {
+    // Ignore error
+  }
+  return "";
+}
 
 // Rate limiting in-memory store
 interface RateLimitEntry {
@@ -70,7 +88,7 @@ async function verifyFirebaseToken(authHeader?: string): Promise<{ uid: string; 
   if (!token) return null;
 
   try {
-    const apiKey = process.env.VITE_FIREBASE_API_KEY || "AIzaSyB4sXORIB9RMhNtHFiVHplMZ-WPGAWoT_M";
+    const apiKey = getActiveFirebaseApiKey();
     const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -104,13 +122,15 @@ async function verifyFirebaseToken(authHeader?: string): Promise<{ uid: string; 
   }
 }
 
-// Optional Auth middleware (ensures valid user if present, or logs origin)
+// Strictly require valid Firebase authentication token
 async function requireAuthOrUserContext(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    // If no header provided in development, we allow request but restrict rate & sanitize heavily
-    (req as any).user = null;
-    return next();
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    res.status(401).json({
+      success: false,
+      error: "Cabecera de autenticación ausente o formato incorrecto. Se requiere token Bearer."
+    });
+    return;
   }
 
   const verified = await verifyFirebaseToken(authHeader);
@@ -129,6 +149,16 @@ async function requireAuthOrUserContext(req: Request, res: Response, next: NextF
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // Security Headers Middleware
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)");
+    res.removeHeader("X-Powered-By");
+    next();
+  });
 
   // Enforce body size limit to avoid payload DOS
   app.use(express.json({ limit: "64kb" }));

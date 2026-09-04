@@ -659,16 +659,6 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <span className="leading-relaxed font-bold">{errorMessage}</span>
             </div>
-            {(errorMessage.includes('Error:') || errorMessage.includes('Código:') || errorMessage.includes('Firebase') || errorMessage.includes('Authentication')) && (
-              <div className="ml-7 pt-1 border-t border-red-500/20">
-                <p className="text-[10px] opacity-70 uppercase tracking-tighter font-bold">
-                  Instrucción de Configuración:
-                </p>
-                <p className="text-[10px] leading-tight">
-                  Asegúrate de haber hecho clic en "Comenzar" en la pestaña Authentication de la consola de Firebase y haber activado el proveedor "Correo electrónico/contraseña".
-                </p>
-              </div>
-            )}
           </div>
         )}
 

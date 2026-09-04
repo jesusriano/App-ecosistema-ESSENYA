@@ -3,6 +3,7 @@ import { ClientRoutePath } from '../components/ClientNavigation';
 import { InicioPage } from '../pages/InicioPage';
 import { ReservasPage } from '../pages/ReservasPage';
 import { FacturasPage } from '../pages/FacturasPage';
+import { BilleteraPage } from '../pages/BilleteraPage';
 import { PromocionesPage } from '../pages/PromocionesPage';
 import { PerfilPage } from '../pages/PerfilPage';
 
@@ -17,6 +18,8 @@ export const ClientRoutes: React.FC<ClientRoutesProps> = ({ currentRoute, onNavi
       return <InicioPage onGoToReservas={() => onNavigate('/reservas')} />;
     case '/reservas':
       return <ReservasPage />;
+    case '/billetera':
+      return <BilleteraPage onGoToReservas={() => onNavigate('/reservas')} />;
     case '/facturas':
       return <FacturasPage />;
     case '/promociones':

@@ -36,7 +36,7 @@ const REQUIRED_DOC_TYPES = [
   },
   {
     tipo: 'constancia' as const,
-    label: 'Constancia de Situación Fiscal (SAT) o CURP',
+    label: 'Constancia de Situación Fiscal o CURP',
     descripcion: 'Documento fiscal oficial con RFC y CURP validado.',
     esRequerido: false
   },

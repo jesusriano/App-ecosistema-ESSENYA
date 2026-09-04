@@ -1,82 +1,332 @@
-import React from 'react';
-import { Gift, Award, Sparkles, CheckCircle2, ShieldCheck, Heart } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { 
+  Gift, Award, Sparkles, CheckCircle2, ShieldCheck, Lock, 
+  Copy, Check, Clock, ArrowRight, Wallet, Gem, Crown 
+} from 'lucide-react';
 import { useCliente } from '../hooks/useCliente';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
+import { 
+  calculateMembershipTier, 
+  getCompletedAndPaidBookings, 
+  getVipCourtesyStatus,
+  validatePromotionCode 
+} from '../services/membershipService';
+import { getGiftCards } from '../services/billeteraService';
+import { useToast } from '../../../shared/context/ToastContext';
 
 interface PromocionesPageProps {
   onStartBooking: () => void;
 }
 
 export const PromocionesPage: React.FC<PromocionesPageProps> = ({ onStartBooking }) => {
-  const { client } = useCliente();
+  const { client, bookings } = useCliente();
+  const { showToast } = useToast();
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  const promos = [
-    {
-      id: 'promo-1',
-      title: 'Paquete Ritual Pareja Gold',
-      code: 'PAREJA-GOLD-2026',
-      discount: '15% OFF',
-      description: '2 Masajes Terapéuticos de 90 min simultáneos con dobles fisioterapeutas certifcados en tu residencia.',
-      badge: 'Exclusivo Club Black',
-    },
-    {
-      id: 'promo-2',
-      title: 'Upgrade Aceites Escenciales Ylang Ylang',
-      code: 'ESSENTIAL-VIP',
-      discount: 'Cortesía VIP',
-      description: 'Infusión botánica orgánica de grado farmacéutico sin costo adicional en tus siguientes 3 masajes.',
-      badge: 'Beneficio de Membresía',
-    },
-    {
-      id: 'promo-3',
-      title: 'Tarjeta de Regalo Haute Wellness',
-      code: 'GIFT-ESSENYA',
-      discount: '$1,000 MXN',
-      description: 'Abono aplicable para regalar a familiares o ejecutivos de tu empresa.',
-      badge: 'Validez 12 Meses',
-    },
-  ];
+  // Masajes concluidos y pagados
+  const completedAndPaidBookings = useMemo(() => {
+    return getCompletedAndPaidBookings(bookings, client?.id);
+  }, [bookings, client?.id]);
+
+  const completedCount = completedAndPaidBookings.length;
+  const tierInfo = useMemo(() => calculateMembershipTier(completedCount), [completedCount]);
+  const vipCourtesy = useMemo(() => getVipCourtesyStatus(completedCount), [completedCount]);
+  const giftCards = useMemo(() => getGiftCards(), []);
+  const primaryGiftCard = giftCards[0] || { code: 'REGALO-ESS-1400', currentBalance: 1400 };
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    showToast('Código Copiado', `El código ${code} ha sido copiado. Aplícalo al confirmar tu reserva.`, 'gold');
+    setTimeout(() => setCopiedCode(null), 2500);
+  };
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-[#E5DFD3] dark:border-[#262626] pb-4">
-        <h1 className="text-2xl font-serif font-bold text-[#1C1917] dark:text-white flex items-center gap-2">
-          <Gift className="w-6 h-6 text-[#C9A55B]" />
-          <span>Beneficios & Promociones VIP</span>
-        </h1>
-        <p className="text-xs text-[#6B655F] dark:text-[#888888] mt-1">
-          Privilegios especiales exclusivos para miembros de {client?.membershipTier || 'Club Black VIP'}.
-        </p>
+      {/* Header Banner */}
+      <div className="border-b border-[#E5DFD3] dark:border-[#262626] pb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <div className="inline-flex items-center space-x-2 bg-[#C9A55B]/15 border border-[#C9A55B]/30 px-3 py-1 rounded-full text-xs font-semibold text-[#806020] dark:text-[#C9A55B] mb-2">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Beneficios y Promociones Exclusivas</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[#1C1917] dark:text-white">
+            Promociones y Cortesías de Membresía
+          </h1>
+          <p className="text-xs text-[#6B655F] dark:text-[#888888] mt-1 max-w-xl">
+            Descuentos especiales validados por categoría de socio y recompensas por fidelidad acumulada en ESSENYA.
+          </p>
+        </div>
+
+        <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-3 rounded-2xl border border-[#E5DFD3] dark:border-[#262626] flex flex-col sm:flex-row items-start sm:items-center gap-3 text-xs">
+          <div>
+            <span className="text-[#888888] block text-[10px]">Tu Estatus Actual:</span>
+            <span className="font-bold text-[#806020] dark:text-[#E6CA65]">{tierInfo.fullLabel}</span>
+          </div>
+          <div className="border-l border-[#E5DFD3] dark:border-[#333333] pl-3">
+            <span className="text-[#888888] block text-[10px]">Sesiones Pagadas:</span>
+            <span className="font-bold text-[#1C1917] dark:text-white">{completedCount}</span>
+          </div>
+          {tierInfo.perk && (
+            <div className="border-l border-[#E5DFD3] dark:border-[#333333] pl-3 max-w-xs">
+              <span className="text-[#888888] block text-[10px]">Beneficio de tu Rango:</span>
+              <span className="text-[#1C1917] dark:text-[#E5DFD3] text-[11px] font-medium block truncate">
+                {tierInfo.perk}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
+      {/* Grid of Promotions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {promos.map((p) => (
-          <div
-            key={p.id}
-            className="bg-white dark:bg-[#141414] border border-[#E5DFD3] dark:border-[#262626] rounded-2xl p-6 space-y-4 shadow-sm hover:border-[#C9A55B] transition-all relative overflow-hidden"
-          >
+        {/* PROMO 1: EXCLUSIVA DIAMOND+ (10% de descuento) */}
+        <div 
+          id="promo-diamond-10"
+          className={`rounded-3xl p-6 border transition-all flex flex-col justify-between space-y-4 shadow-sm relative overflow-hidden ${
+            tierInfo.isDiamondOrHigher
+              ? 'bg-gradient-to-br from-white via-[#FAF8F5] to-white dark:from-[#141414] dark:via-[#1A1A1A] dark:to-[#141414] border-[#C9A55B] ring-1 ring-[#C9A55B]/40'
+              : 'bg-[#FAF8F5]/80 dark:bg-[#121212] border-gray-300 dark:border-zinc-800 opacity-90'
+          }`}
+        >
+          <div className="space-y-3">
             <div className="flex justify-between items-start">
-              <span className="bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B] border border-[#C9A55B]/30 text-[10px] font-bold px-2.5 py-0.5 rounded-full">
-                {p.badge}
+              <span className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border flex items-center gap-1 ${
+                tierInfo.isDiamondOrHigher
+                  ? 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-400/40'
+                  : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-700'
+              }`}>
+                {tierInfo.isDiamondOrHigher ? (
+                  <>
+                    <Gem className="w-3 h-3 text-sky-500" />
+                    <span>Exclusivo Diamante+</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-3 h-3" />
+                    <span>Bloqueado para tu Nivel</span>
+                  </>
+                )}
               </span>
-              <span className="font-extrabold text-lg text-[#C9A55B]">{p.discount}</span>
+
+              <span className="font-serif font-extrabold text-xl text-[#806020] dark:text-[#E6CA65]">
+                10% de Descuento
+              </span>
             </div>
 
             <div>
-              <h3 className="font-serif font-bold text-base text-[#1C1917] dark:text-white">{p.title}</h3>
-              <p className="text-xs text-[#6B655F] dark:text-[#888888] mt-1 leading-relaxed">{p.description}</p>
+              <h3 className="font-serif font-bold text-base text-[#1C1917] dark:text-white">
+                Promoción Exclusiva Diamond
+              </h3>
+              <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] mt-1 leading-relaxed">
+                {tierInfo.isDiamondOrHigher
+                  ? 'Descuento especial del 10% en cualquiera de tus reservas de masaje terapéutico de autor.'
+                  : `Disponible únicamente para socios Diamante en adelante. Tu categoría actual es "${tierInfo.fullLabel}". Te faltan ${Math.max(1, 3 - completedCount)} masajes concluidos para desbloquear este beneficio.`}
+              </p>
             </div>
 
-            <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-2.5 rounded-xl border border-[#E5DFD3] dark:border-[#2A2A2A] flex justify-between items-center text-xs">
-              <span className="text-[#6B655F] dark:text-[#888888] text-[11px]">Código:</span>
-              <span className="font-mono font-bold text-[#806020] dark:text-[#C9A55B]">{p.code}</span>
-            </div>
+            {/* Code Box */}
+            <div className={`p-3 rounded-xl border flex justify-between items-center text-xs ${
+              tierInfo.isDiamondOrHigher
+                ? 'bg-white dark:bg-[#202020] border-[#C9A55B]/30'
+                : 'bg-zinc-100 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800'
+            }`}>
+              <div className="space-y-0.5">
+                <span className="text-[10px] text-[#888888] uppercase block">Código Promocional:</span>
+                <span className={`font-mono font-bold tracking-wider ${
+                  tierInfo.isDiamondOrHigher ? 'text-[#806020] dark:text-[#E6CA65]' : 'text-zinc-400 dark:text-zinc-600'
+                }`}>
+                  DIAMOND10
+                </span>
+              </div>
 
-            <LuxuryButton variant="gold" fullWidth size="sm" onClick={onStartBooking}>
-              Usar Cupón en Reserva
-            </LuxuryButton>
+              {tierInfo.isDiamondOrHigher ? (
+                <button
+                  onClick={() => handleCopyCode('DIAMOND10')}
+                  className="px-2.5 py-1 bg-[#C9A55B]/20 hover:bg-[#C9A55B] text-[#806020] dark:text-[#E6CA65] hover:text-black rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                >
+                  {copiedCode === 'DIAMOND10' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedCode === 'DIAMOND10' ? 'Copiado' : 'Copiar'}</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    const validation = validatePromotionCode('DIAMOND10', completedCount, tierInfo);
+                    showToast(validation.title, validation.message, 'error');
+                  }}
+                  className="px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/20 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                  title="Haz clic para ver motivo de restricción"
+                >
+                  <Lock className="w-3 h-3" />
+                  <span>Restringido</span>
+                </button>
+              )}
+            </div>
           </div>
-        ))}
+
+          <LuxuryButton 
+            variant={tierInfo.isDiamondOrHigher ? 'gold' : 'outline'} 
+            fullWidth 
+            size="sm" 
+            onClick={onStartBooking}
+          >
+            {tierInfo.isDiamondOrHigher ? 'Aplicar en Reserva' : 'Reservar Masaje para Subir'}
+          </LuxuryButton>
+        </div>
+
+        {/* PROMO 2: BENEFICIO DE MEMBRESÍA "CORTESÍA VIP" (15% de descuento a partir de 5 masajes) */}
+        <div 
+          id="beneficio-cortesia-vip"
+          className={`rounded-3xl p-6 border transition-all flex flex-col justify-between space-y-4 shadow-sm relative overflow-hidden ${
+            vipCourtesy.unlocked && !vipCourtesy.used
+              ? 'bg-gradient-to-br from-white via-[#FAF8F5] to-white dark:from-[#141414] dark:via-[#1A1A1A] dark:to-[#141414] border-emerald-500/50 ring-1 ring-emerald-500/30'
+              : 'bg-[#FAF8F5]/80 dark:bg-[#121212] border-gray-300 dark:border-zinc-800 opacity-90'
+          }`}
+        >
+          <div className="space-y-3">
+            <div className="flex justify-between items-start">
+              <span className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border flex items-center gap-1 ${
+                vipCourtesy.used
+                  ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-700'
+                  : vipCourtesy.unlocked
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                  : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
+              }`}>
+                {vipCourtesy.used ? (
+                  <span>Utilizado (Uso Único)</span>
+                ) : vipCourtesy.unlocked ? (
+                  <>
+                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                    <span>Desbloqueado (5+ Masajes)</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-3 h-3" />
+                    <span>Requiere 5 Masajes ({completedCount}/5)</span>
+                  </>
+                )}
+              </span>
+
+              <span className="font-serif font-extrabold text-xl text-[#806020] dark:text-[#E6CA65]">
+                15% de Descuento
+              </span>
+            </div>
+
+            <div>
+              <h3 className="font-serif font-bold text-base text-[#1C1917] dark:text-white">
+                Beneficio: Cortesía VIP
+              </h3>
+              <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] mt-1 leading-relaxed">
+                {vipCourtesy.used
+                  ? 'Este beneficio de lealtad de uso único ya ha sido canjeado en tu cuenta.'
+                  : vipCourtesy.unlocked
+                  ? '¡Felicitaciones por tu fidelidad! Aplica este 15% de descuento especial en tu siguiente sesión.'
+                  : `Se desbloquea al acumular 5 masajes concluidos y pagados. Llevas ${completedCount}/5 masajes acumulados.`}
+              </p>
+            </div>
+
+            {/* Code Box */}
+            <div className={`p-3 rounded-xl border flex justify-between items-center text-xs ${
+              vipCourtesy.unlocked && !vipCourtesy.used
+                ? 'bg-white dark:bg-[#202020] border-emerald-500/30'
+                : 'bg-zinc-100 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800'
+            }`}>
+              <div className="space-y-0.5">
+                <span className="text-[10px] text-[#888888] uppercase block">Código de Beneficio:</span>
+                <span className={`font-mono font-bold tracking-wider ${
+                  vipCourtesy.unlocked && !vipCourtesy.used
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-zinc-400 dark:text-zinc-600'
+                }`}>
+                  VIP15
+                </span>
+              </div>
+
+              {vipCourtesy.unlocked && !vipCourtesy.used ? (
+                <button
+                  onClick={() => handleCopyCode('VIP15')}
+                  className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500 text-emerald-700 dark:text-emerald-300 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                >
+                  {copiedCode === 'VIP15' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedCode === 'VIP15' ? 'Copiado' : 'Copiar'}</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    const validation = validatePromotionCode('VIP15', completedCount, tierInfo);
+                    showToast(validation.title, validation.message, 'error');
+                  }}
+                  className="px-2.5 py-1 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-red-500 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                >
+                  <Lock className="w-3 h-3" />
+                  <span>{vipCourtesy.used ? 'Canjeado' : 'Restringido'}</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          <LuxuryButton 
+            variant={vipCourtesy.unlocked && !vipCourtesy.used ? 'gold' : 'outline'} 
+            fullWidth 
+            size="sm" 
+            onClick={onStartBooking}
+            disabled={vipCourtesy.used}
+          >
+            {vipCourtesy.used ? 'Beneficio Ya Canjeado' : vipCourtesy.unlocked ? 'Usar Código VIP15' : 'Reservar Masajes para Acumular'}
+          </LuxuryButton>
+        </div>
+
+        {/* PROMO 3: COMPRA DE TARJETA DE REGALO ($1,400 MXN) PARA OBSEQUIAR */}
+        <div 
+          id="promo-tarjeta-regalo-1400"
+          className="rounded-3xl p-6 bg-gradient-to-br from-[#1C1917] via-[#2A241B] to-[#1C1917] text-white border border-[#C9A55B]/60 shadow-lg flex flex-col justify-between space-y-4 relative overflow-hidden"
+        >
+          <div className="space-y-3 relative z-10">
+            <div className="flex justify-between items-start">
+              <span className="bg-[#C9A55B]/20 text-[#E6CA65] border border-[#C9A55B]/40 text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full flex items-center gap-1">
+                <Gift className="w-3 h-3" />
+                <span>Compra para Obsequiar</span>
+              </span>
+
+              <span className="font-serif font-extrabold text-xl text-[#E6CA65]">
+                $1,400 MXN
+              </span>
+            </div>
+
+            <div>
+              <h3 className="font-serif font-bold text-base text-white">
+                Tarjeta de Regalo para Alguien Especial
+              </h3>
+              <p className="text-xs text-[#CCCCCC] mt-1 leading-relaxed">
+                Adquiere este obsequio por <strong>$1,400 MXN</strong> para consentir a tu pareja, amistad o familiar con una experiencia de masaje de autor en su hogar.
+              </p>
+            </div>
+
+            {/* Benefit highlights */}
+            <div className="bg-black/60 p-3 rounded-xl border border-white/15 space-y-1 text-xs text-[#E5DFD3]">
+              <div className="flex items-center gap-1.5 text-[11px]">
+                <Check className="w-3.5 h-3.5 text-[#E6CA65]" />
+                <span>Dedicatoria personalizada incluida</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px]">
+                <Check className="w-3.5 h-3.5 text-[#E6CA65]" />
+                <span>Envío directo por WhatsApp al destinatario</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px]">
+                <Check className="w-3.5 h-3.5 text-[#E6CA65]" />
+                <span>Válido durante 12 meses completos</span>
+              </div>
+            </div>
+          </div>
+
+          <a 
+            href="/cliente/billetera" 
+            className="w-full py-2.5 bg-gradient-to-r from-[#D4AF37] via-[#C9A55B] to-[#9A7B38] hover:from-[#E6CA65] hover:to-[#B38728] text-black font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all text-center flex items-center justify-center gap-1.5 shadow-md shadow-[#C9A55B]/20"
+          >
+            <Gift className="w-4 h-4 text-black" />
+            <span>Comprar Regalo ($1,400 MXN)</span>
+          </a>
+        </div>
       </div>
     </div>
   );

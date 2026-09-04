@@ -1,21 +1,65 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, Calendar, Award, ShieldCheck, Clock, MapPin, ChevronRight, Star } from 'lucide-react';
+import { 
+  Sparkles, Calendar, Award, ShieldCheck, Clock, MapPin, ChevronRight, 
+  Crown, Gem, Shield, Gift, CheckCircle2, Lock, ArrowUpRight, Wallet
+} from 'lucide-react';
 import { useCliente } from '../hooks/useCliente';
 import { useAuth } from '../../../shared/context/AuthContext';
 import { LiveTrackingMap } from '../../../shared/components/LiveTrackingMap';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
+import { 
+  calculateMembershipTier, 
+  getCompletedAndPaidBookings, 
+  getVipCourtesyStatus 
+} from '../services/membershipService';
+import { getBilleteraTotalBalance } from '../services/billeteraService';
 
 interface InicioPageProps {
   onGoToReservas: () => void;
 }
 
 export const InicioPage: React.FC<InicioPageProps> = ({ onGoToReservas }) => {
-  const { client, activeBooking, services, therapists } = useCliente();
+  const { client, bookings, activeBooking, services } = useCliente();
   const { getUser } = useAuth();
   const authUser = getUser('cliente');
 
-  const clientName = authUser?.nombre || client?.name?.split(' ')[0] || 'Jesús';
+  const clientName = authUser?.nombre || (client?.name ? client.name.split(' ')[0] : '') || 'Socio';
+
+  // Masajes concluidos y pagados
+  const completedAndPaidBookings = useMemo(() => {
+    return getCompletedAndPaidBookings(bookings, client?.id);
+  }, [bookings, client?.id]);
+
+  const completedCount = completedAndPaidBookings.length;
+
+  // Información dinámica de categoría y nivel
+  const tierInfo = useMemo(() => {
+    return calculateMembershipTier(completedCount);
+  }, [completedCount]);
+
+  // Estado del beneficio Cortesía VIP (15% de descuento a partir de 5 masajes)
+  const vipCourtesy = useMemo(() => {
+    return getVipCourtesyStatus(completedCount);
+  }, [completedCount]);
+
+  // Saldo de la Billetera
+  const billeteraBalance = useMemo(() => {
+    return getBilleteraTotalBalance();
+  }, []);
+
+  const getTierIcon = () => {
+    switch (tierInfo.iconType) {
+      case 'crown':
+        return <Crown className="w-5 h-5 text-[#E6CA65]" />;
+      case 'gem':
+        return <Gem className="w-5 h-5 text-sky-400" />;
+      case 'sparkles':
+        return <Sparkles className="w-5 h-5 text-amber-400" />;
+      default:
+        return <Shield className="w-5 h-5 text-slate-300" />;
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -23,10 +67,17 @@ export const InicioPage: React.FC<InicioPageProps> = ({ onGoToReservas }) => {
       <div className="relative rounded-3xl p-6 sm:p-8 bg-gradient-to-r from-[#1C1917] via-[#2A241B] to-[#1C1917] text-white border border-[#C9A55B]/30 shadow-2xl overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-[#C9A55B]/10 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="relative z-10 max-w-2xl space-y-3">
-          <div className="inline-flex items-center space-x-2 bg-[#C9A55B]/20 border border-[#C9A55B]/40 px-3 py-1 rounded-full text-xs font-semibold text-[#E6CA65]">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Haute Wellness At-Home Experience</span>
+        <div className="relative z-10 max-w-3xl space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center space-x-2 bg-[#C9A55B]/20 border border-[#C9A55B]/40 px-3 py-1 rounded-full text-xs font-semibold text-[#E6CA65]">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Experiencia de Alta Terapia Spa a Domicilio</span>
+            </div>
+
+            <span className={`inline-flex items-center space-x-1.5 text-xs px-3 py-1 rounded-full ${tierInfo.badgeStyle}`}>
+              {getTierIcon()}
+              <span>{tierInfo.fullLabel}</span>
+            </span>
           </div>
 
           <h1 className="text-2xl sm:text-4xl font-serif font-bold text-white tracking-wide">
@@ -34,17 +85,183 @@ export const InicioPage: React.FC<InicioPageProps> = ({ onGoToReservas }) => {
           </h1>
 
           <p className="text-xs sm:text-sm text-[#CCCCCC] leading-relaxed">
-            Tu membresía <strong className="text-[#C9A55B]">{client?.membershipTier || 'Club Black VIP'}</strong> te concede prioridad inmediata en masajes terapéuticos de alto nivel a domicilio en CDMX.
+            Tu membresía en categoría <strong className="text-[#E6CA65]">{tierInfo.fullLabel}</strong> te concede prioridad inmediata en masajes terapéuticos de alto nivel a domicilio en CDMX, con terapeutas especializadas y kits esterilizados.
           </p>
 
-          <div className="pt-2 flex flex-wrap gap-3">
+          <div className="pt-2 flex flex-wrap gap-3 items-center">
             <LuxuryButton variant="gold" size="md" onClick={onGoToReservas}>
               <Calendar className="w-4 h-4 mr-1.5" />
               <span>Agendar Nuevo Masaje</span>
             </LuxuryButton>
+
+            {billeteraBalance > 0 && (
+              <div className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl bg-white/10 border border-white/15 text-xs text-white">
+                <Wallet className="w-4 h-4 text-[#E6CA65]" />
+                <span>Saldo en Billetera: <strong className="text-[#E6CA65] font-bold">${billeteraBalance.toLocaleString()} MXN</strong></span>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* SECCIÓN PRINCIPAL: SISTEMA DE NIVELES Y CATEGORÍAS DE MEMBRESÍA */}
+      <section 
+        id="seccion-membresia-niveles"
+        className="bg-white dark:bg-[#141414] border border-[#E5DFD3] dark:border-[#262626] rounded-3xl p-6 sm:p-8 space-y-6 shadow-sm transition-all relative overflow-hidden"
+      >
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#E5DFD3] dark:border-[#262626] pb-5">
+          <div>
+            <div className="flex items-center space-x-2 mb-1">
+              <Award className="w-4 h-4 text-[#C9A55B]" />
+              <span className="text-xs uppercase tracking-widest font-bold text-[#806020] dark:text-[#C9A55B]">
+                Club de Beneficios y Lealtad ESSENYA
+              </span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#1C1917] dark:text-white flex items-center gap-3">
+              <span>Tu Categoría Actual:</span>
+              <span className={`inline-flex items-center space-x-1.5 text-xs sm:text-sm px-3.5 py-1 rounded-full ${tierInfo.badgeStyle}`}>
+                {getTierIcon()}
+                <span>{tierInfo.fullLabel}</span>
+              </span>
+            </h2>
+          </div>
+
+          <div className="text-left sm:text-right bg-[#FAF8F5] dark:bg-[#1A1A1A] px-4 py-2.5 rounded-2xl border border-[#E5DFD3] dark:border-[#262626]">
+            <span className="text-[11px] text-[#6B655F] dark:text-[#888888] block">Masajes Completados y Pagados:</span>
+            <span className="text-lg sm:text-xl font-serif font-bold text-[#806020] dark:text-[#E6CA65]">
+              {completedCount} {completedCount === 1 ? 'Masaje' : 'Masajes'}
+            </span>
+          </div>
+        </div>
+
+        {/* Dynamic Progress towards Next Level */}
+        <div className="space-y-3 bg-[#FAF8F5] dark:bg-[#1A1A1A] p-5 rounded-2xl border border-[#E5DFD3] dark:border-[#262626]">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
+            <div className="space-y-0.5">
+              <span className="font-bold text-[#1C1917] dark:text-white block">
+                Progreso hacia: <strong className="text-[#806020] dark:text-[#E6CA65]">{tierInfo.nextTier}</strong>
+              </span>
+              <span className="text-[#6B655F] dark:text-[#AAAAAA]">
+                {tierInfo.incentiveMessage}
+              </span>
+            </div>
+
+            <div className="font-mono font-bold text-[#806020] dark:text-[#E6CA65] bg-white dark:bg-[#222222] px-3 py-1 rounded-lg border border-[#E5DFD3] dark:border-[#333333] shrink-0">
+              {tierInfo.progressPercent}% Completado
+            </div>
+          </div>
+
+          {/* Animated Progress Bar */}
+          <div className="w-full bg-[#E5DFD3] dark:bg-[#2A2A2A] h-3 rounded-full overflow-hidden p-0.5">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${tierInfo.progressPercent}%` }}
+              transition={{ duration: 0.8, ease: 'easeOut' }}
+              className="h-full bg-gradient-to-r from-[#C9A55B] via-[#E6CA65] to-[#B38728] rounded-full shadow-sm"
+            />
+          </div>
+
+          {tierInfo.neededForNext > 0 ? (
+            <div className="flex items-center justify-between text-[11px] text-[#6B655F] dark:text-[#888888] pt-1">
+              <span>Nivel actual: {tierInfo.fullLabel}</span>
+              <span className="font-semibold text-[#806020] dark:text-[#C9A55B]">
+                {tierInfo.neededForNext === 1 ? '¡Solo 1 masaje restante para subir!' : `Faltan ${tierInfo.neededForNext} masajes para ascender`}
+              </span>
+              <span>Próximo nivel: {tierInfo.nextTier}</span>
+            </div>
+          ) : (
+            <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold pt-1 flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Has alcanzado el estatus máximo de excelencia vitalicia.</span>
+            </div>
+          )}
+        </div>
+
+        {/* Benefits Breakdown Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+          {/* Current Category Benefits */}
+          <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-5 rounded-2xl border border-[#E5DFD3] dark:border-[#262626] space-y-3">
+            <div className="flex items-center justify-between border-b border-[#E5DFD3] dark:border-[#262626] pb-2.5">
+              <h3 className="font-serif font-bold text-sm text-[#1C1917] dark:text-white flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-[#C9A55B]" />
+                <span>Beneficios de tu Categoría ({tierInfo.fullLabel})</span>
+              </h3>
+              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                Activos Ahora
+              </span>
+            </div>
+
+            <ul className="space-y-2.5 text-xs text-[#44403C] dark:text-[#D6D3D1]">
+              {tierInfo.perks.map((perk, idx) => (
+                <li key={idx} className="flex items-start space-x-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#C9A55B] mt-1.5 shrink-0" />
+                  <span>{perk}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Siguiente Categoría & Beneficio Cortesía VIP */}
+          <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-5 rounded-2xl border border-[#E5DFD3] dark:border-[#262626] space-y-4">
+            <div>
+              <div className="flex items-center justify-between border-b border-[#E5DFD3] dark:border-[#262626] pb-2.5">
+                <h3 className="font-serif font-bold text-sm text-[#1C1917] dark:text-white flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[#E6CA65]" />
+                  <span>Próxima Meta: {tierInfo.nextTier}</span>
+                </h3>
+                <span className="text-[10px] font-bold text-[#806020] dark:text-[#C9A55B] bg-[#C9A55B]/10 px-2 py-0.5 rounded border border-[#C9A55B]/20">
+                  Por Desbloquear
+                </span>
+              </div>
+              <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] mt-2">
+                Al alcanzar <strong>{tierInfo.nextTier}</strong> tendrás prioridad adicional en reservas, tarifas exclusivas y acceso a promociones de élite.
+              </p>
+            </div>
+
+            {/* Beneficio Cortesía VIP Preview Card */}
+            <div className="p-3.5 rounded-xl bg-white dark:bg-[#202020] border border-[#E5DFD3] dark:border-[#333333] space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-[#1C1917] dark:text-white flex items-center gap-1.5">
+                  <Gift className="w-4 h-4 text-[#C9A55B]" />
+                  <span>Beneficio "Cortesía VIP" (15% de Descuento)</span>
+                </span>
+                {vipCourtesy.used ? (
+                  <span className="text-[10px] font-bold text-zinc-500 bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 rounded">
+                    Utilizado
+                  </span>
+                ) : vipCourtesy.unlocked ? (
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
+                    ¡Disponible! Código: VIP15
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded flex items-center gap-1">
+                    <Lock className="w-3 h-3" />
+                    <span>Requiere 5 masajes ({completedCount}/5)</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-[#6B655F] dark:text-[#888888]">
+                {vipCourtesy.unlocked && !vipCourtesy.used
+                  ? '¡Has desbloqueado este beneficio exclusivo! Utiliza el código VIP15 al agendar tu próxima reserva.'
+                  : vipCourtesy.used
+                  ? 'Este beneficio de uso único ya fue redimido en una cita anterior.'
+                  : `Se desbloquea al acumular 5 masajes terminados y pagados. Te faltan ${vipCourtesy.massagesNeeded} sesiones.`}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Action button inside Membership section */}
+        <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-[#E5DFD3] dark:border-[#262626]">
+          <p className="text-xs text-[#6B655F] dark:text-[#888888]">
+            Cada masaje concluido y pagado en tu domicilio acumula puntos y te acerca a la siguiente categoría.
+          </p>
+          <LuxuryButton variant="gold" size="sm" onClick={onGoToReservas}>
+            <span>Reservar Masaje para Subir de Nivel</span>
+            <ArrowUpRight className="w-4 h-4 ml-1.5" />
+          </LuxuryButton>
+        </div>
+      </section>
 
       {/* Active Service Tracking if available */}
       {activeBooking && (
@@ -52,10 +269,10 @@ export const InicioPage: React.FC<InicioPageProps> = ({ onGoToReservas }) => {
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-serif font-bold text-[#1C1917] dark:text-white flex items-center space-x-2">
               <Clock className="w-5 h-5 text-[#C9A55B]" />
-              <span>Servicio Activo en Seguimiento Live</span>
+              <span>Servicio Activo en Seguimiento en Vivo</span>
             </h2>
             <span className="text-xs font-mono font-bold bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B] px-3 py-1 rounded-full border border-[#C9A55B]/30">
-              Reserva #{activeBooking.code || activeBooking.id}
+              Cita #{activeBooking.code || activeBooking.id}
             </span>
           </div>
 
@@ -69,14 +286,14 @@ export const InicioPage: React.FC<InicioPageProps> = ({ onGoToReservas }) => {
         </div>
       )}
 
-      {/* Featured Luxury Treatments */}
+      {/* Featured Treatments */}
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <h2 className="text-lg font-serif font-bold text-[#1C1917] dark:text-white">
             Tratamientos Destacados ESSENYA
           </h2>
-          <button onClick={onGoToReservas} className="text-xs font-bold text-[#806020] dark:text-[#C9A55B] hover:underline flex items-center">
-            <span>Ver Menú Completo</span>
+          <button onClick={onGoToReservas} className="text-xs font-bold text-[#806020] dark:text-[#C9A55B] hover:underline flex items-center cursor-pointer">
+            <span>Ver Catálogo Completo</span>
             <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
           </button>
         </div>
@@ -88,7 +305,12 @@ export const InicioPage: React.FC<InicioPageProps> = ({ onGoToReservas }) => {
               className="bg-white dark:bg-[#141414] border border-[#E5DFD3] dark:border-[#262626] rounded-2xl p-5 space-y-4 shadow-sm hover:shadow-md transition-all group"
             >
               <div className="aspect-video rounded-xl overflow-hidden relative">
-                <img src={service.image || undefined} alt={service.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                <img 
+                  src={service.image || undefined} 
+                  alt={service.name} 
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                  referrerPolicy="no-referrer"
+                />
                 <span className="absolute top-2 right-2 bg-black/80 text-[#C9A55B] text-[10px] font-bold px-2 py-0.5 rounded-full border border-[#C9A55B]/30">
                   {service.category}
                 </span>
@@ -102,7 +324,7 @@ export const InicioPage: React.FC<InicioPageProps> = ({ onGoToReservas }) => {
               <div className="flex justify-between items-center pt-2 border-t border-[#E5DFD3] dark:border-[#262626]">
                 <span className="text-sm font-bold text-[#806020] dark:text-[#C9A55B]">${service.basePrice.toLocaleString()} MXN</span>
                 <LuxuryButton variant="outline" size="sm" onClick={onGoToReservas}>
-                  Reservar
+                  Reservar Cita
                 </LuxuryButton>
               </div>
             </div>

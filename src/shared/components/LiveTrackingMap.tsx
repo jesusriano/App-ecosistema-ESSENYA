@@ -236,9 +236,9 @@ const VisualRouteProgressTracker: React.FC<{
   const steps = [
     {
       id: 'confirmada',
-      title: 'Asignación Aceptada',
-      subtitle: 'Equipo preparado & sanitizado',
-      minProgress: 25
+      title: bookingState === 'pendiente' ? 'Asignación Pendiente' : 'Asignación Aceptada',
+      subtitle: bookingState === 'pendiente' ? 'Buscando terapeuta...' : 'Equipo preparado & sanitizado',
+      minProgress: bookingState === 'pendiente' ? 10 : 25
     },
     {
       id: 'en_camino',
@@ -279,7 +279,7 @@ const VisualRouteProgressTracker: React.FC<{
             <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
               <span>Rastreo de Ruta Google Maps</span>
               <span className="text-[10px] bg-[#C9A55B]/20 text-[#C9A55B] px-2 py-0.5 rounded font-mono font-bold uppercase border border-[#C9A55B]/30">
-                {bookingState === 'llegue' ? '¡Arribo!' : bookingState === 'en_camino' ? 'En Movimiento' : 'Confirmado'}
+                {bookingState === 'llegue' ? '¡Arribo!' : bookingState === 'en_camino' ? 'En Movimiento' : bookingState === 'pendiente' ? 'Asignando' : 'Confirmado'}
               </span>
             </h4>
             <p className="text-[11px] text-[#888888]">
@@ -323,37 +323,56 @@ const VisualRouteProgressTracker: React.FC<{
           const isDone = idx < currentStepIdx;
           const isCurrent = idx === currentStepIdx;
 
+          let stepClasses = '';
+          let indexClasses = '';
+          let iconElement = null;
+          let titleClasses = '';
+
+          if (isCurrent) {
+            if (idx === 0 && bookingState === 'pendiente') {
+              // Amarillo
+              stepClasses = 'bg-yellow-500/15 border-yellow-500 text-white shadow-md shadow-yellow-500/10 ring-1 ring-yellow-500/30';
+              indexClasses = 'bg-yellow-500 text-black';
+              iconElement = <LocateFixed className="w-3.5 h-3.5 text-yellow-500 animate-pulse" />;
+              titleClasses = 'text-white';
+            } else if (idx === 0 && bookingState === 'aceptado') {
+              // Verde por fuera únicamente (fondo transparente, borde verde)
+              stepClasses = 'bg-transparent border-emerald-500 text-white shadow-md shadow-emerald-500/10 ring-1 ring-emerald-500/30';
+              indexClasses = 'bg-emerald-500 text-black';
+              iconElement = <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />;
+              titleClasses = 'text-emerald-400';
+            } else {
+              // Normal Current (Gold)
+              stepClasses = 'bg-[#C9A55B]/15 border-[#C9A55B] text-white shadow-md shadow-[#C9A55B]/10 ring-1 ring-[#C9A55B]/30';
+              indexClasses = 'bg-[#C9A55B] text-black';
+              iconElement = <LocateFixed className="w-3.5 h-3.5 text-[#C9A55B] animate-pulse" />;
+              titleClasses = 'text-white';
+            }
+          } else if (isDone) {
+            stepClasses = 'bg-[#121212] border-emerald-500/30 text-gray-300';
+            indexClasses = 'bg-emerald-500/20 text-emerald-400';
+            iconElement = <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />;
+            titleClasses = 'text-emerald-300';
+          } else {
+            stepClasses = 'bg-[#101010] border-[#222222] text-[#555555]';
+            indexClasses = 'bg-[#222222] text-[#666666]';
+            iconElement = <span className="w-1.5 h-1.5 rounded-full bg-[#333333]"></span>;
+            titleClasses = 'text-[#666666]';
+          }
+
           return (
             <div 
               key={step.id} 
-              className={`p-2.5 rounded-xl border text-left transition-all ${
-                isCurrent 
-                  ? 'bg-[#C9A55B]/15 border-[#C9A55B] text-white shadow-md shadow-[#C9A55B]/10 ring-1 ring-[#C9A55B]/30' 
-                  : isDone 
-                  ? 'bg-[#121212] border-emerald-500/30 text-gray-300' 
-                  : 'bg-[#101010] border-[#222222] text-[#555555]'
-              }`}
+              className={`p-2.5 rounded-xl border text-left transition-all ${stepClasses}`}
             >
               <div className="flex items-center justify-between mb-1">
-                <span className={`text-[10px] font-mono font-extrabold px-1.5 py-0.2 rounded ${
-                  isCurrent 
-                    ? 'bg-[#C9A55B] text-black' 
-                    : isDone 
-                    ? 'bg-emerald-500/20 text-emerald-400' 
-                    : 'bg-[#222222] text-[#666666]'
-                }`}>
+                <span className={`text-[10px] font-mono font-extrabold px-1.5 py-0.2 rounded ${indexClasses}`}>
                   0{idx + 1}
                 </span>
-                {isDone ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                ) : isCurrent ? (
-                  <LocateFixed className="w-3.5 h-3.5 text-[#C9A55B] animate-pulse" />
-                ) : (
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#333333]"></span>
-                )}
+                {iconElement}
               </div>
 
-              <h5 className={`text-xs font-bold truncate ${isCurrent ? 'text-white' : isDone ? 'text-emerald-300' : 'text-[#666666]'}`}>
+              <h5 className={`text-xs font-bold truncate ${titleClasses}`}>
                 {step.title}
               </h5>
               <p className="text-[10px] text-[#888888] truncate mt-0.5">

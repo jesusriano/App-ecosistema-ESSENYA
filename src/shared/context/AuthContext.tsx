@@ -46,6 +46,7 @@ interface AuthContextType {
   isAuthenticated: (role: UserRole) => boolean;
   getUser: (role: UserRole) => UserAuthProfile | null;
   verifyAdminInFirestore: (uid?: string, email?: string) => Promise<AdminVerificationResult>;
+  firebaseUser: any;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -73,10 +74,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   });
 
   const [loading, setLoading] = useState(false);
+  const [currentFirebaseUser, setCurrentFirebaseUser] = useState<any>(auth.currentUser);
 
   // Synchronize Firestore user records and Auth State
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setCurrentFirebaseUser(firebaseUser);
       if (firebaseUser) {
         try {
           // 1. Verify if user is an Admin in the 'administradores' collection in Firestore
@@ -222,7 +225,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             name: `${nombre.trim()} ${apellidos.trim()}`,
             email: correo.trim().toLowerCase(),
             phone: telefono.trim(),
-            membershipTier: 'Gold',
+            membershipTier: 'Platino',
             address: '',
             cityZone: 'Polanco / Reforma',
             spentTotal: 0,
@@ -565,7 +568,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         updateUserProfile,
         isAuthenticated,
         getUser,
-        verifyAdminInFirestore
+        verifyAdminInFirestore,
+        firebaseUser: currentFirebaseUser
       }}
     >
       {children}

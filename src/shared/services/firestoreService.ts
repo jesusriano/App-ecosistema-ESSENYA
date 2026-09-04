@@ -16,39 +16,43 @@ import {
   Unsubscribe
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { handleFirestoreError, OperationType } from '../utils/firestoreDebug';
+import { handleFirestoreError, OperationType, cleanForFirestore } from '../utils/firestoreDebug';
 
 /**
- * Safe wrapper around setDoc that logs detailed query structure and field errors.
+ * Safe wrapper around setDoc that logs detailed query structure and field errors,
+ * and recursively strips undefined properties to prevent Firestore serialization errors.
  */
 export async function safeSetDoc<T extends DocumentData>(
   docRef: DocumentReference<T>,
   data: T,
   options?: SetOptions
 ): Promise<void> {
+  const sanitized = cleanForFirestore(data);
   try {
     if (options) {
-      await setDoc(docRef, data, options);
+      await setDoc(docRef, sanitized as T, options);
     } else {
-      await setDoc(docRef, data);
+      await setDoc(docRef, sanitized as T);
     }
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, docRef.path, data);
+    handleFirestoreError(error, OperationType.CREATE, docRef.path, sanitized);
     throw error;
   }
 }
 
 /**
- * Safe wrapper around updateDoc that logs detailed query structure and field errors.
+ * Safe wrapper around updateDoc that logs detailed query structure and field errors,
+ * and recursively strips undefined properties.
  */
 export async function safeUpdateDoc<T extends DocumentData>(
   docRef: DocumentReference<T>,
   data: UpdateData<T>
 ): Promise<void> {
+  const sanitized = cleanForFirestore(data);
   try {
-    await updateDoc(docRef, data);
+    await updateDoc(docRef, sanitized as UpdateData<T>);
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, docRef.path, data);
+    handleFirestoreError(error, OperationType.UPDATE, docRef.path, sanitized);
     throw error;
   }
 }

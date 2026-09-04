@@ -113,12 +113,12 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // 4. THERAPIST PROFILES (PUBLIC DIRECTORY FOR CLIENTS, EDITABLE BY OWNER/ADMIN)
+    // 4. THERAPIST PROFILES (PUBLIC DIRECTORY FOR CLIENTS & VISITORS)
     // ==========================================
 
     match /terapeutas/{terapeutaId} {
-      // Signed-in users can browse therapists to book appointments
-      allow read: if isSignedIn();
+      // Allow public reading so website visitors can explore therapist credentials
+      allow read: if true;
       allow create: if isSignedIn() && (isOwner(terapeutaId) || isAdmin());
       allow update: if isSignedIn() && (isOwner(terapeutaId) || isAdmin());
       allow delete: if isAdmin();
@@ -188,17 +188,17 @@ service cloud.firestore {
     // ==========================================
 
     match /servicios/{servicioId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
     match /zonas/{zonaId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
     match /zones/{zoneId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isAdmin();
     }
 

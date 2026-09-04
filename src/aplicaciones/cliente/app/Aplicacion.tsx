@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from '../../../context/ToastContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
@@ -14,13 +14,27 @@ import {
   MessageSquare, FileText, Star, Award, ShieldCheck, ChevronRight, 
   Bot, AlertCircle, RefreshCw, Send, X, Heart, Droplets, Music, Sliders,
   AlertTriangle, CreditCard, Building2, Check, Copy, Users, UserCheck, Banknote, Camera, Upload,
-  LocateFixed
+  LocateFixed, Crown, Gem, Shield, Gift, Wallet, Lock
 } from 'lucide-react';
 import { PanicModal } from '../../../shared/components/PanicModal';
 import { WhatsAppButton } from '../../../shared/components/WhatsAppButton';
 import { LiveTrackingMap } from '../../../shared/components/LiveTrackingMap';
 import { useGeolocation } from '../../../shared/hooks/useGeolocation';
 import { fetchAiConciergeRecommendation } from '../../../shared/services/api';
+import { 
+  calculateMembershipTier, 
+  getCompletedAndPaidBookings, 
+  getVipCourtesyStatus, 
+  markVipCourtesyAsUsed,
+  validatePromotionCode,
+  PromoValidationResult
+} from '../services/membershipService';
+import { 
+  validateGiftCardCode, 
+  applyGiftCardToBooking, 
+  getGiftCards, 
+  GiftCard 
+} from '../services/billeteraService';
 
 
 interface ClientAppProps {
@@ -79,6 +93,19 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
   const [selectedTherapistId, setSelectedTherapistId] = useState<string | 'auto'>('auto');
   const [couponCode, setCouponCode] = useState<string>('');
+  const [appliedPromo, setAppliedPromo] = useState<{
+    code: string;
+    label: string;
+    discountPercent?: number;
+    fixedDiscount?: number;
+    type: 'DIAMOND10' | 'VIP15' | 'STANDARD';
+  } | null>(null);
+
+  // Tarjeta de Regalo / Billetera State (para canjear un regalo recibido por el cliente)
+  const [giftCardCodeInput, setGiftCardCodeInput] = useState<string>('');
+  const [appliedGiftCard, setAppliedGiftCard] = useState<GiftCard | null>(null);
+  const [showGiftCardSection, setShowGiftCardSection] = useState<boolean>(false);
+
   const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [tipAmount, setTipAmount] = useState<number>(0);
   const [isCustomTip, setIsCustomTip] = useState<boolean>(false);
@@ -147,6 +174,21 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   // Active tracking booking
   const activeBooking = bookings.find(b => b.state !== 'servicio_finalizado' && b.state !== 'cancelado') || bookings[0];
 
+  // Popover state for client tier incentive ladder
+  const [showTierPopover, setShowTierPopover] = useState<boolean>(false);
+
+  // Masajes adquiridos por el cliente que ya han terminado de pagarse y ya concluyó el masaje
+  const completedAndPaidBookings = useMemo(() => {
+    return getCompletedAndPaidBookings(bookings, client?.id);
+  }, [bookings, client?.id]);
+
+  const completedMassagesCount = completedAndPaidBookings.length;
+
+  // Niveles de membresía calculados según masajes concluidos y pagados
+  const currentTierData = useMemo(() => {
+    return calculateMembershipTier(completedMassagesCount);
+  }, [completedMassagesCount]);
+
   // AI Concierge State
   const [showAiConcierge, setShowAiConcierge] = useState<boolean>(false);
   const [aiQuery, setAiQuery] = useState<string>('');
@@ -182,7 +224,30 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
   const baseMassagePrice = calculateBasePrice();
   const rawPrice = baseMassagePrice + extrasTotalPrice;
-  const totalPrice = Math.max(0, rawPrice - discountAmount);
+
+  // Calculate promotional discount dynamically
+  const promoDiscountAmount = useMemo(() => {
+    if (!appliedPromo) return discountAmount;
+    if (appliedPromo.discountPercent) {
+      return Math.round(rawPrice * (appliedPromo.discountPercent / 100));
+    }
+    return appliedPromo.fixedDiscount || discountAmount;
+  }, [appliedPromo, rawPrice, discountAmount]);
+
+  const priceAfterPromo = Math.max(0, rawPrice - promoDiscountAmount);
+
+  // Calculate Gift Card deduction ($1,400 MXN card system)
+  const giftCardDeduction = useMemo(() => {
+    if (!appliedGiftCard) return 0;
+    return Math.min(appliedGiftCard.currentBalance, priceAfterPromo);
+  }, [appliedGiftCard, priceAfterPromo]);
+
+  const giftCardRemainingBalance = useMemo(() => {
+    if (!appliedGiftCard) return 0;
+    return Math.max(0, appliedGiftCard.currentBalance - giftCardDeduction);
+  }, [appliedGiftCard, giftCardDeduction]);
+
+  const totalPrice = Math.max(0, priceAfterPromo - giftCardDeduction);
 
   // Select service helper
   const handleSelectService = (srv: ServiceItem) => {
@@ -193,14 +258,57 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     }
   };
 
-  // Apply Coupon
-  const handleApplyCoupon = () => {
-    if (couponCode.toUpperCase() === 'ESSENYABLACK' || couponCode.toUpperCase() === 'GOLD2026') {
-      setDiscountAmount(500);
-      showToast('Cupón Aplicado', 'Se ha abonado un descuento de $500 MXN a su cuenta VIP.', 'gold');
-    } else {
-      showToast('Cupón no válido', 'Utilice GOLD2026 o ESSENYABLACK para obtener beneficios exclusivos.', 'error');
+  // Apply Coupon with strict membership tier validation (DIAMOND10, VIP15, GOLD2026, ESSENYABLACK)
+  const handleApplyCoupon = (customCode?: string) => {
+    const code = (typeof customCode === 'string' ? customCode : couponCode).trim().toUpperCase();
+    if (!code) {
+      showToast('Ingresa un código', 'Por favor escribe un código promocional o de membresía.', 'error');
+      return;
     }
+
+    const result = validatePromotionCode(code, completedMassagesCount, currentTierData);
+    if (!result.valid) {
+      showToast(result.title, result.message, 'error');
+      return;
+    }
+
+    setAppliedPromo({
+      code: result.code || code,
+      label: result.label || 'Descuento Promocional',
+      discountPercent: result.discountPercent,
+      fixedDiscount: result.fixedDiscount,
+      type: result.type || 'STANDARD'
+    });
+
+    showToast(result.title, result.message, 'gold');
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromo(null);
+    setDiscountAmount(0);
+    setCouponCode('');
+    showToast('Cupón Removido', 'Se ha eliminado el descuento de la reserva.', 'info');
+  };
+
+  // Gift Card application handler ($1,400 MXN system)
+  const handleApplyGiftCard = (customCode?: string) => {
+    const code = (typeof customCode === 'string' ? customCode : giftCardCodeInput).trim().toUpperCase();
+    const result = validateGiftCardCode(code);
+    if (!result.valid || !result.card) {
+      showToast('Tarjeta Inválida', result.message, 'error');
+      return;
+    }
+    setAppliedGiftCard(result.card);
+    showToast(
+      'Tarjeta de Regalo Aplicada',
+      `Saldo de $${result.card.currentBalance.toLocaleString()} MXN disponible. Se aplicará a esta reserva.`,
+      'gold'
+    );
+  };
+
+  const handleRemoveGiftCard = () => {
+    setAppliedGiftCard(null);
+    showToast('Tarjeta de Regalo Quitada', 'Se ha desvinculado la tarjeta de esta reserva.', 'info');
   };
 
   // Submit Booking
@@ -232,22 +340,18 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     const newBk: Booking = {
       id: `bk-${Math.floor(1000 + Math.random() * 9000)}`,
       code: `ESS-${Math.floor(1000 + Math.random() * 9000)}`,
-      clientId: client?.id,
-      clientName: client?.name,
-      clientPhone: client?.phone,
-      clientAddress: address,
-      cityZone: cityZone,
-      therapistId: undefined,
-      therapistName: undefined,
-      therapistPhoto: undefined,
-      therapistPhone: undefined,
+      clientId: client?.id || '',
+      clientName: client?.name || 'Cliente VIP',
+      clientPhone: client?.phone || '',
+      clientAddress: address || '',
+      cityZone: cityZone || 'Zona Metropolitana CDMX',
       serviceId: selectedService.id,
-      serviceName: selectedService?.name,
+      serviceName: selectedService?.name || 'Masaje Exclusivo',
       durationMinutes: duration,
       totalDurationMinutes: totalServiceDurationMinutes,
-      selectedExtras: extrasList.length > 0 ? extrasList : undefined,
-      requiresDualTherapist: selectedService.requiresDualTherapist,
-      dualTherapistNote: selectedService.therapistAssignmentNote,
+      ...(extrasList.length > 0 ? { selectedExtras: extrasList } : {}),
+      ...(selectedService.requiresDualTherapist ? { requiresDualTherapist: true } : {}),
+      ...(selectedService.therapistAssignmentNote ? { dualTherapistNote: selectedService.therapistAssignmentNote } : {}),
       price: rawPrice,
       tip: tipAmount,
       total: totalPrice,
@@ -256,17 +360,34 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       preferences: { ...preferences },
       state: 'pendiente',
       etaMinutes: 20,
-      paymentMethod: paymentMethodType === 'efectivo'
+      paymentMethod: totalPrice === 0 && giftCardDeduction > 0
+        ? 'Tarjeta de Regalo (Saldo Billetera)'
+        : paymentMethodType === 'efectivo'
         ? 'Efectivo (Pago al Recibir)'
         : paymentMethodType === 'transferencia'
         ? 'Transferencia Interbancaria (SPEI)'
         : 'Tarjeta de Crédito / Débito',
-      paymentStatus: paymentMethodType === 'efectivo' ? 'pendiente' : 'pagado',
-      painPoints: preferences.painPoints,
-      arrivalInstructions: preferences.arrivalInstructions,
+      paymentStatus: totalPrice === 0 ? 'pagado' : paymentMethodType === 'efectivo' ? 'pendiente' : 'pagado',
+      painPoints: preferences.painPoints || '',
+      arrivalInstructions: preferences.arrivalInstructions || '',
       createdAt: new Date().toISOString(),
       invoiceId: `inv-${Math.floor(1000 + Math.random() * 9000)}`
     };
+
+    // Consume VIP15 courtesy benefit if applied (single-use)
+    if (appliedPromo?.type === 'VIP15') {
+      markVipCourtesyAsUsed();
+    }
+
+    // Deduct Gift Card balance if applied
+    if (appliedGiftCard && giftCardDeduction > 0) {
+      applyGiftCardToBooking(
+        appliedGiftCard.code,
+        giftCardDeduction,
+        newBk.code,
+        selectedService?.name || 'Masaje ESSENYA'
+      );
+    }
 
     onNewBooking(newBk);
     showToast(
@@ -274,6 +395,12 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       `Su código es ${newBk.code}. Estamos buscando una profesional disponible que cumpla con tus preferencias.`,
       'gold'
     );
+    
+    // Reset coupon & gift card states
+    setAppliedPromo(null);
+    setAppliedGiftCard(null);
+    setCouponCode('');
+
     setActiveTab('tracking');
     setStep(1);
   };
@@ -377,8 +504,86 @@ export const ClientApp: React.FC<ClientAppProps> = ({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg sm:text-xl font-serif font-bold text-[#1C1917] dark:text-white tracking-wide">{client?.name}</h2>
-                <span className="bg-gradient-to-r from-[#D8B76C] via-[#C9A55B] to-[#9A7B38] text-white text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full tracking-wider shadow-xs">
-                  Socio {client.membershipTier}
+                <span 
+                  id="client-membership-tier-badge"
+                  onClick={() => setShowTierPopover(prev => !prev)}
+                  onMouseEnter={() => setShowTierPopover(true)}
+                  onMouseLeave={() => setShowTierPopover(false)}
+                  title={`${currentTierData.fullLabel} • ${completedMassagesCount} ${completedMassagesCount === 1 ? 'masaje concluido y pagado' : 'masajes concluidos y pagados'}. ${currentTierData.incentiveMessage}`}
+                  className={`relative inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] uppercase tracking-wider cursor-pointer transition-all duration-300 select-none ${currentTierData.badgeStyle}`}
+                >
+                  {/* Icon according to tier */}
+                  {currentTierData.iconType === 'shield' && <Shield className="w-3.5 h-3.5 text-slate-700 dark:text-slate-200 shrink-0" />}
+                  {currentTierData.iconType === 'crown' && <Crown className="w-3.5 h-3.5 shrink-0" />}
+                  {currentTierData.iconType === 'gem' && <Gem className="w-3.5 h-3.5 shrink-0 animate-pulse" />}
+                  {currentTierData.iconType === 'sparkles' && <Sparkles className="w-3.5 h-3.5 shrink-0 text-amber-300" />}
+
+                  {/* Tier Label */}
+                  <span>{currentTierData.fullLabel}</span>
+
+                  {/* Massages completed counter pill */}
+                  <span className="bg-black/15 dark:bg-white/20 px-1.5 py-0.5 rounded-full text-[9px] font-bold lowercase tracking-normal flex items-center gap-0.5">
+                    <span>{completedMassagesCount} {completedMassagesCount === 1 ? 'masaje' : 'masajes'}</span>
+                  </span>
+
+                  {/* Incentive Ladder Popover on Hover or Click */}
+                  <AnimatePresence>
+                    {showTierPopover && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 4, scale: 0.96 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute left-0 top-full mt-2 z-50 w-72 p-3.5 rounded-2xl bg-white dark:bg-[#1A1A1A] text-[#1C1917] dark:text-white border border-[#E5DFD3] dark:border-[#333333] shadow-2xl normal-case tracking-normal text-left pointer-events-auto"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-between pb-2 border-b border-[#E5DFD3] dark:border-[#2A2A2A]">
+                          <div className="flex items-center gap-1.5">
+                            <Award className="w-4 h-4 text-[#C9A55B]" />
+                            <span className="font-serif font-bold text-xs">Programa de Ascenso VIP</span>
+                          </div>
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B]">
+                            Nivel {currentTierData.level}
+                          </span>
+                        </div>
+
+                        <div className="mt-2.5 space-y-2 text-xs">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-[#6B655F] dark:text-[#AAAAAA]">Masajes concluidos & pagados:</span>
+                            <span className="font-bold text-[#1C1917] dark:text-white">{completedMassagesCount}</span>
+                          </div>
+
+                          {currentTierData.neededForNext > 0 ? (
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between text-[10px] text-[#6B655F] dark:text-[#AAAAAA]">
+                                <span>Próximo ascenso: <strong className="text-[#806020] dark:text-[#C9A55B]">{currentTierData.nextTier}</strong></span>
+                                <span className="font-bold">{currentTierData.neededForNext} {currentTierData.neededForNext === 1 ? 'masaje' : 'masajes'}</span>
+                              </div>
+                              <div className="w-full bg-[#E5DFD3] dark:bg-[#2A2A2A] h-1.5 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-gradient-to-r from-[#C9A55B] to-[#E6CA65] rounded-full transition-all duration-500"
+                                  style={{ width: `${Math.max(8, currentTierData.progressPercent)}%` }}
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Máximo nivel alcanzado</span>
+                            </p>
+                          )}
+
+                          <p className="text-[11px] text-[#6B655F] dark:text-[#AAAAAA] leading-snug pt-1">
+                            {currentTierData.incentiveMessage}
+                          </p>
+
+                          <div className="p-2 rounded-xl bg-[#FAF8F5] dark:bg-[#141414] border border-[#E5DFD3] dark:border-[#262626] text-[10px] text-[#806020] dark:text-[#D4AF37]">
+                            {currentTierData.perk}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </span>
                 <label 
                   htmlFor="client-photo-input"
@@ -1278,26 +1483,186 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                   </div>
                 </div>
 
-                {/* Coupon Code Section */}
+                {/* Coupon Code & Membership Benefits Section */}
+                <div className="pt-2 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs text-[#6B655F] dark:text-[#AAAAAA] uppercase font-semibold block">
+                      ¿Tienes un Cupón Promocional o Beneficio VIP?
+                    </label>
+                    <span className="text-[10px] text-[#806020] dark:text-[#C9A55B] font-bold">
+                      Nivel: {currentTierData.fullLabel}
+                    </span>
+                  </div>
+
+                  {appliedPromo ? (
+                    <div className="bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/30 rounded-xl p-3 flex justify-between items-center text-xs">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center space-x-1.5 font-bold text-emerald-700 dark:text-emerald-300">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>{appliedPromo.label}</span>
+                        </div>
+                        <p className="text-[11px] text-[#6B655F] dark:text-[#AAAAAA]">
+                          Código <span className="font-mono font-bold text-[#806020] dark:text-[#E6CA65]">{appliedPromo.code}</span> activo • Descuento: -${promoDiscountAmount.toLocaleString()} MXN
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRemovePromo}
+                        className="text-[11px] text-red-600 dark:text-red-400 font-bold hover:underline px-2 py-1"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex space-x-2">
+                        <input 
+                          type="text"
+                          value={couponCode}
+                          onChange={(e) => setCouponCode(e.target.value)}
+                          placeholder="Ej. DIAMOND10, VIP15 o GOLD2026"
+                          className="flex-1 bg-[#F5F1EA] dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-3 py-2 text-xs text-[#1C1917] dark:text-white uppercase focus:outline-none focus:border-[#C9A55B]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleApplyCoupon()}
+                          className="px-4 py-2 bg-[#F5F1EA] dark:bg-[#222222] border border-[#C9A55B]/40 text-[#806020] dark:text-[#C9A55B] font-semibold text-xs rounded-xl hover:bg-[#C9A55B] hover:text-black transition-colors"
+                        >
+                          Aplicar
+                        </button>
+                      </div>
+
+                      {/* Quick access pills for eligible codes */}
+                      <div className="flex flex-wrap gap-2 pt-1 text-[11px]">
+                        {currentTierData.level >= 3 ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCouponCode('DIAMOND10');
+                              handleApplyCoupon('DIAMOND10');
+                            }}
+                            className="bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-400/30 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 hover:bg-sky-500/20 transition-all cursor-pointer"
+                          >
+                            <Gem className="w-3 h-3 text-sky-500" />
+                            <span>Usar DIAMOND10 (10% OFF)</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCouponCode('DIAMOND10');
+                              handleApplyCoupon('DIAMOND10');
+                            }}
+                            className="text-zinc-500 dark:text-zinc-400 hover:text-red-500 dark:hover:text-red-400 text-[10px] flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 hover:bg-red-50 dark:hover:bg-red-950/20 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:border-red-300 dark:hover:border-red-800 transition-all cursor-pointer"
+                            title="Haz clic para verificar requisitos de categoría"
+                          >
+                            <Lock className="w-3 h-3 text-zinc-400" />
+                            <span>DIAMOND10 (Solo Socios Diamante en adelante)</span>
+                          </button>
+                        )}
+
+                        {completedMassagesCount >= 5 && !getVipCourtesyStatus(completedMassagesCount).used ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCouponCode('VIP15');
+                              handleApplyCoupon('VIP15');
+                            }}
+                            className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 hover:bg-emerald-500/20 transition-all cursor-pointer"
+                          >
+                            <CheckCircle className="w-3 h-3 text-emerald-500" />
+                            <span>Usar VIP15 (15% Cortesía)</span>
+                          </button>
+                        ) : completedMassagesCount < 5 ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCouponCode('VIP15');
+                              handleApplyCoupon('VIP15');
+                            }}
+                            className="text-zinc-500 dark:text-zinc-400 hover:text-red-500 dark:hover:text-red-400 text-[10px] flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 hover:bg-red-50 dark:hover:bg-red-950/20 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:border-red-300 dark:hover:border-red-800 transition-all cursor-pointer"
+                            title="Haz clic para verificar requisitos de fidelidad"
+                          >
+                            <Lock className="w-3 h-3 text-zinc-400" />
+                            <span>VIP15 (Requiere 5 masajes concluidos: {completedMassagesCount}/5)</span>
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Tarjeta de Regalo Recibida ($1,400 MXN) — Billetera ESSENYA Section */}
                 <div className="pt-2">
-                  <label className="text-xs text-[#6B655F] dark:text-[#AAAAAA] uppercase font-semibold block mb-1.5">
-                    ¿Tienes un Cupón Promocional VIP?
-                  </label>
-                  <div className="flex space-x-2">
-                    <input 
-                      type="text"
-                      value={couponCode}
-                      onChange={(e) => setCouponCode(e.target.value)}
-                      placeholder="Ej. GOLD2026 o ESSENYABLACK"
-                      className="flex-1 bg-[#F5F1EA] dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-3 py-2 text-xs text-[#1C1917] dark:text-white uppercase focus:outline-none focus:border-[#C9A55B]"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleApplyCoupon}
-                      className="px-4 py-2 bg-[#F5F1EA] dark:bg-[#222222] border border-[#C9A55B]/40 text-[#806020] dark:text-[#C9A55B] font-semibold text-xs rounded-xl hover:bg-[#C9A55B] hover:text-black transition-colors"
-                    >
-                      Aplicar
-                    </button>
+                  <div className="bg-gradient-to-br from-[#FAF8F5] via-white to-[#FAF8F5] dark:from-[#1A1A1A] dark:via-[#141414] dark:to-[#1A1A1A] p-4 rounded-2xl border border-[#C9A55B]/40 space-y-3 shadow-xs">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center space-x-2">
+                        <div className="p-1.5 rounded-lg bg-[#C9A55B]/20 text-[#806020] dark:text-[#E6CA65]">
+                          <Gift className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-[#1C1917] dark:text-white block">
+                            ¿Te obsequiaron una Tarjeta de Regalo ESSENYA? ($1,400 MXN)
+                          </span>
+                          <span className="text-[10px] text-[#6B655F] dark:text-[#AAAAAA]">
+                            Ingresa el código que te regalaron para aplicar su saldo monetario a esta reserva.
+                          </span>
+                        </div>
+                      </div>
+
+                      {appliedGiftCard && (
+                        <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                          Aplicada
+                        </span>
+                      )}
+                    </div>
+
+                    {appliedGiftCard ? (
+                      <div className="bg-white dark:bg-[#202020] p-3 rounded-xl border border-[#C9A55B]/30 space-y-2 text-xs">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[#6B655F] dark:text-[#AAAAAA]">Tarjeta Activa:</span>
+                          <span className="font-mono font-bold text-[#806020] dark:text-[#E6CA65]">{appliedGiftCard.code}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-[#6B655F] dark:text-[#AAAAAA]">Saldo Total en Tarjeta:</span>
+                          <span className="font-bold text-[#1C1917] dark:text-white">${appliedGiftCard.currentBalance.toLocaleString()} MXN</span>
+                        </div>
+                        <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400 font-bold">
+                          <span>Saldo a Descontar en esta Cita:</span>
+                          <span>-${giftCardDeduction.toLocaleString()} MXN</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[#806020] dark:text-[#E6CA65] font-semibold border-t border-dashed border-[#E5DFD3] dark:border-[#333333] pt-1.5 text-[11px]">
+                          <span>Saldo Remanente Conservado:</span>
+                          <span>${giftCardRemainingBalance.toLocaleString()} MXN</span>
+                        </div>
+                        <div className="pt-1 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={handleRemoveGiftCard}
+                            className="text-[11px] text-red-600 dark:text-red-400 font-bold hover:underline"
+                          >
+                            Quitar Tarjeta de Regalo
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={giftCardCodeInput}
+                          onChange={(e) => setGiftCardCodeInput(e.target.value)}
+                          placeholder="Ingresa código recibido (ej. REGALO-ESS-1400)"
+                          className="flex-1 bg-white dark:bg-[#202020] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-3 py-2 text-xs text-[#1C1917] dark:text-white uppercase focus:outline-none focus:border-[#C9A55B]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleApplyGiftCard()}
+                          className="px-4 py-2 bg-[#C9A55B] hover:bg-[#E6CA65] text-black font-bold text-xs rounded-xl transition-all shadow-xs"
+                        >
+                          Aplicar Saldo
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1317,141 +1682,153 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                 </div>
 
                 {/* Payment Method Options Selection */}
-                <div className="pt-2 space-y-3">
-                  <label className="text-xs text-[#6B655F] dark:text-[#AAAAAA] uppercase font-semibold block">
-                    Selecciona tu Método de Pago
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {/* Option 1: Tarjeta */}
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethodType('tarjeta')}
-                      className={`p-3.5 rounded-xl border flex flex-col items-center justify-center space-y-1.5 transition-all text-xs font-bold ${
-                        paymentMethodType === 'tarjeta'
-                          ? 'bg-[#C9A55B]/15 border-[#C9A55B] text-[#806020] dark:text-[#C9A55B] ring-1 ring-[#C9A55B]'
-                          : 'bg-[#F5F1EA] dark:bg-[#1A1A1A] border-[#E5DFD3] dark:border-[#333333] text-[#6B655F] dark:text-[#AAAAAA]'
-                      }`}
-                    >
-                      <CreditCard className="w-5 h-5 text-[#C9A55B]" />
-                      <span>Tarjeta de Crédito / Débito</span>
-                    </button>
-
-                    {/* Option 2: Transferencia Bancaria SPEI */}
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethodType('transferencia')}
-                      className={`p-3.5 rounded-xl border flex flex-col items-center justify-center space-y-1.5 transition-all text-xs font-bold ${
-                        paymentMethodType === 'transferencia'
-                          ? 'bg-[#C9A55B]/15 border-[#C9A55B] text-[#806020] dark:text-[#C9A55B] ring-1 ring-[#C9A55B]'
-                          : 'bg-[#F5F1EA] dark:bg-[#1A1A1A] border-[#E5DFD3] dark:border-[#333333] text-[#6B655F] dark:text-[#AAAAAA]'
-                      }`}
-                    >
-                      <Building2 className="w-5 h-5 text-[#C9A55B]" />
-                      <span>Transferencia (SPEI)</span>
-                    </button>
-
-                    {/* Option 3: Efectivo (Pago al Recibir) */}
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethodType('efectivo')}
-                      className={`p-3.5 rounded-xl border flex flex-col items-center justify-center space-y-1.5 transition-all text-xs font-bold ${
-                        paymentMethodType === 'efectivo'
-                          ? 'bg-[#C9A55B]/15 border-[#C9A55B] text-[#806020] dark:text-[#C9A55B] ring-1 ring-[#C9A55B]'
-                          : 'bg-[#F5F1EA] dark:bg-[#1A1A1A] border-[#E5DFD3] dark:border-[#333333] text-[#6B655F] dark:text-[#AAAAAA]'
-                      }`}
-                    >
-                      <Banknote className="w-5 h-5 text-[#C9A55B]" />
-                      <span>Efectivo (Pago al Recibir)</span>
-                    </button>
-                  </div>
-
-                  {/* Payment Details Container */}
-                  {paymentMethodType === 'tarjeta' && (
-                    <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 rounded-xl border border-[#E5DFD3] dark:border-[#333333] space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#1C1917] dark:text-white flex items-center">
-                          <CreditCard className="w-4 h-4 mr-1.5 text-[#C9A55B]" />
-                          Tarjeta Registrada ESSENYA Club Black
-                        </span>
-                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                          Encriptado SSL 256-bit
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                        <input
-                          type="text"
-                          value={cardDetails.number}
-                          onChange={(e) => setCardDetails(prev => ({ ...prev, number: e.target.value }))}
-                          placeholder="Número de Tarjeta"
-                          className="bg-white dark:bg-[#222222] border border-[#E5DFD3] dark:border-[#444444] rounded-lg p-2 text-xs text-[#1C1917] dark:text-white"
-                        />
-                        <input
-                          type="text"
-                          value={cardDetails.name}
-                          onChange={(e) => setCardDetails(prev => ({ ...prev, name: e.target.value }))}
-                          placeholder="Titular de la Tarjeta"
-                          className="bg-white dark:bg-[#222222] border border-[#E5DFD3] dark:border-[#444444] rounded-lg p-2 text-xs text-[#1C1917] dark:text-white"
-                        />
-                      </div>
+                {totalPrice === 0 && giftCardDeduction > 0 ? (
+                  <div className="bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/30 p-4 rounded-xl flex items-center space-x-3 text-xs text-emerald-800 dark:text-emerald-300">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <div>
+                      <span className="font-bold block">Reserva 100% Cubierta con Tarjeta de Regalo:</span>
+                      <span>
+                        El costo total de tu experiencia ha sido cubierto con tu Tarjeta de Regalo. Tu saldo remanente de <strong className="text-[#806020] dark:text-[#E6CA65]">${giftCardRemainingBalance.toLocaleString()} MXN</strong> permanece en tu Billetera para futuras citas.
+                      </span>
                     </div>
-                  )}
+                  </div>
+                ) : (
+                  <div className="pt-2 space-y-3">
+                    <label className="text-xs text-[#6B655F] dark:text-[#AAAAAA] uppercase font-semibold block">
+                      Selecciona tu Método de Pago
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {/* Option 1: Tarjeta */}
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethodType('tarjeta')}
+                        className={`p-3.5 rounded-xl border flex flex-col items-center justify-center space-y-1.5 transition-all text-xs font-bold ${
+                          paymentMethodType === 'tarjeta'
+                            ? 'bg-[#C9A55B]/15 border-[#C9A55B] text-[#806020] dark:text-[#C9A55B] ring-1 ring-[#C9A55B]'
+                            : 'bg-[#F5F1EA] dark:bg-[#1A1A1A] border-[#E5DFD3] dark:border-[#333333] text-[#6B655F] dark:text-[#AAAAAA]'
+                        }`}
+                      >
+                        <CreditCard className="w-5 h-5 text-[#C9A55B]" />
+                        <span>Tarjeta de Crédito / Débito</span>
+                      </button>
 
-                  {paymentMethodType === 'transferencia' && (
-                    <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 rounded-xl border border-[#C9A55B]/40 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#806020] dark:text-[#C9A55B] flex items-center">
-                          <Building2 className="w-4 h-4 mr-1.5 text-[#C9A55B]" />
-                          Datos para Transferencia Interbancaria (SPEI)
-                        </span>
-                        <span className="text-[10px] text-[#C9A55B] font-bold">BBVA Mexico</span>
+                      {/* Option 2: Transferencia Bancaria SPEI */}
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethodType('transferencia')}
+                        className={`p-3.5 rounded-xl border flex flex-col items-center justify-center space-y-1.5 transition-all text-xs font-bold ${
+                          paymentMethodType === 'transferencia'
+                            ? 'bg-[#C9A55B]/15 border-[#C9A55B] text-[#806020] dark:text-[#C9A55B] ring-1 ring-[#C9A55B]'
+                            : 'bg-[#F5F1EA] dark:bg-[#1A1A1A] border-[#E5DFD3] dark:border-[#333333] text-[#6B655F] dark:text-[#AAAAAA]'
+                        }`}
+                      >
+                        <Building2 className="w-5 h-5 text-[#C9A55B]" />
+                        <span>Transferencia (SPEI)</span>
+                      </button>
+
+                      {/* Option 3: Efectivo (Pago al Recibir) */}
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethodType('efectivo')}
+                        className={`p-3.5 rounded-xl border flex flex-col items-center justify-center space-y-1.5 transition-all text-xs font-bold ${
+                          paymentMethodType === 'efectivo'
+                            ? 'bg-[#C9A55B]/15 border-[#C9A55B] text-[#806020] dark:text-[#C9A55B] ring-1 ring-[#C9A55B]'
+                            : 'bg-[#F5F1EA] dark:bg-[#1A1A1A] border-[#E5DFD3] dark:border-[#333333] text-[#6B655F] dark:text-[#AAAAAA]'
+                        }`}
+                      >
+                        <Banknote className="w-5 h-5 text-[#C9A55B]" />
+                        <span>Efectivo (Pago al Recibir)</span>
+                      </button>
+                    </div>
+
+                    {/* Payment Details Container */}
+                    {paymentMethodType === 'tarjeta' && (
+                      <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 rounded-xl border border-[#E5DFD3] dark:border-[#333333] space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[#1C1917] dark:text-white flex items-center">
+                            <CreditCard className="w-4 h-4 mr-1.5 text-[#C9A55B]" />
+                            Tarjeta Registrada ESSENYA Club Black
+                          </span>
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                            Encriptado SSL 256-bit
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                          <input
+                            type="text"
+                            value={cardDetails.number}
+                            onChange={(e) => setCardDetails(prev => ({ ...prev, number: e.target.value }))}
+                            placeholder="Número de Tarjeta"
+                            className="bg-white dark:bg-[#222222] border border-[#E5DFD3] dark:border-[#444444] rounded-lg p-2 text-xs text-[#1C1917] dark:text-white"
+                          />
+                          <input
+                            type="text"
+                            value={cardDetails.name}
+                            onChange={(e) => setCardDetails(prev => ({ ...prev, name: e.target.value }))}
+                            placeholder="Titular de la Tarjeta"
+                            className="bg-white dark:bg-[#222222] border border-[#E5DFD3] dark:border-[#444444] rounded-lg p-2 text-xs text-[#1C1917] dark:text-white"
+                          />
+                        </div>
                       </div>
+                    )}
 
-                      <div className="bg-white dark:bg-[#141414] p-3 rounded-lg border border-[#E5DFD3] dark:border-[#333333] space-y-1.5 text-xs">
-                        <div className="flex justify-between items-center">
-                          <span className="text-[#6B655F] dark:text-[#AAAAAA]">CLABE Interbancaria:</span>
-                          <div className="flex items-center space-x-2">
-                            <span className="font-mono font-bold text-[#1C1917] dark:text-white">012180001234567890</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard.writeText('012180001234567890');
-                                setClabeCopied(true);
-                                setTimeout(() => setClabeCopied(false), 2000);
-                              }}
-                              className="text-[10px] bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B] px-2 py-0.5 rounded border border-[#C9A55B]/30 font-bold flex items-center space-x-1"
-                            >
-                              {clabeCopied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                              <span>{clabeCopied ? 'Copiado' : 'Copiar'}</span>
-                            </button>
+                    {paymentMethodType === 'transferencia' && (
+                      <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 rounded-xl border border-[#C9A55B]/40 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[#806020] dark:text-[#C9A55B] flex items-center">
+                            <Building2 className="w-4 h-4 mr-1.5 text-[#C9A55B]" />
+                            Datos para Transferencia Interbancaria (SPEI)
+                          </span>
+                          <span className="text-[10px] text-[#C9A55B] font-bold">BBVA Mexico</span>
+                        </div>
+
+                        <div className="bg-white dark:bg-[#141414] p-3 rounded-lg border border-[#E5DFD3] dark:border-[#333333] space-y-1.5 text-xs">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[#6B655F] dark:text-[#AAAAAA]">CLABE Interbancaria:</span>
+                            <div className="flex items-center space-x-2">
+                              <span className="font-mono font-bold text-[#1C1917] dark:text-white">012180001234567890</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText('012180001234567890');
+                                  setClabeCopied(true);
+                                  setTimeout(() => setClabeCopied(false), 2000);
+                                }}
+                                className="text-[10px] bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B] px-2 py-0.5 rounded border border-[#C9A55B]/30 font-bold flex items-center space-x-1"
+                              >
+                                {clabeCopied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                                <span>{clabeCopied ? 'Copiado' : 'Copiar'}</span>
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-[#6B655F] dark:text-[#AAAAAA]">Beneficiario:</span>
+                            <span className="font-bold text-[#1C1917] dark:text-white">ESSENYA S.A. DE C.V.</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-[#6B655F] dark:text-[#AAAAAA]">Banco Receptivo:</span>
+                            <span className="font-bold text-[#1C1917] dark:text-white">BBVA México</span>
                           </div>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-[#6B655F] dark:text-[#AAAAAA]">Beneficiario:</span>
-                          <span className="font-bold text-[#1C1917] dark:text-white">ESSENYA S.A. DE C.V.</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-[#6B655F] dark:text-[#AAAAAA]">Banco Receptivo:</span>
-                          <span className="font-bold text-[#1C1917] dark:text-white">BBVA México</span>
-                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {paymentMethodType === 'efectivo' && (
-                    <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 rounded-xl border border-[#C9A55B]/50 space-y-2">
-                      <div className="flex items-center space-x-2 text-xs font-bold text-[#806020] dark:text-[#C9A55B]">
-                        <Banknote className="w-4 h-4 text-[#C9A55B]" />
-                        <span>Pago en Efectivo (Pago al Recibir)</span>
+                    {paymentMethodType === 'efectivo' && (
+                      <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 rounded-xl border border-[#C9A55B]/50 space-y-2">
+                        <div className="flex items-center space-x-2 text-xs font-bold text-[#806020] dark:text-[#C9A55B]">
+                          <Banknote className="w-4 h-4 text-[#C9A55B]" />
+                          <span>Pago en Efectivo (Pago al Recibir)</span>
+                        </div>
+                        <p className="text-xs text-[#1C1917] dark:text-white font-medium">
+                          Pago en efectivo directo a la masajista antes de iniciar el masaje.
+                        </p>
+                        <p className="text-[11px] text-[#6B655F] dark:text-[#AAAAAA]">
+                          Se solicita entregar el importe exacto de <strong className="text-[#806020] dark:text-[#C9A55B]">${totalPrice.toLocaleString()} MXN</strong> al momento de recibir a la terapeuta en tu domicilio.
+                        </p>
                       </div>
-                      <p className="text-xs text-[#1C1917] dark:text-white font-medium">
-                        Pago en efectivo directo a la masajista antes de iniciar el masaje.
-                      </p>
-                      <p className="text-[11px] text-[#6B655F] dark:text-[#AAAAAA]">
-                        Se solicita entregar el importe exacto de <strong className="text-[#806020] dark:text-[#C9A55B]">${totalPrice.toLocaleString()} MXN</strong> al momento de recibir a la terapeuta en tu domicilio.
-                      </p>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Financial Summary Box */}
                 <div className="bg-[#F5F1EA] dark:bg-[#1F1F1F] p-5 rounded-xl border border-[#E5DFD3] dark:border-[#C9A55B]/30 space-y-2 shadow-xs">
@@ -1467,14 +1844,26 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                     </div>
                   )}
 
-                  {discountAmount > 0 && (
+                  {promoDiscountAmount > 0 && (
                     <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400">
-                      <span>Descuento Cupón VIP:</span>
-                      <span>-${discountAmount.toLocaleString()} MXN</span>
+                      <span>Descuento {appliedPromo ? appliedPromo.label : 'Cupón VIP'}:</span>
+                      <span>-${promoDiscountAmount.toLocaleString()} MXN</span>
                     </div>
                   )}
 
+                  {giftCardDeduction > 0 && (
+                    <div className="flex justify-between text-xs text-[#806020] dark:text-[#E6CA65] font-bold">
+                      <span>Saldo Tarjeta de Regalo Aplicado:</span>
+                      <span>-${giftCardDeduction.toLocaleString()} MXN</span>
+                    </div>
+                  )}
 
+                  {appliedGiftCard && (
+                    <div className="flex justify-between text-[11px] text-[#6B655F] dark:text-[#888888] italic">
+                      <span>Saldo remanente conservado en Tarjeta:</span>
+                      <span>${giftCardRemainingBalance.toLocaleString()} MXN</span>
+                    </div>
+                  )}
 
                   <div className="flex justify-between text-base font-bold text-[#1C1917] dark:text-white pt-2 border-t border-[#E5DFD3] dark:border-[#333333]">
                     <span>Total a Cargo:</span>

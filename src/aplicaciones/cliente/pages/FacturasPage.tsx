@@ -14,10 +14,10 @@ export const FacturasPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-serif font-bold text-[#1C1917] dark:text-white flex items-center gap-2">
             <FileText className="w-6 h-6 text-[#C9A55B]" />
-            <span>Facturación Electrónica SAT (CFDI 4.0)</span>
+            <span>Facturas y Comprobantes de Servicio</span>
           </h1>
           <p className="text-xs text-[#6B655F] dark:text-[#888888] mt-1">
-            Comprobantes fiscales de tus servicios de masaje Haute Wellness ESSENYA.
+            Comprobantes y facturas de tus servicios de masaje terapéutico ESSENYA.
           </p>
         </div>
       </div>
@@ -31,7 +31,7 @@ export const FacturasPage: React.FC = () => {
           </span>
           <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1">
             <ShieldCheck className="w-3 h-3" />
-            <span>Validado SAT</span>
+            <span>Comprobante Registrado</span>
           </span>
         </div>
 
@@ -71,7 +71,7 @@ export const FacturasPage: React.FC = () => {
                   <div className="flex items-center space-x-2">
                     <span className="font-mono font-bold text-xs text-[#806020] dark:text-[#C9A55B]">{inv.invoiceNumber}</span>
                     <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-md border border-emerald-500/20">
-                      CFDI 4.0 Timbrado
+                      Factura Emitida
                     </span>
                   </div>
                   <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA]">

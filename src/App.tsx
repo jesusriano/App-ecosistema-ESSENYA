@@ -7,6 +7,9 @@ import { EcosystemProvider, useEcosystem } from './shared/context/EcosystemConte
 import { AuthProvider } from './shared/context/AuthContext';
 import { TherapistProvider } from './shared/context/TherapistContext';
 import { PortalAuthGuard } from './shared/components/auth/PortalAuthGuard';
+import { ThemeToggle } from './shared/components/ThemeToggle';
+
+import { ConfigValidator } from './shared/components/ConfigValidator';
 
 // Lazy loading the three independent application modules
 const ClienteAppModule = React.lazy(() => import('./aplicaciones/cliente/App'));
@@ -90,24 +93,29 @@ function MainAppContent() {
         invoice={activeInvoice}
         onClose={() => setActiveInvoice(null)}
       />
+
+      {/* Global Theme Toggle Button */}
+      <ThemeToggle />
     </div>
   );
 }
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <ToastProvider>
-        <AuthProvider>
-          <TherapistProvider>
-            <EcosystemProvider>
-              <BrowserRouter>
-                <MainAppContent />
-              </BrowserRouter>
-            </EcosystemProvider>
-          </TherapistProvider>
-        </AuthProvider>
-      </ToastProvider>
-    </ThemeProvider>
+    <ConfigValidator>
+      <ThemeProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <TherapistProvider>
+              <EcosystemProvider>
+                <BrowserRouter>
+                  <MainAppContent />
+                </BrowserRouter>
+              </EcosystemProvider>
+            </TherapistProvider>
+          </AuthProvider>
+        </ToastProvider>
+      </ThemeProvider>
+    </ConfigValidator>
   );
 }

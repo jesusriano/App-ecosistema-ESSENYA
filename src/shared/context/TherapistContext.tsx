@@ -4,6 +4,7 @@ import { sendPasswordResetEmail } from 'firebase/auth';
 import { db, auth } from '../../lib/firebase';
 import { TherapistFullProfile, TherapistDocument, DocumentStatus, AccountStatus } from '../types/auth';
 import { handleFirestoreError, OperationType } from '../utils/firestoreDebug';
+import { useAuth } from './AuthContext';
 
 interface AuditLog {
   id: string;
@@ -84,9 +85,12 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
   });
 
   const [loading, setLoading] = useState(false);
+  const { firebaseUser } = useAuth();
 
   // Firestore Realtime Subscription for Therapists
   useEffect(() => {
+    if (!firebaseUser) return;
+
     const unsubscribe = onSnapshot(collection(db, 'terapeutas'), (snapshot) => {
       if (!snapshot.empty) {
         const loaded: TherapistFullProfile[] = snapshot.docs.map(docSnap => ({
@@ -100,7 +104,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [firebaseUser]);
 
   // Sync state to LocalStorage
   useEffect(() => {

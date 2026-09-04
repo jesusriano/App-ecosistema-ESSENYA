@@ -11,6 +11,7 @@ import {
 import { PanicModal } from './PanicModal';
 import { WhatsAppButton } from './WhatsAppButton';
 import { fetchPostCareProtocol } from '../shared/services/api';
+import { LiveTrackingMap } from '../shared/components/LiveTrackingMap';
 
 
 interface TherapistAppProps {
@@ -414,6 +415,17 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                 </div>
               </div>
 
+              {/* Live Tracking Map Preview */}
+              <div className="mt-4 border border-[#C9A55B]/20 rounded-2xl overflow-hidden shadow-lg">
+                <LiveTrackingMap
+                  clientAddress={currentBooking.clientAddress}
+                  cityZone={currentBooking.cityZone}
+                  therapistName={activeTherapist.name}
+                  therapistPhoto={activeTherapist.photoUrl}
+                  bookingState={currentBooking.state}
+                />
+              </div>
+
               {/* Service State Controller Buttons */}
               <div className="space-y-3 pt-2">
                 <span className="text-xs uppercase text-[#AAAAAA] tracking-wider font-semibold block">
@@ -421,26 +433,42 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                 </span>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
-                  {[
-                    { key: 'aceptado', label: '1. Aceptar Solicitud', icon: CheckCircle2, color: 'bg-[#C9A55B]' },
-                    { key: 'en_camino', label: '2. En Camino (GPS)', icon: Navigation, color: 'bg-[#C9A55B]' },
-                    { key: 'llegue', label: '3. Llegué a Domicilio', icon: MapPin, color: 'bg-[#C9A55B]' },
-                    { key: 'servicio_iniciado', label: '4. Iniciar Masaje', icon: Play, color: 'bg-[#C9A55B]' },
-                    { key: 'servicio_finalizado', label: '5. Finalizar Masaje', icon: UserCheck, color: 'bg-emerald-500' }
-                  ].map((st) => (
-                    <button
-                      key={st.key}
-                      onClick={() => onUpdateBookingState(currentBooking.id, st.key as any)}
-                      className={`p-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-2 ${
-                        currentBooking.state === st.key
-                          ? `${st.color} text-black ring-2 ring-white shadow-lg`
-                          : 'bg-[#222222] text-white hover:bg-[#C9A55B] hover:text-black'
-                      }`}
-                    >
-                      <st.icon className="w-4 h-4 shrink-0" />
-                      <span className="whitespace-nowrap">{st.label}</span>
-                    </button>
-                  ))}
+                  {(() => {
+                    const stateOrder = ['pendiente', 'aceptado', 'en_camino', 'llegue', 'servicio_iniciado', 'servicio_finalizado'];
+                    const currentIndex = stateOrder.indexOf(currentBooking.state);
+                    
+                    return [
+                      { key: 'aceptado', label: '1. Aceptar Solicitud', icon: CheckCircle2 },
+                      { key: 'en_camino', label: '2. En Camino (GPS)', icon: Navigation },
+                      { key: 'llegue', label: '3. Llegué a Domicilio', icon: MapPin },
+                      { key: 'servicio_iniciado', label: '4. Iniciar Masaje', icon: Play },
+                      { key: 'servicio_finalizado', label: '5. Finalizar Masaje', icon: UserCheck }
+                    ].map((st) => {
+                      const stepIndex = stateOrder.indexOf(st.key);
+                      const isCompleted = stepIndex <= currentIndex;
+                      const isNext = stepIndex === currentIndex + 1;
+                      
+                      let btnClasses = '';
+                      if (isCompleted) {
+                        btnClasses = 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20 border border-emerald-400';
+                      } else if (isNext) {
+                        btnClasses = 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/30 ring-2 ring-yellow-400 transform scale-105 z-10';
+                      } else {
+                        btnClasses = 'bg-[#1A1A1A] text-[#666666] border border-[#333333] hover:bg-[#222222] hover:text-[#AAAAAA]';
+                      }
+
+                      return (
+                        <button
+                          key={st.key}
+                          onClick={() => onUpdateBookingState(currentBooking.id, st.key as any)}
+                          className={`p-3 rounded-xl text-[11px] lg:text-xs font-bold transition-all duration-500 flex items-center justify-center space-x-1.5 sm:space-x-2 ${btnClasses}`}
+                        >
+                          <st.icon className={`w-4 h-4 shrink-0 ${isCompleted ? 'text-white' : isNext ? 'text-black' : 'text-[#666666]'}`} />
+                          <span className="whitespace-nowrap">{st.label}</span>
+                        </button>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             </div>

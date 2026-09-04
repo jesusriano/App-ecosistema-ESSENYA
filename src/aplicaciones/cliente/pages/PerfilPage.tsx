@@ -1,11 +1,36 @@
-import React, { useState } from 'react';
-import { User, ShieldCheck, MapPin, Phone, Mail, Award, CreditCard, Heart, Camera, Upload, CheckCircle2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { 
+  User, ShieldCheck, MapPin, Phone, Mail, Award, CreditCard, Heart, 
+  Camera, Upload, CheckCircle2, Crown, Gem, Sparkles, Shield, Lock, ArrowUpRight 
+} from 'lucide-react';
 import { useCliente } from '../hooks/useCliente';
+import { useAuth } from '../../../shared/context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
+import { calculateMembershipTier, getCompletedAndPaidBookings } from '../services/membershipService';
 
 export const PerfilPage: React.FC = () => {
-  const { client } = useCliente();
+  const { client, bookings } = useCliente();
+  const { getUser } = useAuth();
+  const authUser = getUser('cliente');
   const { showToast } = useToast();
+
+  // Cálculo estricto del nivel según masajes pagados y concluidos
+  const completedAndPaidBookings = useMemo(() => {
+    return getCompletedAndPaidBookings(bookings, client?.id);
+  }, [bookings, client?.id]);
+
+  const completedCount = completedAndPaidBookings.length;
+  const tierInfo = useMemo(() => {
+    return calculateMembershipTier(completedCount);
+  }, [completedCount]);
+
+  const displayName = authUser?.nombre 
+    ? `${authUser.nombre} ${authUser.apellidos || ''}`.trim() 
+    : (client?.name || 'Socio VIP');
+
+  const displayEmail = authUser?.correo || client?.email || 'socio@essenya.com';
+  const displayPhone = authUser?.telefono || client?.phone || '+52 55 1234 5678';
+
   const [clientPhoto, setClientPhoto] = useState<string>(() => {
     return localStorage.getItem('essenya_client_photo') || client?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
   });
@@ -36,6 +61,73 @@ export const PerfilPage: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
+  const getTierIcon = () => {
+    switch (tierInfo.iconType) {
+      case 'crown':
+        return <Crown className="w-4 h-4 text-[#E6CA65]" />;
+      case 'gem':
+        return <Gem className="w-4 h-4 text-sky-400" />;
+      case 'sparkles':
+        return <Sparkles className="w-4 h-4 text-amber-400" />;
+      default:
+        return <Shield className="w-4 h-4 text-slate-300" />;
+    }
+  };
+
+  // Escalafón completo de categorías desde el nivel inicial
+  const ALL_TIERS = [
+    {
+      level: 1,
+      name: 'Socio Platino',
+      range: '0 masajes concluidos',
+      tag: 'Nivel Inicial',
+      icon: Shield,
+      color: 'slate',
+      perkSummary: 'Tarifa preferencial de bienvenida, kit esterilizado individual de grado hospitalario y aromaterapia de autor.',
+      promoNote: 'Acceso a cupones estándar de bienvenida.',
+    },
+    {
+      level: 2,
+      name: 'Socio Gold',
+      range: '1 a 2 masajes concluidos',
+      tag: 'Primer Ascenso',
+      icon: Crown,
+      color: 'amber',
+      perkSummary: '10% de bonificación en recompensas por sesión, prioridad de asignación en horarios pico de CDMX.',
+      promoNote: 'Aromaterapia botánica de cortesía en cada visita.',
+    },
+    {
+      level: 3,
+      name: 'Socio Diamante',
+      range: '3 a 5 masajes concluidos',
+      tag: 'Categoría Élite',
+      icon: Gem,
+      color: 'sky',
+      perkSummary: '10% OFF en todas tus citas con cupón DIAMOND10, aceites esenciales franceses y prioridad express.',
+      promoNote: 'Acceso exclusivo al código DIAMOND10 habilitado en el sistema.',
+    },
+    {
+      level: 4,
+      name: 'Socio Black Diamond',
+      range: '6 a 9 masajes concluidos',
+      tag: 'Alta Distinción',
+      icon: Sparkles,
+      color: 'purple',
+      perkSummary: 'Concierge ejecutivo 24/7, toallas de algodón egipcio de 800g y acceso ilimitado a promociones.',
+      promoNote: 'Cupón DIAMOND10 y cortesías de reflexología adicionales.',
+    },
+    {
+      level: 5,
+      name: 'Socio Imperial VIP',
+      range: '10 o más masajes concluidos',
+      tag: 'Rango Supremo',
+      icon: Crown,
+      color: 'yellow',
+      perkSummary: 'Asignación garantizada de terapeuta Master de cabecera y sesión de cortesía anual.',
+      promoNote: 'Todos los beneficios y promociones VIP permanentemente desbloqueados.',
+    },
+  ];
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="border-b border-[#E5DFD3] dark:border-[#262626] pb-4">
@@ -44,17 +136,18 @@ export const PerfilPage: React.FC = () => {
           <span>Perfil de Usuario VIP</span>
         </h1>
         <p className="text-xs text-[#6B655F] dark:text-[#888888] mt-1">
-          Gestión de datos personales, preferencias de terapia y expedientes de seguridad.
+          Gestión de datos personales, nivel de membresía verificado y preferencias de terapia.
         </p>
       </div>
 
+      {/* Tarjeta Principal de Perfil */}
       <div className="bg-white dark:bg-[#141414] border border-[#E5DFD3] dark:border-[#262626] rounded-2xl p-6 space-y-6 shadow-sm">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[#E5DFD3] dark:border-[#262626] pb-6">
           <div className="flex items-center space-x-4">
             <div className="relative group">
               <img
                 src={clientPhoto}
-                alt={client?.name || 'Cliente'}
+                alt={displayName}
                 className="w-16 h-16 rounded-2xl border-2 border-[#C9A55B] object-cover shadow-lg"
                 referrerPolicy="no-referrer"
               />
@@ -83,14 +176,15 @@ export const PerfilPage: React.FC = () => {
               </button>
             </div>
             <div>
-              <div className="flex items-center space-x-2">
-                <h2 className="text-xl font-serif font-bold text-[#1C1917] dark:text-white">{client?.name || 'Don Alejandro Garza'}</h2>
-                <span className="bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B] border border-[#C9A55B]/30 text-[10px] font-bold px-2.5 py-0.5 rounded-full">
-                  {client?.membershipTier || 'Club Black VIP'}
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-xl font-serif font-bold text-[#1C1917] dark:text-white">{displayName}</h2>
+                <span className={`text-[11px] font-bold px-3 py-0.5 rounded-full flex items-center gap-1.5 ${tierInfo.badgeStyle}`}>
+                  {getTierIcon()}
+                  <span>{tierInfo.fullLabel}</span>
                 </span>
               </div>
               <p className="text-xs text-[#6B655F] dark:text-[#888888] mt-1">
-                {client?.email || 'alejandro.garza@grupo-garza.com'} • ID Socio: {client?.id || 'cli-1'}
+                {displayEmail} • {displayPhone}
               </p>
             </div>
           </div>
@@ -102,6 +196,155 @@ export const PerfilPage: React.FC = () => {
             <Upload className="w-3.5 h-3.5" />
             <span>Subir Nueva Foto</span>
           </label>
+        </div>
+
+        {/* Estatus Dinámico de Membresía y Masajes */}
+        <div className="rounded-2xl p-5 bg-gradient-to-br from-[#1C1917] via-[#262016] to-[#171512] text-white border border-[#C9A55B]/40 space-y-4 shadow-md">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#E6CA65] flex items-center gap-1">
+                <Award className="w-3.5 h-3.5" />
+                <span>Nivel de Membresía Calculado</span>
+              </span>
+              <h3 className="text-lg font-serif font-bold text-white flex items-center gap-2">
+                <span>{tierInfo.fullLabel}</span>
+                <span className="text-xs font-sans font-normal text-[#AAAAAA]">(Nivel {tierInfo.level} de 5)</span>
+              </h3>
+            </div>
+
+            <div className="px-3.5 py-1.5 bg-white/10 rounded-xl border border-white/15 text-xs text-right">
+              <span className="text-[11px] text-[#AAAAAA] block">Masajes Pagados y Concluidos:</span>
+              <strong className="text-sm font-bold text-[#E6CA65]">{completedCount}</strong>
+            </div>
+          </div>
+
+          {completedCount === 0 ? (
+            <div className="p-3 bg-white/5 rounded-xl border border-white/10 text-xs text-[#E5DFD3] leading-relaxed">
+              <p>
+                👋 <strong>¡Bienvenido como Socio Nuevo!</strong> Tu categoría inicial es <strong className="text-[#E6CA65]">Socio Platino</strong>. Al solicitar, pagar y concluir tu primer servicio de masaje a domicilio ascenderás inmediatamente a <strong className="text-amber-300">Socio Gold</strong>.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between items-center text-[#CCCCCC]">
+                <span>Progreso hacia {tierInfo.nextTier || 'Nivel Máximo'}</span>
+                {tierInfo.nextTier && (
+                  <span className="text-[#E6CA65] font-semibold">
+                    {tierInfo.neededForNext} {tierInfo.neededForNext === 1 ? 'masaje restante' : 'masajes restantes'}
+                  </span>
+                )}
+              </div>
+              <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-[#C9A55B] to-[#E6CA65] rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.max(8, tierInfo.progressPercent))}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="pt-2 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span className="text-[#CCCCCC]">
+              {tierInfo.perk}
+            </span>
+            <span className="text-[11px] font-semibold text-[#E6CA65]">
+              {completedCount >= 3 ? '✅ Acceso a cupón DIAMOND10 activo' : '🔒 Requiere Socio Diamante (3+ masajes)'}
+            </span>
+          </div>
+        </div>
+
+        {/* Escalafón de Categorías VIP Completo desde el Nivel Inicial */}
+        <div className="space-y-4 pt-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-[#E5DFD3] dark:border-[#262626] pb-3">
+            <div>
+              <h3 className="font-serif font-bold text-base text-[#1C1917] dark:text-white flex items-center gap-2">
+                <Crown className="w-4 h-4 text-[#C9A55B]" />
+                <span>Escalafón de Categorías VIP</span>
+              </h3>
+              <p className="text-xs text-[#6B655F] dark:text-[#888888]">
+                Progreso acumulado basado estrictamente en masajes concluidos y pagados.
+              </p>
+            </div>
+            <div className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-[#FAF8F5] dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#2A2A2A] text-[#806020] dark:text-[#C9A55B] self-start sm:self-auto">
+              Total acumulado: {completedCount} {completedCount === 1 ? 'masaje' : 'masajes'}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {ALL_TIERS.map((tier) => {
+              const isCurrent = tier.level === tierInfo.level;
+              const isPassed = tier.level < tierInfo.level;
+              const isLocked = tier.level > tierInfo.level;
+              const TierIcon = tier.icon;
+
+              return (
+                <div
+                  key={tier.level}
+                  className={`relative p-4 rounded-xl border transition-all ${
+                    isCurrent
+                      ? 'bg-gradient-to-b from-[#FAF6ED] to-white dark:from-[#201D17] dark:to-[#171512] border-[#C9A55B] shadow-md shadow-[#C9A55B]/15 ring-2 ring-[#C9A55B]/40'
+                      : isPassed
+                      ? 'bg-[#FAF8F5]/60 dark:bg-[#161616] border-emerald-500/30 dark:border-emerald-500/20 opacity-85'
+                      : 'bg-[#FAF8F5]/40 dark:bg-[#141414] border-[#E5DFD3] dark:border-[#262626] opacity-65'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className={`p-1.5 rounded-lg ${
+                        tier.level === 1 ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200' :
+                        tier.level === 2 ? 'bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400' :
+                        tier.level === 3 ? 'bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-300' :
+                        tier.level === 4 ? 'bg-zinc-900 text-amber-400' :
+                        'bg-rose-950 text-amber-300'
+                      }`}>
+                        <TierIcon className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-serif font-bold text-xs text-[#1C1917] dark:text-white">
+                          {tier.name}
+                        </h4>
+                        <span className="text-[10px] text-[#6B655F] dark:text-[#AAAAAA] block">
+                          Nivel {tier.level} • {tier.tag}
+                        </span>
+                      </div>
+                    </div>
+
+                    {isCurrent && (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-[#C9A55B] text-black shrink-0">
+                        Nivel Actual
+                      </span>
+                    )}
+                    {isPassed && (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 shrink-0">
+                        Superado
+                      </span>
+                    )}
+                    {isLocked && (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold text-[#888888] bg-black/5 dark:bg-white/5 shrink-0 flex items-center gap-0.5">
+                        <Lock className="w-2.5 h-2.5" />
+                        <span>Bloqueado</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 pt-2.5 border-t border-[#E5DFD3]/60 dark:border-[#262626] space-y-1.5 text-[11px]">
+                    <div className="flex items-center justify-between text-[#6B655F] dark:text-[#AAAAAA]">
+                      <span>Requisito:</span>
+                      <strong className="text-[#1C1917] dark:text-white">{tier.range}</strong>
+                    </div>
+
+                    <p className="text-[#6B655F] dark:text-[#888888] leading-tight text-[11px]">
+                      {tier.perkSummary}
+                    </p>
+
+                    <div className="pt-1 text-[10px] font-medium text-[#806020] dark:text-[#D4AF37]">
+                      {tier.promoNote}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
@@ -123,7 +366,7 @@ export const PerfilPage: React.FC = () => {
             </h3>
             <div className="p-3 bg-[#FAF8F5] dark:bg-[#1A1A1A] rounded-xl border border-[#E5DFD3] dark:border-[#262626]">
               <p className="font-semibold text-[#1C1917] dark:text-white">Tarjeta AMEX Centurion •••• 8821</p>
-              <p className="text-[#6B655F] dark:text-[#888888] mt-0.5">Facturación automática habilitada CFDI 4.0</p>
+              <p className="text-[#6B655F] dark:text-[#888888] mt-0.5">Emisión automática de comprobantes de servicio habilitada</p>
             </div>
           </div>
         </div>

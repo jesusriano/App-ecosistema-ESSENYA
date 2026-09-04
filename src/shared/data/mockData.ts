@@ -14,7 +14,7 @@ export const INITIAL_CLIENT: ClientUser = {
   name: '',
   email: '',
   phone: '',
-  membershipTier: 'Gold',
+  membershipTier: 'Platino',
   totalBookings: 0,
   spentTotal: 0,
   address: '',
