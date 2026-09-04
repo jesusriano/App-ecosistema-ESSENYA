@@ -40,7 +40,7 @@ export const ReportesPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[var(--border-color)] pb-4">
         <div>
-          <h1 className="text-2xl font-serif font-bold text-white flex items-center gap-2">
+          <h1 className="text-2xl font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
             <BarChart2 className="w-6 h-6 text-[#C9A55B]" />
             <span>Reportes Executivos & Auditoría Inmutable</span>
           </h1>
@@ -67,25 +67,25 @@ export const ReportesPage: React.FC = () => {
         <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-1">
           <span className="text-[11px] text-[var(--text-muted)] font-semibold">Ventas Totales Registradas</span>
           <p className="text-2xl font-serif font-bold text-[#C9A55B]">${totalGMV.toLocaleString()} MXN</p>
-          <span className="text-[10px] text-emerald-400 font-bold">100% Cobro Acreditado</span>
+          <span className="text-[10px] text-emerald-500 dark:text-emerald-400 font-bold">100% Cobro Acreditado</span>
         </div>
 
         <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-1">
           <span className="text-[11px] text-[var(--text-muted)] font-semibold">Tasa de Conclusión</span>
-          <p className="text-2xl font-serif font-bold text-white">98.4%</p>
+          <p className="text-2xl font-serif font-bold text-[var(--text-primary)]">98.4%</p>
           <span className="text-[10px] text-[var(--text-muted)]">{totalCompleted} servicios concluidos</span>
         </div>
 
         <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-1">
           <span className="text-[11px] text-[var(--text-muted)] font-semibold">Calificación Promedio Red</span>
-          <p className="text-2xl font-serif font-bold text-white">4.95 ⭐</p>
+          <p className="text-2xl font-serif font-bold text-[var(--text-primary)]">4.95 ⭐</p>
           <span className="text-[10px] text-[#C9A55B]">Excelencia de Servicio VIP</span>
         </div>
 
         <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-1">
           <span className="text-[11px] text-[var(--text-muted)] font-semibold">Tiempo Arribo Promedio</span>
-          <p className="text-2xl font-serif font-bold text-white">18.5 Min</p>
-          <span className="text-[10px] text-emerald-400 font-bold">Puntualidad Garantizada</span>
+          <p className="text-2xl font-serif font-bold text-[var(--text-primary)]">18.5 Min</p>
+          <span className="text-[10px] text-emerald-500 dark:text-emerald-400 font-bold">Puntualidad Garantizada</span>
         </div>
       </div>
 
@@ -93,7 +93,7 @@ export const ReportesPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Therapists Breakdown */}
         <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 space-y-4">
-          <h3 className="font-serif font-bold text-base text-white flex items-center gap-2">
+          <h3 className="font-serif font-bold text-base text-[var(--text-primary)] flex items-center gap-2">
             <Award className="w-5 h-5 text-[#C9A55B]" />
             <span>Productividad & Calificación de Terapeutas</span>
           </h3>
@@ -104,7 +104,7 @@ export const ReportesPage: React.FC = () => {
                 <div className="flex items-center space-x-3">
                   <img src={t.photo || undefined} alt={t.name} className="w-10 h-10 rounded-xl object-cover border border-[#C9A55B]/30" />
                   <div>
-                    <h4 className="font-serif font-bold text-white">{t.name}</h4>
+                    <h4 className="font-serif font-bold text-[var(--text-primary)]">{t.name}</h4>
                     <p className="text-[10px] text-[var(--text-muted)]">{t.currentZone}</p>
                   </div>
                 </div>
@@ -120,7 +120,7 @@ export const ReportesPage: React.FC = () => {
 
         {/* Coverage Zones Revenue Breakdown */}
         <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 space-y-4">
-          <h3 className="font-serif font-bold text-base text-white flex items-center gap-2">
+          <h3 className="font-serif font-bold text-base text-[var(--text-primary)] flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-[#C9A55B]" />
             <span>Demanda e Ingresos por Zona CDMX</span>
           </h3>
@@ -129,13 +129,13 @@ export const ReportesPage: React.FC = () => {
             {zones.map((z) => (
               <div key={z.id} className="p-3 bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-2xl flex justify-between items-center text-xs">
                 <div>
-                  <h4 className="font-serif font-bold text-white">{z.name}</h4>
+                  <h4 className="font-serif font-bold text-[var(--text-primary)]">{z.name}</h4>
                   <p className="text-[10px] text-[var(--text-muted)]">{z.activeTherapists} masajistas asignadas en zona</p>
                 </div>
 
                 <div className="text-right">
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                    z.surgeMultiplier > 1 ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-zinc-800 text-zinc-400'
+                    z.surgeMultiplier > 1 ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30' : 'bg-[var(--bg-card)] text-[var(--text-muted)] border-[var(--border-color)]'
                   }`}>
                     {z.surgeMultiplier > 1 ? `Surge ${z.surgeMultiplier}x` : 'Tarifa Regular'}
                   </span>
@@ -148,19 +148,19 @@ export const ReportesPage: React.FC = () => {
 
       {/* Immutable Audit Log Section */}
       <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 space-y-4">
-        <h3 className="font-serif font-bold text-lg text-white flex items-center gap-2">
+        <h3 className="font-serif font-bold text-lg text-[var(--text-primary)] flex items-center gap-2">
           <ShieldAlert className="w-5 h-5 text-[#C9A55B]" />
           <span>Bitácora de Auditoría Inmutable del Sistema</span>
         </h3>
 
-        <div className="divide-y divide-[#262626] max-h-96 overflow-y-auto pr-2">
+        <div className="divide-y divide-[var(--border-color)] max-h-96 overflow-y-auto pr-2">
           {auditLogs.map((log) => (
             <div key={log.id} className="py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
               <div className="space-y-0.5">
                 <span className="font-bold text-[#C9A55B]">{log.action}</span>
                 <p className="text-[var(--text-muted)]">{log.details}</p>
               </div>
-              <div className="text-right text-[11px] text-[#666666]">
+              <div className="text-right text-[11px] text-[var(--text-muted)]">
                 <span>{log.timestamp}</span>
                 <span className="block text-[var(--text-primary)] font-mono">{log.userName} ({log.userRole})</span>
               </div>

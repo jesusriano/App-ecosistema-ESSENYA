@@ -752,8 +752,28 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const handleEditClient = async (updatedClient: ClientUser) => {
     setClients(prev => prev.map(c => c.id === updatedClient.id ? updatedClient : c));
+    if (client?.id === updatedClient.id) {
+      setClient(prev => ({
+        ...prev,
+        name: updatedClient.name,
+        phone: updatedClient.phone,
+        membershipTier: updatedClient.membershipTier,
+        address: updatedClient.address,
+        cityZone: updatedClient.cityZone,
+        specialNotes: updatedClient.specialNotes
+      }));
+    }
+
     try {
-      await setDoc(doc(db, 'clientes', updatedClient.id), cleanForFirestore(updatedClient));
+      await setDoc(doc(db, 'clientes', updatedClient.id), cleanForFirestore(updatedClient), { merge: true });
+      try {
+        await updateDoc(doc(db, 'users', updatedClient.id), {
+          nombre: updatedClient.name,
+          telefono: updatedClient.phone,
+          membershipTier: updatedClient.membershipTier,
+          fechaActualizacion: new Date().toISOString()
+        });
+      } catch {}
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `clientes/${updatedClient.id}`, updatedClient);
     }

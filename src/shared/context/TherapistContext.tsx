@@ -89,8 +89,6 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Firestore Realtime Subscription for Therapists
   useEffect(() => {
-    if (!firebaseUser) return;
-
     const unsubscribe = onSnapshot(collection(db, 'terapeutas'), (snapshot) => {
       if (!snapshot.empty) {
         const loaded: TherapistFullProfile[] = snapshot.docs.map(docSnap => ({
@@ -104,7 +102,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     });
 
     return () => unsubscribe();
-  }, [firebaseUser]);
+  }, []);
 
   // Sync state to LocalStorage
   useEffect(() => {
@@ -135,6 +133,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Admin Operation: Create Therapist with Temporary Credentials
   const createTherapist = async (data: {
+    id?: string;
     nombre: string;
     apellidos: string;
     correo: string;
@@ -162,16 +161,17 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     const trimmedEmail = correo.trim().toLowerCase();
+    const newId = data.id || `ther-${Date.now()}`;
+    const initialStatus: AccountStatus = data.estado || 'activo';
 
-    // Check duplicate
-    if (therapists.some(t => t.correo.toLowerCase() === trimmedEmail)) {
+    // Check duplicate: only error if there is another therapist with the same email and a DIFFERENT id
+    const existingOther = therapists.find(t => t.correo.toLowerCase() === trimmedEmail && t.id !== newId);
+    if (existingOther) {
       return { success: false, error: 'Ya existe una terapeuta registrada con este correo electrónico.' };
     }
 
     // Auto generate strong temp password if not provided
     const tempPass = data.tempPassword || `Essenya${Math.floor(1000 + Math.random() * 9000)}!`;
-    const newId = `ther-${Date.now()}`;
-    const initialStatus: AccountStatus = data.estado || 'activo';
 
     const newTherapist: TherapistFullProfile = {
       id: newId,
@@ -242,10 +242,13 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         fechaActualizacion: new Date().toISOString(),
         mustChangePassword: initialStatus === 'activo'
       };
-      await setDoc(doc(db, 'users', newId), userPayload);
-      await setDoc(doc(db, 'terapeutas', newId), newTherapist);
+      await setDoc(doc(db, 'users', newId), userPayload, { merge: true });
+      await setDoc(doc(db, 'terapeutas', newId), newTherapist, { merge: true });
       
-      setTherapists(prev => [newTherapist, ...prev]);
+      setTherapists(prev => {
+        const remaining = prev.filter(t => t.id !== newId && t.correo.toLowerCase() !== trimmedEmail);
+        return [newTherapist, ...remaining];
+      });
       logAudit(newId, `${nombre} ${apellidos}`, initialStatus === 'pendiente' ? 'Postulación de Terapeuta Registrada' : 'Creación de Cuenta por Administradora', `Estado Inicial: ${initialStatus.toUpperCase()}`);
       
       return { success: true, tempPassword: tempPass };

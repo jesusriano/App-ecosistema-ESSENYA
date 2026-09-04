@@ -9,7 +9,7 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../../lib/firebase';
 import { UserAuthProfile, UserRole, AccountStatus } from '../types/auth';
 import { 
@@ -35,7 +35,7 @@ interface AuthContextType {
   
   // Strict Auth Actions per Portal
   login: (role: UserRole, email: string, pass: string, rememberMe?: boolean) => Promise<{ success: boolean; error?: string }>;
-  register: (role: UserRole, data: { nombre: string; apellidos: string; correo: string; telefono: string; contrasena: string }) => Promise<{ success: boolean; error?: string }>;
+  register: (role: UserRole, data: { nombre: string; apellidos: string; correo: string; telefono: string; contrasena: string }) => Promise<{ success: boolean; error?: string; uid?: string }>;
   logout: (role: UserRole) => Promise<void>;
   sendPasswordReset: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   changePassword: (role: UserRole, oldPass: string, newPass: string) => Promise<{ success: boolean; error?: string }>;
@@ -170,6 +170,48 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               return updated;
             });
           }
+
+          // 3. Realtime listener on current user document to reflect immediate Admin approvals/rejections
+          const unsubLiveUser = onSnapshot(doc(db, 'users', firebaseUser.uid), (liveSnap) => {
+            if (liveSnap.exists()) {
+              const liveData = liveSnap.data() as UserAuthProfile;
+              const r = liveData.rol;
+              if (r) {
+                setSessions(prev => {
+                  const current = prev[r];
+                  if (current && (current.estado !== liveData.estado || current.membershipTier !== liveData.membershipTier)) {
+                    const merged = { ...current, ...liveData };
+                    localStorage.setItem(`essenya_auth_${r}`, JSON.stringify(merged));
+                    return { ...prev, [r]: merged };
+                  }
+                  return prev;
+                });
+              }
+            }
+          });
+
+          // Also listen to terapeutas doc if role is terapeuta
+          const unsubLiveTherapist = onSnapshot(doc(db, 'terapeutas', firebaseUser.uid), (tSnap) => {
+            if (tSnap.exists()) {
+              const tData = tSnap.data();
+              if (tData.estado) {
+                setSessions(prev => {
+                  const current = prev.terapeuta;
+                  if (current && current.estado !== tData.estado) {
+                    const updated = { ...current, estado: tData.estado, motivoRechazoAccount: tData.motivoRechazoAccount };
+                    localStorage.setItem('essenya_auth_terapeuta', JSON.stringify(updated));
+                    return { ...prev, terapeuta: updated };
+                  }
+                  return prev;
+                });
+              }
+            }
+          });
+
+          return () => {
+            unsubLiveUser();
+            unsubLiveTherapist();
+          };
         } catch (err) {
           console.warn('Firestore user synchronization note:', err);
         }
@@ -206,7 +248,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const register = async (
     role: UserRole, 
     data: { nombre: string; apellidos: string; correo: string; telefono: string; contrasena: string }
-  ): Promise<{ success: boolean; error?: string }> => {
+  ): Promise<{ success: boolean; error?: string; uid?: string }> => {
     const { nombre, apellidos, correo, telefono, contrasena } = data;
 
     // Strict Validations
@@ -314,7 +356,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       clearFailedAttempts(role, correo);
 
       setLoading(false);
-      return { success: true };
+      return { success: true, uid };
     } catch (err: any) {
       setLoading(false);
       console.error('Registration failed:', err);

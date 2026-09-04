@@ -96,7 +96,7 @@ export const DashboardPage: React.FC = () => {
               CENTRO DE OPERACIONES SERVICIOS A DOMICILIO ESSENYA
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-serif font-bold text-white">
+          <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[var(--text-primary)]">
             Monitoreo en Tiempo Real CDMX
           </h1>
           <p className="text-xs text-[var(--text-muted)] max-w-xl">
@@ -124,13 +124,13 @@ export const DashboardPage: React.FC = () => {
               <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
                 activePanicAlerts.length > 0
                   ? 'bg-red-600 text-white animate-bounce shadow-lg shadow-red-600/40'
-                  : 'bg-[#222222] text-[var(--text-muted)]'
+                  : 'bg-[var(--bg-subcard)] text-[var(--text-muted)]'
               }`}>
                 <ShieldAlert className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="font-serif font-bold text-base text-white">
+                  <h3 className="font-serif font-bold text-base text-[var(--text-primary)]">
                     Central de Telemetría SOS & Solicitudes de Ubicación
                   </h3>
                   {activePanicAlerts.length > 0 ? (
@@ -138,18 +138,18 @@ export const DashboardPage: React.FC = () => {
                       {activePanicAlerts.length} ALERTA{activePanicAlerts.length > 1 ? 'S' : ''} ACTIVA{activePanicAlerts.length > 1 ? 'S' : ''}
                     </span>
                   ) : (
-                    <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <span className="bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full">
                       Sin Alertas Pendientes
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-[#AAAAAA]">
+                <p className="text-xs text-[var(--text-muted)]">
                   Transmisión continua de coordenadas GPS vía Firestore desde el botón de pánico del cliente/terapeuta.
                 </p>
               </div>
             </div>
 
-            <div className="text-right text-[11px] font-mono text-emerald-400 flex items-center gap-1.5">
+            <div className="text-right text-[11px] font-mono text-emerald-500 dark:text-emerald-400 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
               <span>Satelital Firestore 24/7</span>
             </div>
@@ -182,27 +182,27 @@ export const DashboardPage: React.FC = () => {
                         isActive
                           ? 'bg-red-600 text-white animate-pulse'
                           : isAttending
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          ? 'bg-amber-500/20 text-amber-500 dark:text-amber-300 border border-amber-500/40'
+                          : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/40'
                       }`}>
                         {alert.status.replace('_', ' ')}
                       </span>
                     </div>
 
-                    <h4 className="font-bold text-sm text-white flex items-center gap-1.5">
+                    <h4 className="font-bold text-sm text-[var(--text-primary)] flex items-center gap-1.5">
                       <span>{alert.userName}</span>
-                      <span className="text-[10px] font-normal text-[#AAAAAA] capitalize">
+                      <span className="text-[10px] font-normal text-[var(--text-muted)] capitalize">
                         ({alert.userRole})
                       </span>
                     </h4>
 
-                    <p className="text-xs text-[#CCCCCC] flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                    <p className="text-xs text-[var(--text-primary)] flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5 text-red-500 dark:text-red-400 shrink-0" />
                       <span className="truncate">{alert.userLocation}</span>
                     </p>
 
                     {/* GPS Exact Coordinates Display */}
-                    <div className="bg-black/40 p-2 rounded-xl text-[11px] font-mono flex items-center justify-between text-emerald-400 border border-white/5">
+                    <div className="bg-[var(--bg-main)] p-2 rounded-xl text-[11px] font-mono flex items-center justify-between text-emerald-600 dark:text-emerald-400 border border-[var(--border-color)]">
                       <span>Lat: {alert.latitude?.toFixed(5) || '19.4326'}</span>
                       <span>Lng: {alert.longitude?.toFixed(5) || '-99.1913'}</span>
                       <span className="text-[9px] text-[var(--text-muted)]">±{Math.round(alert.accuracy || 10)}m</span>
@@ -216,12 +216,12 @@ export const DashboardPage: React.FC = () => {
                   </div>
 
                   {/* Actions for Admin */}
-                  <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2">
+                  <div className="pt-2 border-t border-[var(--border-color)] flex items-center justify-between gap-2">
                     <a
                       href={`https://www.google.com/maps/search/?api=1&query=${alert.latitude},${alert.longitude}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-2.5 py-1 bg-white dark:bg-[var(--bg-subcard)]/10 hover:bg-white dark:bg-[var(--bg-subcard)]/20 text-white text-[11px] font-bold rounded-lg transition-all flex items-center gap-1"
+                      className="px-2.5 py-1 bg-[var(--bg-card)] hover:bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] text-[11px] font-bold rounded-lg transition-all flex items-center gap-1"
                     >
                       <Navigation className="w-3 h-3 text-[#C9A55B]" />
                       <span>Ver Mapa</span>
@@ -235,7 +235,7 @@ export const DashboardPage: React.FC = () => {
                             handleAttendPanicAlert(alert.id);
                             showToast('Alerta en Atención', `Personal del S.O.C. asignado a la alerta ${alert.id}`, 'info');
                           }}
-                          className="px-2 py-1 bg-amber-600/30 hover:bg-amber-600/50 text-amber-300 text-[10px] font-bold rounded-lg border border-amber-500/40 transition-all"
+                          className="px-2 py-1 bg-amber-600/30 hover:bg-amber-600/50 text-amber-500 dark:text-amber-300 text-[10px] font-bold rounded-lg border border-amber-500/40 transition-all cursor-pointer"
                         >
                           Atender
                         </button>
@@ -248,7 +248,7 @@ export const DashboardPage: React.FC = () => {
                             handleResolvePanicAlert(alert.id);
                             showToast('Alerta Resuelta', `La alerta ${alert.id} fue archivada como atendida.`, 'success');
                           }}
-                          className="px-2 py-1 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 text-[10px] font-bold rounded-lg border border-emerald-500/40 transition-all"
+                          className="px-2 py-1 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-600 dark:text-emerald-300 text-[10px] font-bold rounded-lg border border-emerald-500/40 transition-all cursor-pointer"
                         >
                           Resolver
                         </button>
@@ -271,8 +271,8 @@ export const DashboardPage: React.FC = () => {
             <Calendar className="w-4 h-4 text-[#C9A55B]" />
           </div>
           <div className="flex items-baseline space-x-2">
-            <span className="text-2xl font-serif font-bold text-white">{bookings.length}</span>
-            <span className="text-[10px] text-emerald-400 font-bold">{finishedCount} concluidos</span>
+            <span className="text-2xl font-serif font-bold text-[var(--text-primary)]">{bookings.length}</span>
+            <span className="text-[10px] text-emerald-500 dark:text-emerald-400 font-bold">{finishedCount} concluidos</span>
           </div>
           <p className="text-[10px] text-[var(--text-muted)]">{canceledCount} cancelaciones registradas</p>
         </div>
@@ -287,7 +287,7 @@ export const DashboardPage: React.FC = () => {
             <span className="text-2xl font-serif font-bold text-[#C9A55B]">${todayRevenue.toLocaleString()}</span>
             <span className="text-[10px] text-[var(--text-muted)]">MXN</span>
           </div>
-          <p className="text-[10px] text-emerald-400 font-semibold">100% cobro garantizado</p>
+          <p className="text-[10px] text-emerald-500 dark:text-emerald-400 font-semibold">100% cobro garantizado</p>
         </div>
 
         {/* KPI 3 */}
@@ -297,7 +297,7 @@ export const DashboardPage: React.FC = () => {
             <UserCheck className="w-4 h-4 text-[#C9A55B]" />
           </div>
           <div className="flex items-baseline space-x-2">
-            <span className="text-2xl font-serif font-bold text-white">{therapists.length}</span>
+            <span className="text-2xl font-serif font-bold text-[var(--text-primary)]">{therapists.length}</span>
             <span className="text-[10px] text-[#C9A55B] font-mono">⭐ {avgRating}</span>
           </div>
           <p className="text-[10px] text-[var(--text-muted)]">{therapists.filter(t => t.status === 'disponible').length} disponibles en zona</p>
@@ -310,8 +310,8 @@ export const DashboardPage: React.FC = () => {
             <Users className="w-4 h-4 text-[#C9A55B]" />
           </div>
           <div className="flex items-baseline space-x-2">
-            <span className="text-2xl font-serif font-bold text-white">{clients.length}</span>
-            <span className="text-[10px] text-emerald-400 font-bold">100% Verificados</span>
+            <span className="text-2xl font-serif font-bold text-[var(--text-primary)]">{clients.length}</span>
+            <span className="text-[10px] text-emerald-500 dark:text-emerald-400 font-bold">100% Verificados</span>
           </div>
           <p className="text-[10px] text-[var(--text-muted)]">3 Membresías Black & Diamond</p>
         </div>
@@ -322,7 +322,7 @@ export const DashboardPage: React.FC = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-[var(--border-color)] pb-3">
           <div className="flex items-center space-x-2">
             <ShieldCheck className="w-5 h-5 text-[#C9A55B]" />
-            <h3 className="font-serif font-bold text-sm text-white">
+            <h3 className="font-serif font-bold text-sm text-[var(--text-primary)]">
               Estado de Solicitudes y Acreditación de Masajistas
             </h3>
           </div>
@@ -346,28 +346,28 @@ export const DashboardPage: React.FC = () => {
 
           <div className="bg-[var(--bg-subcard)] border border-emerald-500/30 rounded-xl p-3.5 flex items-center justify-between">
             <div>
-              <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1">
+              <p className="text-[10px] text-emerald-500 dark:text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>Masajistas Aprobadas</span>
               </p>
-              <p className="text-2xl font-mono font-bold text-emerald-400 mt-1">{approvedTherapistsCount}</p>
+              <p className="text-2xl font-mono font-bold text-emerald-500 dark:text-emerald-400 mt-1">{approvedTherapistsCount}</p>
               <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Acceso activo al Radar</p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-500 dark:text-emerald-400">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
 
           <div className="bg-[var(--bg-subcard)] border border-red-500/30 rounded-xl p-3.5 flex items-center justify-between">
             <div>
-              <p className="text-[10px] text-red-400 font-bold uppercase tracking-wider flex items-center gap-1">
+              <p className="text-[10px] text-red-500 dark:text-red-400 font-bold uppercase tracking-wider flex items-center gap-1">
                 <XCircle className="w-3.5 h-3.5" />
                 <span>Masajistas Rechazadas</span>
               </p>
-              <p className="text-2xl font-mono font-bold text-red-400 mt-1">{rejectedTherapistsCount}</p>
+              <p className="text-2xl font-mono font-bold text-red-500 dark:text-red-400 mt-1">{rejectedTherapistsCount}</p>
               <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Solicitudes no acreditadas</p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400">
+            <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-500 dark:text-red-400">
               <XCircle className="w-5 h-5" />
             </div>
           </div>
@@ -382,7 +382,7 @@ export const DashboardPage: React.FC = () => {
             <div>
               <div className="flex items-center space-x-2 text-[#C9A55B]">
                 <Navigation className="w-4 h-4 animate-pulse" />
-                <h3 className="font-serif font-bold text-lg text-white">
+                <h3 className="font-serif font-bold text-lg text-[var(--text-primary)]">
                   Monitoreo GPS en Vivo — Ruta hacia Domicilio CDMX
                 </h3>
               </div>
@@ -392,7 +392,7 @@ export const DashboardPage: React.FC = () => {
             </div>
 
             {/* Privacy Compliance & Realtime Badge */}
-            <div className="flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-[10px] text-emerald-400 font-semibold shrink-0">
+            <div className="flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-[10px] text-emerald-500 dark:text-emerald-400 font-semibold shrink-0">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
               <span>Telemetría GPS Activa</span>
             </div>
@@ -418,20 +418,20 @@ export const DashboardPage: React.FC = () => {
                     <span className="text-[10px] font-mono text-[#C9A55B] font-bold uppercase">
                       SERVICIO #{currentTrackBooking.code || currentTrackBooking.id}
                     </span>
-                    <h4 className="font-serif font-bold text-base text-white">
+                    <h4 className="font-serif font-bold text-base text-[var(--text-primary)]">
                       {currentTrackBooking.serviceName} ({currentTrackBooking.durationMinutes} min)
                     </h4>
                     <p className="text-xs text-[var(--text-muted)]">
-                      Terapeuta: <strong className="text-[#C9A55B]">{currentTrackBooking.therapistName || assignedTherapist?.name || 'Sin asignar'}</strong> • Cliente: <strong className="text-white">{currentTrackBooking.clientName}</strong>
+                      Terapeuta: <strong className="text-[#C9A55B]">{currentTrackBooking.therapistName || assignedTherapist?.name || 'Sin asignar'}</strong> • Cliente: <strong className="text-[var(--text-primary)]">{currentTrackBooking.clientName}</strong>
                     </p>
-                    <p className="text-[11px] text-[#AAAAAA] mt-0.5 flex items-center gap-1">
+                    <p className="text-[11px] text-[var(--text-muted)] mt-0.5 flex items-center gap-1">
                       <MapPin className="w-3.5 h-3.5 text-[#C9A55B] shrink-0" />
                       <span>Destino: {currentTrackBooking.clientAddress} ({currentTrackBooking.cityZone})</span>
                     </p>
                   </div>
 
                   <div className="flex items-center space-x-2 shrink-0">
-                    <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                    <span className="text-xs font-mono font-bold text-emerald-500 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5" />
                       <span>ETA: ~{currentTrackBooking.etaMinutes || 15} MIN</span>
                     </span>
@@ -441,7 +441,7 @@ export const DashboardPage: React.FC = () => {
                 {/* READ-ONLY Progress Steps Indicator - Controlled EXCLUSIVELY by Therapist */}
                 <div className="pt-2 border-t border-[var(--border-color)] space-y-2">
                   <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
-                    <span className="flex items-center gap-1.5 font-semibold text-white/90">
+                    <span className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
                       <Lock className="w-3.5 h-3.5 text-[#C9A55B]" />
                       <span>Estado del Servicio (Solo Lectura — La terapeuta es quien actualiza las etapas desde su app)</span>
                     </span>
@@ -464,12 +464,12 @@ export const DashboardPage: React.FC = () => {
                             isCurrent
                               ? 'bg-[#C9A55B] text-black border-[#C9A55B] shadow-md ring-2 ring-[#C9A55B]/40'
                               : isPast
-                              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                              : 'bg-[var(--bg-card)] text-[#666666] border-[var(--border-color)]'
+                              ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/40'
+                              : 'bg-[var(--bg-card)] text-[var(--text-muted)] border-[var(--border-color)]'
                           }`}
                         >
                           <div className="flex items-center justify-center gap-1">
-                            {isPast && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
+                            {isPast && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />}
                             {isCurrent && <span className="w-2 h-2 rounded-full bg-black animate-ping" />}
                             <span>{stepItem.label}</span>
                           </div>
@@ -479,7 +479,7 @@ export const DashboardPage: React.FC = () => {
                             </span>
                           )}
                           {isPast && (
-                            <span className="block text-[9px] font-mono text-emerald-400/90 mt-0.5">
+                            <span className="block text-[9px] font-mono text-emerald-600 dark:text-emerald-400/90 mt-0.5">
                               ✓ Completado
                             </span>
                           )}
@@ -492,8 +492,8 @@ export const DashboardPage: React.FC = () => {
             </div>
           ) : (
             <div className="h-72 flex flex-col items-center justify-center text-center p-8 bg-[var(--bg-main)] border border-[var(--border-color)] rounded-2xl text-[var(--text-muted)] space-y-2">
-              <Car className="w-10 h-10 text-[#444444]" />
-              <p className="text-sm font-semibold text-white">No hay servicios en curso</p>
+              <Car className="w-10 h-10 text-[var(--text-muted)]" />
+              <p className="text-sm font-semibold text-[var(--text-primary)]">No hay servicios en curso</p>
               <p className="text-xs max-w-sm">Cuando una terapeuta acepte un servicio y se ponga en camino, el mapa y ruta aparecerán aquí automáticamente.</p>
             </div>
           )}
@@ -504,7 +504,7 @@ export const DashboardPage: React.FC = () => {
           {/* Active Bookings Quick Switch List */}
           <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 space-y-4">
             <div className="flex justify-between items-center border-b border-[var(--border-color)] pb-3">
-              <h3 className="font-serif font-bold text-sm text-white flex items-center gap-2">
+              <h3 className="font-serif font-bold text-sm text-[var(--text-primary)] flex items-center gap-2">
                 <Clock className="w-4 h-4 text-[#C9A55B]" />
                 <span>Servicios de Hoy ({bookings.length})</span>
               </h3>
@@ -525,10 +525,10 @@ export const DashboardPage: React.FC = () => {
                   <div className="flex justify-between items-start">
                     <div>
                       <span className="font-mono text-[10px] text-[#C9A55B] font-bold">{b.code}</span>
-                      <h4 className="font-serif font-bold text-xs text-white line-clamp-1">{b.serviceName}</h4>
+                      <h4 className="font-serif font-bold text-xs text-[var(--text-primary)] line-clamp-1">{b.serviceName}</h4>
                       <p className="text-[10px] text-[var(--text-muted)]">{b.clientName} ({b.cityZone})</p>
                     </div>
-                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#262626] text-[#AAAAAA] capitalize">
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-[var(--bg-card)] text-[var(--text-muted)] border border-[var(--border-color)] capitalize">
                       {b.state.replace('_', ' ')}
                     </span>
                   </div>
@@ -540,7 +540,7 @@ export const DashboardPage: React.FC = () => {
           {/* Operational Alerts & Audit Activity */}
           <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 space-y-4">
             <div className="flex justify-between items-center border-b border-[var(--border-color)] pb-3">
-              <h3 className="font-serif font-bold text-sm text-white flex items-center gap-2">
+              <h3 className="font-serif font-bold text-sm text-[var(--text-primary)] flex items-center gap-2">
                 <ShieldAlert className="w-4 h-4 text-[#C9A55B]" />
                 <span>Bitácora & Alertas Operativas</span>
               </h3>
@@ -553,7 +553,7 @@ export const DashboardPage: React.FC = () => {
                     <span className="font-semibold text-[#C9A55B]">{log.action}</span>
                     <span>{log.timestamp.substring(11, 16)} hrs</span>
                   </div>
-                  <p className="text-[#CCCCCC] text-[11px]">{log.details}</p>
+                  <p className="text-[var(--text-primary)] text-[11px]">{log.details}</p>
                 </div>
               ))}
             </div>
@@ -564,7 +564,7 @@ export const DashboardPage: React.FC = () => {
       {/* Analytics & Monthly Volume / Therapist Occupancy Charts */}
       <div className="pt-4 border-t border-[var(--border-color)]">
         <div className="mb-4">
-          <h2 className="text-xl font-serif font-bold text-white">Analítica Ejecutiva & Rendimiento</h2>
+          <h2 className="text-xl font-serif font-bold text-[var(--text-primary)]">Analítica Ejecutiva & Rendimiento</h2>
           <p className="text-xs text-[var(--text-muted)]">Volumen de reservas mensuales y porcentaje de ocupación por terapeuta.</p>
         </div>
         <AdminStatsPanel />

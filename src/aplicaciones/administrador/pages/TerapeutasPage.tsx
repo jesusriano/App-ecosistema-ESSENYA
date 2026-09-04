@@ -227,7 +227,7 @@ export const TerapeutasPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[var(--border-color)] pb-4">
         <div>
-          <h1 className="text-2xl font-serif font-bold text-white flex items-center gap-2">
+          <h1 className="text-2xl font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
             <UserCheck className="w-6 h-6 text-[#C9A55B]" />
             <span>Administración Profesional de Terapeutas</span>
           </h1>
@@ -239,7 +239,7 @@ export const TerapeutasPage: React.FC = () => {
         <div className="flex items-center space-x-3 w-full sm:w-auto">
           <button
             onClick={() => setShowAuditLogs(true)}
-            className="px-3.5 py-2 rounded-xl bg-[var(--bg-subcard)] hover:bg-[#262626] border border-[var(--border-color)] text-[var(--text-primary)] text-xs font-semibold flex items-center space-x-1.5 transition-all cursor-pointer"
+            className="px-3.5 py-2 rounded-xl bg-[var(--bg-subcard)] hover:bg-[var(--bg-active)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs font-semibold flex items-center space-x-1.5 transition-all cursor-pointer"
           >
             <History className="w-4 h-4 text-[#C9A55B]" />
             <span className="hidden md:inline">Historial de Auditoría</span>
@@ -272,11 +272,11 @@ export const TerapeutasPage: React.FC = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-1">
           <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">Total Terapeutas</p>
-          <p className="text-2xl font-mono font-bold text-white">{totalCount}</p>
+          <p className="text-2xl font-mono font-bold text-[var(--text-primary)]">{totalCount}</p>
         </div>
         <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-1">
           <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">Activas en Radar</p>
-          <p className="text-2xl font-mono font-bold text-emerald-400">{activeCount}</p>
+          <p className="text-2xl font-mono font-bold text-emerald-500 dark:text-emerald-400">{activeCount}</p>
         </div>
         <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-1">
           <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">Documentos Pendientes</p>
@@ -284,7 +284,7 @@ export const TerapeutasPage: React.FC = () => {
         </div>
         <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-1">
           <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">Acceso Restringido</p>
-          <p className="text-2xl font-mono font-bold text-red-400">
+          <p className="text-2xl font-mono font-bold text-red-500 dark:text-red-400">
             {therapists.filter(t => t.estado === 'bloqueado').length}
           </p>
         </div>
@@ -300,7 +300,7 @@ export const TerapeutasPage: React.FC = () => {
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 filterStatus === 'todos' 
                   ? 'bg-[#C9A55B] text-black font-bold' 
-                  : 'bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-white border border-[var(--border-color)]'
+                  : 'bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
               }`}
             >
               Todas ({therapists.length})
@@ -311,7 +311,7 @@ export const TerapeutasPage: React.FC = () => {
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
                 filterStatus === 'pendiente' 
                   ? 'bg-[#C9A55B] text-black font-bold' 
-                  : 'bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-white border border-[var(--border-color)]'
+                  : 'bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
               }`}
             >
               <span>Solicitudes Pendientes</span>
@@ -327,7 +327,7 @@ export const TerapeutasPage: React.FC = () => {
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 filterStatus === 'activo' 
                   ? 'bg-emerald-600 text-white font-bold' 
-                  : 'bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-white border border-[var(--border-color)]'
+                  : 'bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
               }`}
             >
               Aprobadas / Activas
@@ -338,7 +338,7 @@ export const TerapeutasPage: React.FC = () => {
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 filterStatus === 'rechazado' 
                   ? 'bg-red-600 text-white font-bold' 
-                  : 'bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-white border border-[var(--border-color)]'
+                  : 'bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
               }`}
             >
               Rechazadas ({therapists.filter(t => t.estado === 'rechazado').length})
@@ -349,7 +349,7 @@ export const TerapeutasPage: React.FC = () => {
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 filterStatus === 'bloqueado' 
                   ? 'bg-amber-600 text-white font-bold' 
-                  : 'bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-white border border-[var(--border-color)]'
+                  : 'bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
               }`}
             >
               Suspendidas
@@ -357,13 +357,13 @@ export const TerapeutasPage: React.FC = () => {
           </div>
 
           <div className="relative w-full sm:w-72">
-            <Search className="w-4 h-4 absolute left-3 top-3 text-[#666666]" />
+            <Search className="w-4 h-4 absolute left-3 top-3 text-[var(--text-muted)]" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Buscar por nombre, correo, CURP..."
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white placeholder-[#666666] focus:outline-none focus:border-[#C9A55B]"
+              className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[#C9A55B]"
             />
           </div>
         </div>
@@ -399,7 +399,7 @@ export const TerapeutasPage: React.FC = () => {
                     referrerPolicy="no-referrer" 
                   />
                   <div>
-                    <h3 className="font-serif font-bold text-sm text-white flex items-center gap-1.5">
+                    <h3 className="font-serif font-bold text-sm text-[var(--text-primary)] flex items-center gap-1.5">
                       <span>{t.nombre} {t.apellidos}</span>
                     </h3>
                     <span className="text-[10px] text-[var(--text-muted)] font-mono block">
@@ -411,12 +411,12 @@ export const TerapeutasPage: React.FC = () => {
                 {/* Status Badge */}
                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${
                   t.estado === 'activo'
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
                     : t.estado === 'pendiente'
-                    ? 'bg-[#C9A55B]/20 text-[#C9A55B] border-[#C9A55B]/50 font-bold'
+                    ? 'bg-[#C9A55B]/20 text-[#9A7B38] dark:text-[#C9A55B] border-[#C9A55B]/50 font-bold'
                     : t.estado === 'inactivo'
-                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                    : 'bg-red-500/10 text-red-400 border-red-500/30'
+                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                    : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30'
                 }`}>
                   {t.estado === 'pendiente' ? 'Pendiente Aprobación' : t.estado}
                 </span>
@@ -441,14 +441,14 @@ export const TerapeutasPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-2 bg-[var(--bg-subcard)] p-3 rounded-xl border border-[var(--border-color)] text-xs">
                 <div>
                   <p className="text-[10px] text-[var(--text-muted)]">Calificación</p>
-                  <p className="text-white font-bold flex items-center gap-1 mt-0.5">
+                  <p className="text-[var(--text-primary)] font-bold flex items-center gap-1 mt-0.5">
                     <Star className="w-3.5 h-3.5 text-[#C9A55B] fill-[#C9A55B]" />
                     <span>{t.puntuacion || 5.0} ({t.resenasCount || 0})</span>
                   </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-[var(--text-muted)]">Servicios Completes</p>
-                  <p className="text-white font-bold mt-0.5">{t.serviciosCompletados || 0}</p>
+                  <p className="text-[var(--text-primary)] font-bold mt-0.5">{t.serviciosCompletados || 0}</p>
                 </div>
               </div>
 
@@ -473,16 +473,16 @@ export const TerapeutasPage: React.FC = () => {
               <div className="pt-2 border-t border-[var(--border-color)] flex items-center justify-between text-xs">
                 <div className="flex items-center space-x-1.5 text-[var(--text-primary)]">
                   <FileText className="w-3.5 h-3.5 text-[#C9A55B]" />
-                  <span>Documentos: <strong className="text-white">{t.documentos?.length || 0}</strong></span>
+                  <span>Documentos: <strong className="text-[var(--text-primary)]">{t.documentos?.length || 0}</strong></span>
                 </div>
 
                 {pendingDocs > 0 ? (
-                  <span className="bg-[#C9A55B]/10 border border-[#C9A55B]/30 text-[#C9A55B] text-[10px] font-bold px-2 py-0.5 rounded-md animate-pulse flex items-center gap-1">
+                  <span className="bg-[#C9A55B]/10 border border-[#C9A55B]/30 text-[#9A7B38] dark:text-[#C9A55B] text-[10px] font-bold px-2 py-0.5 rounded-md animate-pulse flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     <span>{pendingDocs} por revisar</span>
                   </span>
                 ) : (
-                  <span className="text-emerald-400 text-[10px] font-bold flex items-center gap-1">
+                  <span className="text-emerald-600 dark:text-emerald-400 text-[10px] font-bold flex items-center gap-1">
                     <ShieldCheck className="w-3 h-3" /> Verificados
                   </span>
                 )}
@@ -494,18 +494,18 @@ export const TerapeutasPage: React.FC = () => {
                   <div>
                     {rejectingTherapistId === t.id ? (
                       <div className="space-y-2 bg-[var(--bg-subcard)] p-3 rounded-2xl border border-red-500/30">
-                        <p className="text-[11px] font-bold text-red-400">Especifica el motivo de rechazo:</p>
+                        <p className="text-[11px] font-bold text-red-500 dark:text-red-400">Especifica el motivo de rechazo:</p>
                         <textarea
                           value={accountRejectReason}
                           onChange={(e) => setAccountRejectReason(e.target.value)}
                           placeholder="Ej. CURP no coincide con INE, documentos ilegibles..."
-                          className="w-full bg-[var(--bg-main)] border border-red-500/40 rounded-xl p-2 text-xs text-white"
+                          className="w-full bg-[var(--bg-card)] border border-red-500/40 rounded-xl p-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
                           rows={2}
                         />
                         <div className="flex justify-end space-x-2">
                           <button
                             onClick={() => { setRejectingTherapistId(null); setAccountRejectReason(''); }}
-                            className="px-3 py-1 bg-[#262626] text-[var(--text-primary)] text-xs rounded-lg"
+                            className="px-3 py-1 bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--bg-active)] text-xs rounded-lg cursor-pointer"
                           >
                             Cancelar
                           </button>
@@ -516,7 +516,7 @@ export const TerapeutasPage: React.FC = () => {
                               setAccountRejectReason('');
                               if (res.success) showToast('success', 'Solicitud rechazada.');
                             }}
-                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg"
+                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg cursor-pointer"
                           >
                             Confirmar Rechazo
                           </button>
@@ -538,7 +538,7 @@ export const TerapeutasPage: React.FC = () => {
 
                           <button
                             onClick={() => setRejectingTherapistId(t.id)}
-                            className="w-full py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-400 font-bold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer"
+                            className="w-full py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-500 dark:text-red-400 font-bold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer"
                           >
                             <XCircle className="w-4 h-4" />
                             <span>Rechazar</span>
@@ -547,7 +547,7 @@ export const TerapeutasPage: React.FC = () => {
 
                         <button
                           onClick={() => setShowDocModal(t)}
-                          className="w-full py-1.5 bg-[var(--bg-subcard)] hover:bg-[#262626] border border-[var(--border-color)] text-[var(--text-primary)] font-semibold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer text-[11px]"
+                          className="w-full py-1.5 bg-[var(--bg-subcard)] hover:bg-[var(--bg-active)] border border-[var(--border-color)] text-[var(--text-primary)] font-semibold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer text-[11px]"
                         >
                           <Eye className="w-3.5 h-3.5 text-[#C9A55B]" />
                           <span>Revisar Documentos & Certificados</span>
@@ -559,7 +559,7 @@ export const TerapeutasPage: React.FC = () => {
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => setShowDocModal(t)}
-                      className="w-full py-2 bg-[var(--bg-subcard)] hover:bg-[#262626] border border-[var(--border-color)] text-[var(--text-primary)] font-semibold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer"
+                      className="w-full py-2 bg-[var(--bg-subcard)] hover:bg-[var(--bg-active)] border border-[var(--border-color)] text-[var(--text-primary)] font-semibold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer"
                     >
                       <Eye className="w-3.5 h-3.5 text-[#C9A55B]" />
                       <span>Documentos</span>
@@ -569,8 +569,8 @@ export const TerapeutasPage: React.FC = () => {
                       onClick={() => handleStatusChange(t.id, t.estado)}
                       className={`w-full py-2 border font-semibold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer ${
                         isBlocked 
-                          ? 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-400' 
-                          : 'bg-red-500/10 hover:bg-red-500/20 border-red-500/30 text-red-400'
+                          ? 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-600 dark:text-emerald-400' 
+                          : 'bg-red-500/10 hover:bg-red-500/20 border-red-500/30 text-red-600 dark:text-red-400'
                       }`}
                     >
                       <ShieldAlert className="w-3.5 h-3.5" />
@@ -580,7 +580,7 @@ export const TerapeutasPage: React.FC = () => {
                     <button
                       onClick={() => handleResetPass(t)}
                       title="Restablecer clave temporal"
-                      className="w-full py-1.5 bg-[var(--bg-subcard)] hover:bg-[#262626] border border-[var(--border-color)] text-[var(--text-primary)] hover:text-[#C9A55B] text-[11px] font-semibold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer"
+                      className="w-full py-1.5 bg-[var(--bg-subcard)] hover:bg-[var(--bg-active)] border border-[var(--border-color)] text-[var(--text-primary)] hover:text-[#C9A55B] text-[11px] font-semibold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer"
                     >
                       <KeyRound className="w-3 h-3 text-[#C9A55B]" />
                       <span>Reset Clave</span>
@@ -588,9 +588,9 @@ export const TerapeutasPage: React.FC = () => {
 
                     <button
                       onClick={() => setShowDeleteConfirm(t)}
-                      className="w-full py-1.5 bg-[var(--bg-subcard)] hover:bg-red-500/20 border border-[var(--border-color)] hover:border-red-500/40 text-[var(--text-primary)] hover:text-red-400 text-[11px] font-semibold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer"
+                      className="w-full py-1.5 bg-[var(--bg-subcard)] hover:bg-red-500/20 border border-[var(--border-color)] hover:border-red-500/40 text-[var(--text-primary)] hover:text-red-500 dark:hover:text-red-400 text-[11px] font-semibold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer"
                     >
-                      <Trash2 className="w-3 h-3 text-red-400" />
+                      <Trash2 className="w-3 h-3 text-red-500 dark:text-red-400" />
                       <span>Eliminar</span>
                     </button>
                   </div>
@@ -607,7 +607,7 @@ export const TerapeutasPage: React.FC = () => {
           <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 md:p-8 max-w-xl w-full space-y-6 shadow-2xl relative my-8">
             <div className="flex justify-between items-center border-b border-[var(--border-color)] pb-4">
               <div>
-                <h2 className="text-xl font-serif font-bold text-white flex items-center gap-2">
+                <h2 className="text-xl font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
                   <UserCheck className="w-5 h-5 text-[#C9A55B]" />
                   <span>Alta de Terapeuta Certificada</span>
                 </h2>
@@ -617,7 +617,7 @@ export const TerapeutasPage: React.FC = () => {
               </div>
               <button 
                 onClick={() => setShowCreateModal(false)}
-                className="text-[var(--text-muted)] hover:text-white text-lg font-bold p-1 cursor-pointer"
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-lg font-bold p-1 cursor-pointer"
               >
                 ✕
               </button>
@@ -633,7 +633,7 @@ export const TerapeutasPage: React.FC = () => {
                     value={newNombre}
                     onChange={(e) => setNewNombre(e.target.value)}
                     placeholder="Ej. Camila"
-                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C9A55B]"
+                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[#C9A55B]"
                   />
                 </div>
 
@@ -645,7 +645,7 @@ export const TerapeutasPage: React.FC = () => {
                     value={newApellidos}
                     onChange={(e) => setNewApellidos(e.target.value)}
                     placeholder="Ej. Torres"
-                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C9A55B]"
+                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[#C9A55B]"
                   />
                 </div>
 
@@ -657,7 +657,7 @@ export const TerapeutasPage: React.FC = () => {
                     value={newCorreo}
                     onChange={(e) => setNewCorreo(e.target.value)}
                     placeholder="terapeuta@essenya.com"
-                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C9A55B]"
+                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[#C9A55B]"
                   />
                 </div>
 
@@ -669,7 +669,7 @@ export const TerapeutasPage: React.FC = () => {
                     value={newTelefono}
                     onChange={(e) => setNewTelefono(e.target.value)}
                     placeholder="+52 55 1234 5678"
-                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C9A55B]"
+                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[#C9A55B]"
                   />
                 </div>
               </div>
@@ -683,7 +683,7 @@ export const TerapeutasPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setNewTempPass(`Essenya${Math.floor(1000 + Math.random() * 9000)}!`)}
-                    className="text-[10px] text-[#C9A55B] underline hover:text-white font-mono"
+                    className="text-[10px] text-[#C9A55B] underline hover:text-[var(--text-primary)] font-mono"
                   >
                     Generar Otra
                   </button>
@@ -692,7 +692,7 @@ export const TerapeutasPage: React.FC = () => {
                   type="text"
                   readOnly
                   value={newTempPass}
-                  className="w-full bg-[var(--bg-main)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs font-mono font-bold text-emerald-400"
+                  className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs font-mono font-bold text-emerald-500 dark:text-emerald-400"
                 />
                 <p className="text-[10px] text-[var(--text-muted)]">
                   * Obligatorio cambiar en su primer inicio de sesión.
@@ -713,7 +713,7 @@ export const TerapeutasPage: React.FC = () => {
                         className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-all ${
                           isSelected
                             ? 'bg-[#C9A55B]/20 border-[#C9A55B] text-[#C9A55B]'
-                            : 'bg-[var(--bg-main)] border-[var(--border-color)] text-[var(--text-muted)] hover:text-white'
+                            : 'bg-[var(--bg-card)] border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                         }`}
                       >
                         {spec}
@@ -736,8 +736,8 @@ export const TerapeutasPage: React.FC = () => {
                         onClick={() => toggleZone(zone)}
                         className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-all ${
                           isSelected
-                            ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
-                            : 'bg-[var(--bg-main)] border-[var(--border-color)] text-[var(--text-muted)] hover:text-white'
+                            ? 'bg-emerald-500/20 border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-[var(--bg-card)] border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                         }`}
                       >
                         {zone}
@@ -751,7 +751,7 @@ export const TerapeutasPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs rounded-xl hover:bg-[#262626]"
+                  className="px-4 py-2 bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs rounded-xl hover:bg-[var(--bg-active)]"
                 >
                   Cancelar
                 </button>
@@ -774,21 +774,21 @@ export const TerapeutasPage: React.FC = () => {
       {showTempPassResult && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-[var(--bg-card)] border border-[#C9A55B] rounded-3xl p-6 max-w-md w-full space-y-5 shadow-2xl text-center">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 dark:text-emerald-400 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-6 h-6" />
             </div>
 
             <div className="space-y-1">
-              <h3 className="text-lg font-serif font-bold text-white">Credenciales Generadas Exitosamente</h3>
+              <h3 className="text-lg font-serif font-bold text-[var(--text-primary)]">Credenciales Generadas Exitosamente</h3>
               <p className="text-xs text-[var(--text-muted)]">
                 Proporciona estas credenciales temporales a la terapeuta para su primer ingreso.
               </p>
             </div>
 
             <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-2xl p-4 text-left space-y-2 font-mono text-xs">
-              <p><span className="text-[var(--text-muted)]">Terapeuta:</span> <strong className="text-white">{showTempPassResult.name}</strong></p>
+              <p><span className="text-[var(--text-muted)]">Terapeuta:</span> <strong className="text-[var(--text-primary)]">{showTempPassResult.name}</strong></p>
               <p><span className="text-[var(--text-muted)]">Correo:</span> <strong className="text-[#C9A55B]">{showTempPassResult.email}</strong></p>
-              <p><span className="text-[var(--text-muted)]">Clave Temp:</span> <strong className="text-emerald-400 bg-black px-2 py-0.5 rounded border border-[var(--border-color)]">{showTempPassResult.pass}</strong></p>
+              <p><span className="text-[var(--text-muted)]">Clave Temp:</span> <strong className="text-emerald-600 dark:text-emerald-400 bg-[var(--bg-card)] px-2 py-0.5 rounded border border-[var(--border-color)]">{showTempPassResult.pass}</strong></p>
             </div>
 
             <LuxuryButton
@@ -808,7 +808,7 @@ export const TerapeutasPage: React.FC = () => {
           <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 md:p-8 max-w-2xl w-full space-y-6 shadow-2xl my-8 max-h-[90vh] flex flex-col">
             <div className="flex justify-between items-center border-b border-[var(--border-color)] pb-4 shrink-0">
               <div>
-                <h2 className="text-xl font-serif font-bold text-white flex items-center gap-2">
+                <h2 className="text-xl font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
                   <ShieldCheck className="w-5 h-5 text-[#C9A55B]" />
                   <span>Evaluación de Solicitud & Expediente</span>
                 </h2>
@@ -818,7 +818,7 @@ export const TerapeutasPage: React.FC = () => {
               </div>
               <button 
                 onClick={() => setShowDocModal(null)}
-                className="text-[var(--text-muted)] hover:text-white text-lg font-bold p-1 cursor-pointer"
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-lg font-bold p-1 cursor-pointer"
               >
                 ✕
               </button>
@@ -837,7 +837,7 @@ export const TerapeutasPage: React.FC = () => {
                   <div className="flex-1">
                     <div className="flex justify-between items-start">
                       <div>
-                        <h3 className="text-base font-serif font-bold text-white">
+                        <h3 className="text-base font-serif font-bold text-[var(--text-primary)]">
                           {showDocModal.nombre} {showDocModal.apellidos}
                         </h3>
                         <p className="text-xs text-[#C9A55B] font-mono">{showDocModal.correo}</p>
@@ -845,10 +845,10 @@ export const TerapeutasPage: React.FC = () => {
                       </div>
                       <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${
                         showDocModal.estado === 'activo'
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
                           : showDocModal.estado === 'pendiente'
-                          ? 'bg-[#C9A55B]/20 text-[#C9A55B] border-[#C9A55B]/50'
-                          : 'bg-red-500/10 text-red-400 border-red-500/30'
+                          ? 'bg-[#C9A55B]/20 text-[#9A7B38] dark:text-[#C9A55B] border-[#C9A55B]/50'
+                          : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30'
                       }`}>
                         {showDocModal.estado === 'pendiente' ? 'Pendiente Aprobación' : showDocModal.estado}
                       </span>
@@ -856,9 +856,9 @@ export const TerapeutasPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono bg-[var(--bg-main)] p-3 rounded-xl border border-[var(--border-color)]">
-                  <p><strong className="text-[var(--text-muted)]">Fecha Registro:</strong> <span className="text-white">{new Date(showDocModal.fechaAlta || Date.now()).toLocaleDateString()}</span></p>
-                  <p><strong className="text-[var(--text-muted)]">Experiencia:</strong> <span className="text-white">{showDocModal.experienciaAnos || 3} años</span></p>
+                <div className="grid grid-cols-2 gap-2 text-xs font-mono bg-[var(--bg-card)] p-3 rounded-xl border border-[var(--border-color)]">
+                  <p><strong className="text-[var(--text-muted)]">Fecha Registro:</strong> <span className="text-[var(--text-primary)]">{new Date(showDocModal.fechaAlta || Date.now()).toLocaleDateString()}</span></p>
+                  <p><strong className="text-[var(--text-muted)]">Experiencia:</strong> <span className="text-[var(--text-primary)]">{showDocModal.experienciaAnos || 3} años</span></p>
                   <p><strong className="text-[var(--text-muted)]">CURP:</strong> <span className="text-[var(--text-primary)]">{showDocModal.curp || 'No proporcionado'}</span></p>
                   <p><strong className="text-[var(--text-muted)]">Folio INE:</strong> <span className="text-[var(--text-primary)]">{showDocModal.ineNumber || 'No proporcionado'}</span></p>
                   <p><strong className="text-[var(--text-muted)]">CLABE Banco:</strong> <span className="text-[var(--text-primary)]">{showDocModal.cuentaBancariaCLABE || 'No proporcionada'}</span></p>
@@ -869,7 +869,7 @@ export const TerapeutasPage: React.FC = () => {
                   <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">Especialidades Declaradas:</p>
                   <div className="flex flex-wrap gap-1">
                     {(showDocModal.especialidades || []).map((s, idx) => (
-                      <span key={idx} className="bg-[var(--bg-main)] border border-[var(--border-color)] text-[var(--text-primary)] px-2 py-0.5 rounded text-[10px]">
+                      <span key={idx} className="bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-primary)] px-2 py-0.5 rounded text-[10px]">
                         {s}
                       </span>
                     ))}
@@ -878,7 +878,7 @@ export const TerapeutasPage: React.FC = () => {
                   <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider pt-1">Zonas de Cobertura:</p>
                   <div className="flex flex-wrap gap-1">
                     {(showDocModal.zonasCobertura || []).map((z, idx) => (
-                      <span key={idx} className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded text-[10px]">
+                      <span key={idx} className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-300 px-2 py-0.5 rounded text-[10px]">
                         {z}
                       </span>
                     ))}
@@ -888,14 +888,14 @@ export const TerapeutasPage: React.FC = () => {
 
               {/* Documents Title & List */}
               <div className="space-y-3">
-                <h4 className="text-xs font-serif font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                <h4 className="text-xs font-serif font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-[#C9A55B]" />
                   <span>Documentos de Certificación Adjuntos ({showDocModal.documentos?.length || 0})</span>
                 </h4>
 
                 {(!showDocModal.documentos || showDocModal.documentos.length === 0) ? (
                   <div className="text-center py-6 space-y-2 border border-dashed border-[var(--border-color)] rounded-2xl p-4">
-                    <FileText className="w-6 h-6 text-[#666666] mx-auto" />
+                    <FileText className="w-6 h-6 text-[var(--text-muted)] mx-auto" />
                     <p className="text-xs text-[var(--text-muted)]">La terapeuta aún no ha adjuntado documentos digitales.</p>
                   </div>
                 ) : (
@@ -904,7 +904,7 @@ export const TerapeutasPage: React.FC = () => {
                       <div key={doc.id} className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-2xl p-4 space-y-3">
                         <div className="flex justify-between items-start">
                           <div>
-                            <h4 className="font-serif font-bold text-sm text-white">{doc.nombreDocumento}</h4>
+                            <h4 className="font-serif font-bold text-sm text-[var(--text-primary)]">{doc.nombreDocumento}</h4>
                             <p className="text-[11px] text-[var(--text-muted)]">
                               Institución: <span className="text-[var(--text-primary)]">{doc.institucion}</span> • Emisión: {doc.fechaEmision}
                             </p>
@@ -912,10 +912,10 @@ export const TerapeutasPage: React.FC = () => {
 
                           <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border tracking-wider flex items-center gap-1 ${
                             doc.estado === 'validado' || doc.estado === 'aprobado'
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
                               : doc.estado === 'rechazado'
-                              ? 'bg-red-500/10 text-red-400 border-red-500/30'
-                              : 'bg-amber-500/10 text-amber-400 border-amber-500/30 animate-pulse'
+                              ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30'
+                              : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 animate-pulse'
                           }`}>
                             {doc.estado === 'validado' || doc.estado === 'aprobado' ? (
                               <>
@@ -936,24 +936,24 @@ export const TerapeutasPage: React.FC = () => {
                           </span>
                         </div>
 
-                        <div className="flex items-center space-x-3 bg-[var(--bg-main)] p-3 rounded-xl border border-[var(--border-color)]">
+                        <div className="flex items-center space-x-3 bg-[var(--bg-card)] p-3 rounded-xl border border-[var(--border-color)]">
                           <FileText className="w-5 h-5 text-[#C9A55B] shrink-0" />
                           <div className="flex-1 truncate">
-                            <p className="text-xs text-white font-mono truncate">{doc.nombreDocumento}.{doc.fileType}</p>
+                            <p className="text-xs text-[var(--text-primary)] font-mono truncate">{doc.nombreDocumento}.{doc.fileType}</p>
                             <p className="text-[10px] text-[var(--text-muted)]">Subido el {new Date(doc.fechaSubida).toLocaleDateString()}</p>
                           </div>
                           <a 
                             href={doc.fileUrl} 
                             target="_blank" 
                             rel="noreferrer"
-                            className="px-3 py-1 bg-[var(--bg-subcard)] hover:bg-[#262626] border border-[var(--border-color)] text-[var(--text-primary)] text-xs font-semibold rounded-lg shrink-0"
+                            className="px-3 py-1 bg-[var(--bg-subcard)] hover:bg-[var(--bg-active)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs font-semibold rounded-lg shrink-0"
                           >
                             Ver Documento
                           </a>
                         </div>
 
                         {doc.estado === 'rechazado' && doc.motivoRechazo && (
-                          <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl">
+                          <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl">
                             <strong>Motivo de rechazo:</strong> {doc.motivoRechazo}
                           </p>
                         )}
@@ -965,19 +965,19 @@ export const TerapeutasPage: React.FC = () => {
                                 value={rejectReason}
                                 onChange={(e) => setRejectReason(e.target.value)}
                                 placeholder="Motivo de rechazo de este documento..."
-                                className="w-full bg-[var(--bg-main)] border border-red-500/40 rounded-xl p-2.5 text-xs text-white focus:outline-none"
+                                className="w-full bg-[var(--bg-card)] border border-red-500/40 rounded-xl p-2.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
                                 rows={2}
                               />
                               <div className="flex justify-end space-x-2">
                                 <button
                                   onClick={() => { setRejectingDocId(null); setRejectReason(''); }}
-                                  className="px-3 py-1 bg-[#262626] text-[var(--text-primary)] text-xs rounded-lg"
+                                  className="px-3 py-1 bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--bg-active)] text-xs rounded-lg cursor-pointer"
                                 >
                                   Cancelar
                                 </button>
                                 <button
                                   onClick={() => handleRejectDoc(showDocModal.id, doc.id)}
-                                  className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg"
+                                  className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg cursor-pointer"
                                 >
                                   Confirmar Rechazo Doc
                                 </button>
@@ -988,7 +988,7 @@ export const TerapeutasPage: React.FC = () => {
                               {doc.estado !== 'validado' && doc.estado !== 'aprobado' && (
                                 <button
                                   onClick={() => handleApproveDoc(showDocModal.id, doc.id)}
-                                  className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-bold rounded-xl flex items-center gap-1 cursor-pointer"
+                                  className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold rounded-xl flex items-center gap-1 cursor-pointer"
                                 >
                                   <CheckCircle2 className="w-3.5 h-3.5" />
                                   <span>Validar Documento</span>
@@ -998,7 +998,7 @@ export const TerapeutasPage: React.FC = () => {
                               {doc.estado !== 'rechazado' && (
                                 <button
                                   onClick={() => setRejectingDocId(doc.id)}
-                                  className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-xs font-bold rounded-xl flex items-center gap-1 cursor-pointer"
+                                  className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-bold rounded-xl flex items-center gap-1 cursor-pointer"
                                 >
                                   <XCircle className="w-3.5 h-3.5" />
                                   <span>Rechazar Documento</span>
@@ -1022,18 +1022,18 @@ export const TerapeutasPage: React.FC = () => {
 
               {rejectingTherapistId === showDocModal.id ? (
                 <div className="bg-[var(--bg-subcard)] p-3 rounded-2xl border border-red-500/40 space-y-2">
-                  <p className="text-xs text-red-400 font-bold">Ingresa el motivo de rechazo de la cuenta:</p>
+                  <p className="text-xs text-red-500 dark:text-red-400 font-bold">Ingresa el motivo de rechazo de la cuenta:</p>
                   <textarea
                     value={accountRejectReason}
                     onChange={(e) => setAccountRejectReason(e.target.value)}
                     placeholder="Ej. Fotografía de INE no legible, CURP invalida o no cumple con certificaciones requeridas..."
-                    className="w-full bg-[var(--bg-main)] border border-red-500/40 rounded-xl p-2.5 text-xs text-white focus:outline-none"
+                    className="w-full bg-[var(--bg-card)] border border-red-500/40 rounded-xl p-2.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
                     rows={2}
                   />
                   <div className="flex justify-end space-x-2">
                     <button
                       onClick={() => { setRejectingTherapistId(null); setAccountRejectReason(''); }}
-                      className="px-3 py-1.5 bg-[#262626] text-[var(--text-primary)] text-xs rounded-xl"
+                      className="px-3 py-1.5 bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--bg-active)] text-xs rounded-xl cursor-pointer"
                     >
                       Cancelar
                     </button>
@@ -1045,7 +1045,7 @@ export const TerapeutasPage: React.FC = () => {
                         setShowDocModal(null);
                         if (res.success) showToast('success', 'Solicitud rechazada con motivo registrado.');
                       }}
-                      className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl"
+                      className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl cursor-pointer"
                     >
                       Confirmar Rechazo
                     </button>
@@ -1067,7 +1067,7 @@ export const TerapeutasPage: React.FC = () => {
 
                   <button
                     onClick={() => setRejectingTherapistId(showDocModal.id)}
-                    className="py-2.5 px-3 bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-400 text-xs font-bold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer"
+                    className="py-2.5 px-3 bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-600 dark:text-red-400 text-xs font-bold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer"
                   >
                     <XCircle className="w-4 h-4" />
                     <span>Rechazar Solicitud</span>
@@ -1079,7 +1079,7 @@ export const TerapeutasPage: React.FC = () => {
                       setShowDocModal(null);
                       if (res.success) showToast('success', 'Solicitud mantenida en estado PENDIENTE.');
                     }}
-                    className="py-2.5 px-3 bg-[var(--bg-subcard)] hover:bg-[#262626] border border-[var(--border-color)] text-[var(--text-primary)] text-xs font-semibold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer"
+                    className="py-2.5 px-3 bg-[var(--bg-subcard)] hover:bg-[var(--bg-active)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs font-semibold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer"
                   >
                     <Clock className="w-4 h-4 text-[#C9A55B]" />
                     <span>Dejar Pendiente</span>
@@ -1095,28 +1095,28 @@ export const TerapeutasPage: React.FC = () => {
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-[var(--bg-card)] border border-red-500/40 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl text-center">
-            <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 flex items-center justify-center mx-auto">
+            <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-500 dark:text-red-400 flex items-center justify-center mx-auto">
               <AlertTriangle className="w-6 h-6" />
             </div>
 
             <div className="space-y-1">
-              <h3 className="text-lg font-serif font-bold text-white">¿Eliminar Terapeuta?</h3>
+              <h3 className="text-lg font-serif font-bold text-[var(--text-primary)]">¿Eliminar Terapeuta?</h3>
               <p className="text-xs text-[var(--text-muted)]">
-                Estás a punto de borrar la cuenta de <strong className="text-white">{showDeleteConfirm.nombre} {showDeleteConfirm.apellidos}</strong>. Esta acción no se puede deshacer.
+                Estás a punto de borrar la cuenta de <strong className="text-[var(--text-primary)]">{showDeleteConfirm.nombre} {showDeleteConfirm.apellidos}</strong>. Esta acción no se puede deshacer.
               </p>
             </div>
 
             <div className="flex justify-center space-x-3 pt-2">
               <button
                 onClick={() => setShowDeleteConfirm(null)}
-                className="px-4 py-2 bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs rounded-xl hover:bg-[#262626]"
+                className="px-4 py-2 bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs rounded-xl hover:bg-[var(--bg-active)] cursor-pointer"
               >
                 Cancelar
               </button>
 
               <button
                 onClick={handleDeleteAccount}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-all"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
               >
                 Sí, Eliminar Cuenta
               </button>
@@ -1131,7 +1131,7 @@ export const TerapeutasPage: React.FC = () => {
           <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 md:p-8 max-w-2xl w-full space-y-5 shadow-2xl max-h-[85vh] flex flex-col">
             <div className="flex justify-between items-center border-b border-[var(--border-color)] pb-4">
               <div>
-                <h2 className="text-xl font-serif font-bold text-white flex items-center gap-2">
+                <h2 className="text-xl font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
                   <History className="w-5 h-5 text-[#C9A55B]" />
                   <span>Historial de Auditoría de Terapeutas</span>
                 </h2>
@@ -1141,7 +1141,7 @@ export const TerapeutasPage: React.FC = () => {
               </div>
               <button 
                 onClick={() => setShowAuditLogs(false)}
-                className="text-[var(--text-muted)] hover:text-white text-lg font-bold p-1 cursor-pointer"
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-lg font-bold p-1 cursor-pointer"
               >
                 ✕
               </button>
@@ -1158,10 +1158,10 @@ export const TerapeutasPage: React.FC = () => {
                       <span className="text-[10px] text-[var(--text-muted)] font-mono">{new Date(log.timestamp).toLocaleString()}</span>
                     </div>
                     <p className="text-[var(--text-primary)]">
-                      Terapeuta: <strong className="text-white">{log.therapistName}</strong> • Ejecutado por: {log.performedBy}
+                      Terapeuta: <strong className="text-[var(--text-primary)]">{log.therapistName}</strong> • Ejecutado por: {log.performedBy}
                     </p>
                     {log.details && (
-                      <p className="text-[11px] text-[var(--text-muted)] font-mono bg-[var(--bg-main)] p-2 rounded-xl mt-1 border border-[var(--border-color)]">
+                      <p className="text-[11px] text-[var(--text-muted)] font-mono bg-[var(--bg-card)] p-2 rounded-xl mt-1 border border-[var(--border-color)]">
                         {log.details}
                       </p>
                     )}

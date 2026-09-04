@@ -261,7 +261,7 @@ export const ReservasMap: React.FC<ReservasMapProps> = ({
               <h4 className="font-serif font-bold text-[var(--text-primary)] text-base">
                 {therapistName || 'Terapeuta'} ({bookingState === 'llegue' ? 'En Domicilio' : 'En Camino'})
               </h4>
-              <p className="text-xs text-[#AAAAAA] mt-1">
+              <p className="text-xs text-[var(--text-muted)] mt-1">
                 Destino: {clientAddress} ({cityZone})
               </p>
             </div>

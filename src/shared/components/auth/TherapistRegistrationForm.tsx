@@ -41,7 +41,7 @@ const AVAILABLE_ZONES = [
 
 export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps> = ({ onSuccess, onCancel }) => {
   const { createTherapist } = useTherapistContext();
-  const { register } = useAuth();
+  const { register, firebaseUser } = useAuth();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
@@ -126,7 +126,9 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
     }
 
     // 2. Create Therapist Profile with status 'pendiente'
+    const therapistId = authRes.uid || firebaseUser?.uid;
     const profileRes = await createTherapist({
+      id: therapistId,
       nombre,
       apellidos,
       correo,
@@ -519,7 +521,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
               <button
                 type="button"
                 onClick={onCancel}
-                className="px-4 py-2 text-xs font-semibold text-[#888888] hover:text-white"
+                className="px-4 py-2 text-xs font-semibold text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white"
               >
                 Cancelar
               </button>

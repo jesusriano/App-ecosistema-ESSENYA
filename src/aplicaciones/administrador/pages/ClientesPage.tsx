@@ -8,6 +8,7 @@ import { useAdmin } from '../hooks/useAdmin';
 import { useToast } from '../../../shared/context/ToastContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { ClientUser } from '../../../shared/types';
+import { calculateMembershipTier } from '../../cliente/services/membershipService';
 
 export const ClientesPage: React.FC = () => {
   const { clients, bookings, handleEditClient, handleToggleBlockClient } = useAdmin();
@@ -20,12 +21,12 @@ export const ClientesPage: React.FC = () => {
   const [selectedClient, setSelectedClient] = useState<ClientUser | null>(null);
   const [editClientModal, setEditClientModal] = useState<ClientUser | null>(null);
 
-  // Edit Form State
+  // Edit Form State - strictly Platino -> Gold -> Diamond hierarchy
   const [formState, setFormState] = useState<{
     name: string;
     email: string;
     phone: string;
-    membershipTier: 'Gold' | 'Diamond' | 'Black';
+    membershipTier: 'Platino' | 'Gold' | 'Diamond';
     address: string;
     cityZone: string;
     specialNotes: string;
@@ -34,31 +35,57 @@ export const ClientesPage: React.FC = () => {
     name: '',
     email: '',
     phone: '',
-    membershipTier: 'Gold',
+    membershipTier: 'Platino',
     address: '',
     cityZone: '',
     specialNotes: '',
     vipPreferences: ''
   });
 
+  const getEffectiveTier = (c: ClientUser): 'Platino' | 'Gold' | 'Diamond' => {
+    if (c.membershipTier === 'Diamond' || c.membershipTier === 'Gold' || c.membershipTier === 'Platino') {
+      return c.membershipTier;
+    }
+    const clientBookings = bookings.filter(b => b.clientId === c.id);
+    const finishedAndPaid = clientBookings.filter(b => 
+      b.state === 'servicio_finalizado' && (b.paymentStatus === 'pagado' || b.paid === true)
+    ).length;
+    const computed = calculateMembershipTier(finishedAndPaid || c.totalBookings || 0);
+    return computed.tierName as any;
+  };
+
+  const getTierBadgeStyle = (tier: string) => {
+    switch (tier) {
+      case 'Diamond':
+        return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40';
+      case 'Gold':
+        return 'bg-[#C9A55B]/15 text-[#9A7B38] dark:text-[#C9A55B] border border-[#C9A55B]/40';
+      case 'Platino':
+      default:
+        return 'bg-slate-400/15 text-slate-700 dark:text-slate-300 border border-slate-400/40';
+    }
+  };
+
   const filteredClients = clients.filter(c => {
+    const effectiveTier = getEffectiveTier(c);
     const matchesSearch = 
       c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.phone.includes(searchTerm) ||
       c.cityZone.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesTier = tierFilter === 'todos' || c.membershipTier === tierFilter;
+    const matchesTier = tierFilter === 'todos' || effectiveTier === tierFilter;
     return matchesSearch && matchesTier;
   });
 
   const handleOpenEdit = (c: ClientUser) => {
     setEditClientModal(c);
+    const effectiveTier = getEffectiveTier(c);
     setFormState({
       name: c.name,
       email: c.email,
       phone: c.phone,
-      membershipTier: c.membershipTier,
+      membershipTier: effectiveTier,
       address: c.address,
       cityZone: c.cityZone,
       specialNotes: c.specialNotes || '',
@@ -83,7 +110,7 @@ export const ClientesPage: React.FC = () => {
     };
 
     handleEditClient(updated);
-    showToast(`Expediente de cliente VIP ${updated.name} actualizado.`);
+    showToast(`Expediente de socio VIP ${updated.name} actualizado.`);
     setEditClientModal(null);
   };
 
@@ -92,12 +119,12 @@ export const ClientesPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[var(--border-color)] pb-4">
         <div>
-          <h1 className="text-2xl font-serif font-bold text-white flex items-center gap-2">
+          <h1 className="text-2xl font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
             <Users className="w-6 h-6 text-[#C9A55B]" />
             <span>Gestión & Expedientes de Socios VIP</span>
           </h1>
           <p className="text-xs text-[var(--text-muted)] mt-1">
-            Directorio exclusivo de clientes registrados, historial de consumos, observaciones de servicio y control de acceso.
+            Directorio exclusivo de clientes registrados, historial de consumos, niveles VIP unificados y control de acceso.
           </p>
         </div>
       </div>
@@ -111,20 +138,20 @@ export const ClientesPage: React.FC = () => {
             placeholder="Buscar por nombre, correo, teléfono, zona..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white pl-9 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-[#C9A55B]"
+            className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] pl-9 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-[#C9A55B]"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto">
           <span className="text-xs text-[var(--text-muted)] shrink-0">Membresía:</span>
-          {['todos', 'Gold', 'Diamond', 'Black'].map((tier) => (
+          {['todos', 'Platino', 'Gold', 'Diamond'].map((tier) => (
             <button
               key={tier}
               onClick={() => setTierFilter(tier)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 tierFilter === tier
                   ? 'bg-[#C9A55B] text-black font-bold'
-                  : 'bg-[var(--bg-subcard)] text-[var(--text-muted)] hover:text-white border border-[var(--border-color)]'
+                  : 'bg-[var(--bg-subcard)] text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
               }`}
             >
               {tier === 'todos' ? 'Todas' : tier}
@@ -137,6 +164,7 @@ export const ClientesPage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredClients.map((c, index) => {
           const clientBookings = bookings.filter(b => b.clientId === c.id);
+          const effectiveTier = getEffectiveTier(c);
 
           return (
             <motion.div 
@@ -152,34 +180,34 @@ export const ClientesPage: React.FC = () => {
                     <img
                       src={c?.photo || undefined}
                       alt={c.name}
-                      className="w-12 h-12 rounded-2xl object-cover border border-[#C9A55B]/40"
+                      className="w-12 h-12 rounded-2xl object-cover border border-[#C9A55B]/40 bg-[var(--bg-subcard)]"
                     />
                     <div>
-                      <h3 className="font-serif font-bold text-base text-white">{c.name}</h3>
+                      <h3 className="font-serif font-bold text-base text-[var(--text-primary)]">{c.name}</h3>
                       <span className="text-[10px] font-mono text-[#C9A55B]">ID: {c.id}</span>
                     </div>
                   </div>
 
                   <div className="flex flex-col items-end gap-1">
-                    <span className="bg-[#C9A55B]/15 text-[#C9A55B] border border-[#C9A55B]/40 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase">
-                      {c.membershipTier} VIP
+                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${getTierBadgeStyle(effectiveTier)}`}>
+                      {effectiveTier} VIP
                     </span>
                     {c.isBlocked && (
-                      <span className="bg-red-500/20 text-red-400 border border-red-500/40 text-[9px] font-bold px-2 py-0.5 rounded-full">
+                      <span className="bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/40 text-[9px] font-bold px-2 py-0.5 rounded-full">
                         SUSPENDIDO
                       </span>
                     )}
                   </div>
                 </div>
 
-                <div className="space-y-1.5 text-xs text-[#AAAAAA] pt-1">
-                  <p className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-[#C9A55B] shrink-0" /> {c.email}</p>
-                  <p className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-[#C9A55B] shrink-0" /> {c.phone}</p>
-                  <p className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-[#C9A55B] shrink-0" /> {c.address}</p>
+                <div className="space-y-1.5 text-xs text-[var(--text-muted)] pt-1">
+                  <p className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-[#C9A55B] shrink-0" /> <span className="text-[var(--text-primary)]">{c.email}</span></p>
+                  <p className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-[#C9A55B] shrink-0" /> <span className="text-[var(--text-primary)]">{c.phone}</span></p>
+                  <p className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-[#C9A55B] shrink-0" /> <span className="text-[var(--text-primary)]">{c.address}</span></p>
                 </div>
 
                 {c.specialNotes && (
-                  <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl p-2.5 text-[11px] text-amber-300">
+                  <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl p-2.5 text-[11px] text-amber-600 dark:text-amber-300">
                     <strong>⚠️ Nota VIP:</strong> {c.specialNotes}
                   </div>
                 )}
@@ -190,7 +218,7 @@ export const ClientesPage: React.FC = () => {
                 <div className="grid grid-cols-2 text-center text-xs bg-[var(--bg-subcard)] rounded-xl p-2">
                   <div>
                     <span className="text-[10px] text-[var(--text-muted)] block">Reservas</span>
-                    <strong className="text-white font-bold">{clientBookings.length || c.totalBookings}</strong>
+                    <strong className="text-[var(--text-primary)] font-bold">{clientBookings.length || c.totalBookings}</strong>
                   </div>
                   <div>
                     <span className="text-[10px] text-[var(--text-muted)] block">Consumo Total</span>
@@ -201,14 +229,14 @@ export const ClientesPage: React.FC = () => {
                 <div className="flex items-center justify-between gap-2">
                   <button
                     onClick={() => setSelectedClient(c)}
-                    className="flex-1 py-2 bg-[var(--bg-subcard)] hover:bg-[#262626] border border-[var(--border-color)] text-[var(--text-primary)] hover:text-white text-xs font-semibold rounded-xl transition-all cursor-pointer text-center"
+                    className="flex-1 py-2 bg-[var(--bg-subcard)] hover:bg-[var(--bg-active)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs font-semibold rounded-xl transition-all cursor-pointer text-center"
                   >
                     Ver Expediente
                   </button>
 
                   <button
                     onClick={() => handleOpenEdit(c)}
-                    className="p-2 bg-[var(--bg-subcard)] hover:bg-[#262626] border border-[var(--border-color)] text-[#C9A55B] rounded-xl cursor-pointer"
+                    className="p-2 bg-[var(--bg-subcard)] hover:bg-[var(--bg-active)] border border-[var(--border-color)] text-[#C9A55B] rounded-xl cursor-pointer"
                     title="Editar Expediente"
                   >
                     <Edit className="w-4 h-4" />
@@ -218,8 +246,8 @@ export const ClientesPage: React.FC = () => {
                     onClick={() => handleToggleBlockClient(c.id)}
                     className={`p-2 rounded-xl border transition-all cursor-pointer ${
                       c.isBlocked
-                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                        : 'bg-red-500/10 text-red-400 border-red-500/30'
+                        ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/40'
+                        : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30'
                     }`}
                     title={c.isBlocked ? 'Reactivar Cliente' : 'Suspender Cliente'}
                   >
@@ -234,11 +262,11 @@ export const ClientesPage: React.FC = () => {
 
       {/* Client Expediente Details Modal */}
       {selectedClient && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[var(--bg-card)] border border-[#C9A55B]/40 rounded-3xl p-6 max-w-lg w-full space-y-4 relative">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[var(--bg-card)] border border-[#C9A55B]/40 rounded-3xl p-6 max-w-lg w-full space-y-4 relative shadow-2xl">
             <button
               onClick={() => setSelectedClient(null)}
-              className="absolute right-5 top-5 text-[var(--text-muted)] hover:text-white cursor-pointer"
+              className="absolute right-5 top-5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -247,34 +275,34 @@ export const ClientesPage: React.FC = () => {
               <img
                 src={selectedClient?.photo || undefined}
                 alt={selectedClient.name}
-                className="w-16 h-16 rounded-2xl object-cover border-2 border-[#C9A55B]"
+                className="w-16 h-16 rounded-2xl object-cover border-2 border-[#C9A55B] bg-[var(--bg-subcard)]"
               />
               <div>
-                <span className="bg-[#C9A55B]/20 text-[#C9A55B] text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase">
-                  Socio VIP {selectedClient.membershipTier}
+                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${getTierBadgeStyle(getEffectiveTier(selectedClient))}`}>
+                  Socio VIP {getEffectiveTier(selectedClient)}
                 </span>
-                <h3 className="text-xl font-serif font-bold text-white mt-1">{selectedClient.name}</h3>
+                <h3 className="text-xl font-serif font-bold text-[var(--text-primary)] mt-1">{selectedClient.name}</h3>
                 <p className="text-xs text-[var(--text-muted)]">{selectedClient.email} • {selectedClient.phone}</p>
               </div>
             </div>
 
-            <div className="space-y-3 text-xs text-[#CCCCCC]">
+            <div className="space-y-3 text-xs text-[var(--text-primary)]">
               <div>
-                <strong className="text-white block mb-1">📍 Domicilio Registrado:</strong>
-                <p className="bg-[var(--bg-subcard)] p-3 rounded-xl border border-[var(--border-color)]">{selectedClient.address} ({selectedClient.cityZone})</p>
+                <strong className="text-[var(--text-primary)] block mb-1">📍 Domicilio Registrado:</strong>
+                <p className="bg-[var(--bg-subcard)] p-3 rounded-xl border border-[var(--border-color)] text-[var(--text-primary)]">{selectedClient.address} ({selectedClient.cityZone})</p>
               </div>
 
               <div>
                 <strong className="text-[#C9A55B] block mb-1">✨ Preferencias VIP & Observaciones:</strong>
-                <p className="bg-[var(--bg-subcard)] p-3 rounded-xl border border-[var(--border-color)] italic">
+                <p className="bg-[var(--bg-subcard)] p-3 rounded-xl border border-[var(--border-color)] italic text-[var(--text-primary)]">
                   {selectedClient.vipPreferences || 'Presión Firme. Aceite de Lavanda Francesa. Frecuencias 432Hz.'}
                 </p>
               </div>
 
               {selectedClient.specialNotes && (
                 <div>
-                  <strong className="text-amber-400 block mb-1">⚠️ Instrucciones de Seguridad / Caseta:</strong>
-                  <p className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl text-amber-200">
+                  <strong className="text-amber-600 dark:text-amber-400 block mb-1">⚠️ Instrucciones de Seguridad / Caseta:</strong>
+                  <p className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl text-amber-800 dark:text-amber-200">
                     {selectedClient.specialNotes}
                   </p>
                 </div>
@@ -292,85 +320,85 @@ export const ClientesPage: React.FC = () => {
 
       {/* Edit Client Modal */}
       {editClientModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 max-w-lg w-full space-y-4">
-            <h3 className="font-serif font-bold text-lg text-white">Editar Expediente VIP</h3>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
+            <h3 className="font-serif font-bold text-lg text-[var(--text-primary)]">Editar Expediente VIP</h3>
 
             <form onSubmit={handleSaveClient} className="space-y-3 text-xs text-[var(--text-muted)]">
               <div>
-                <label className="block mb-1 text-white">Nombre Completo</label>
+                <label className="block mb-1 font-semibold text-[var(--text-primary)]">Nombre Completo</label>
                 <input
                   type="text"
                   value={formState.name}
                   onChange={(e) => setFormState({ ...formState, name: e.target.value })}
-                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] px-3 py-2 rounded-xl focus:outline-none focus:border-[#C9A55B]"
                   required
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block mb-1 text-white">Correo Electrónico</label>
+                  <label className="block mb-1 font-semibold text-[var(--text-primary)]">Correo Electrónico</label>
                   <input
                     type="email"
                     value={formState.email}
                     onChange={(e) => setFormState({ ...formState, email: e.target.value })}
-                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl"
+                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] px-3 py-2 rounded-xl focus:outline-none focus:border-[#C9A55B]"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block mb-1 text-white">Teléfono WhatsApp</label>
+                  <label className="block mb-1 font-semibold text-[var(--text-primary)]">Teléfono WhatsApp</label>
                   <input
                     type="text"
                     value={formState.phone}
                     onChange={(e) => setFormState({ ...formState, phone: e.target.value })}
-                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl"
+                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] px-3 py-2 rounded-xl focus:outline-none focus:border-[#C9A55B]"
                     required
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block mb-1 text-white">Categoría de Membresía</label>
+                <label className="block mb-1 font-semibold text-[var(--text-primary)]">Jerarquía de Membresía ESSENYA</label>
                 <select
                   value={formState.membershipTier}
                   onChange={(e) => setFormState({ ...formState, membershipTier: e.target.value as any })}
-                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] px-3 py-2 rounded-xl focus:outline-none focus:border-[#C9A55B]"
                 >
-                  <option value="Gold">Gold VIP</option>
-                  <option value="Diamond">Diamond VIP</option>
-                  <option value="Black">Black Exclusivo</option>
+                  <option value="Platino">Platino VIP (Nivel Inicial: 0-2 Masajes)</option>
+                  <option value="Gold">Gold VIP (3-4 Masajes)</option>
+                  <option value="Diamond">Diamond VIP (5+ Masajes)</option>
                 </select>
               </div>
 
               <div>
-                <label className="block mb-1 text-white">Domicilio de Servicio</label>
+                <label className="block mb-1 font-semibold text-[var(--text-primary)]">Domicilio de Servicio</label>
                 <input
                   type="text"
                   value={formState.address}
                   onChange={(e) => setFormState({ ...formState, address: e.target.value })}
-                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] px-3 py-2 rounded-xl focus:outline-none focus:border-[#C9A55B]"
                 />
               </div>
 
               <div>
-                <label className="block mb-1 text-[#C9A55B]">Preferencias VIP</label>
+                <label className="block mb-1 font-semibold text-[#C9A55B]">Preferencias VIP</label>
                 <input
                   type="text"
                   value={formState.vipPreferences}
                   onChange={(e) => setFormState({ ...formState, vipPreferences: e.target.value })}
-                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] px-3 py-2 rounded-xl focus:outline-none focus:border-[#C9A55B]"
                 />
               </div>
 
               <div>
-                <label className="block mb-1 text-amber-400">Instrucciones Especiales / Caseta</label>
+                <label className="block mb-1 font-semibold text-amber-600 dark:text-amber-400">Instrucciones Especiales / Caseta</label>
                 <textarea
                   value={formState.specialNotes}
                   onChange={(e) => setFormState({ ...formState, specialNotes: e.target.value })}
                   rows={2}
-                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white p-3 rounded-xl"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] p-3 rounded-xl focus:outline-none focus:border-[#C9A55B]"
                 />
               </div>
 
@@ -378,7 +406,7 @@ export const ClientesPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setEditClientModal(null)}
-                  className="px-4 py-2 text-[var(--text-muted)] hover:text-white"
+                  className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 >
                   Cancelar
                 </button>

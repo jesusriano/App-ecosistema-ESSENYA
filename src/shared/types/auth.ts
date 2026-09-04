@@ -81,6 +81,8 @@ export interface UserAuthProfile {
   fechaActualizacion: string; // ISO date string
   mustChangePassword?: boolean; // First login password reset flag
   therapistProfile?: TherapistFullProfile;
+  membershipTier?: string;
+  motivoRechazoAccount?: string;
 }
 
 export interface PasswordRequirements {

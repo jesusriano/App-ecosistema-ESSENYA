@@ -141,7 +141,7 @@ export const ServiciosPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[var(--border-color)] pb-4">
         <div>
-          <h1 className="text-2xl font-serif font-bold text-white flex items-center gap-2">
+          <h1 className="text-2xl font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
             <Sparkles className="w-6 h-6 text-[#C9A55B]" />
             <span>Catálogo de Servicios & Precios ESSENYA</span>
           </h1>
@@ -163,7 +163,7 @@ export const ServiciosPage: React.FC = () => {
             <div>
               <div className="relative h-44 overflow-hidden">
                 <img src={s.image || undefined} alt={s.name} className="w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-transparent to-black/30" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-card)] via-transparent to-black/30" />
                 
                 <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
                   <span className="bg-black/80 backdrop-blur-md text-[#C9A55B] border border-[#C9A55B]/40 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase">
@@ -183,7 +183,7 @@ export const ServiciosPage: React.FC = () => {
 
                 <div className="absolute top-3 right-3">
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                    s.isActive !== false ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'
+                    s.isActive !== false ? 'bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-500 dark:text-red-400 border-red-500/30'
                   }`}>
                     {s.isActive !== false ? 'Activo' : 'Inactivo'}
                   </span>
@@ -191,22 +191,22 @@ export const ServiciosPage: React.FC = () => {
               </div>
 
               <div className="p-5 space-y-3">
-                <h3 className="font-serif font-bold text-lg text-white">{s.name}</h3>
-                <p className="text-xs text-[#AAAAAA] line-clamp-2">{s.tagline}</p>
+                <h3 className="font-serif font-bold text-lg text-[var(--text-primary)]">{s.name}</h3>
+                <p className="text-xs text-[var(--text-muted)] line-clamp-2">{s.tagline}</p>
 
                 {/* Price Matrix */}
-                <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl p-3 grid grid-cols-3 text-center divide-x divide-[#262626]">
+                <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl p-3 grid grid-cols-3 text-center divide-x divide-[var(--border-color)]">
                   <div>
                     <span className="text-[10px] text-[var(--text-muted)] block">60 Min</span>
                     <span className="text-xs font-serif font-bold text-[#C9A55B]">${s.basePrice}</span>
                   </div>
                   <div>
                     <span className="text-[10px] text-[var(--text-muted)] block">90 Min</span>
-                    <span className="text-xs font-serif font-bold text-white">${s.price90}</span>
+                    <span className="text-xs font-serif font-bold text-[var(--text-primary)]">${s.price90}</span>
                   </div>
                   <div>
                     <span className="text-[10px] text-[var(--text-muted)] block">120 Min</span>
-                    <span className="text-xs font-serif font-bold text-white">${s.price120}</span>
+                    <span className="text-xs font-serif font-bold text-[var(--text-primary)]">${s.price120}</span>
                   </div>
                 </div>
               </div>
@@ -217,7 +217,7 @@ export const ServiciosPage: React.FC = () => {
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => handleOpenEdit(s)}
-                  className="p-2 bg-[var(--bg-subcard)] hover:bg-[#262626] text-[var(--text-primary)] hover:text-[#C9A55B] rounded-xl transition-all cursor-pointer"
+                  className="p-2 bg-[var(--bg-subcard)] hover:bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-primary)] hover:text-[#C9A55B] rounded-xl transition-all cursor-pointer"
                   title="Editar Servicio"
                 >
                   <Edit className="w-4 h-4" />
@@ -227,7 +227,7 @@ export const ServiciosPage: React.FC = () => {
                     handleDeleteService(s.id);
                     showToast(`Servicio ${s.name} eliminado.`);
                   }}
-                  className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all cursor-pointer"
+                  className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 dark:text-red-400 rounded-xl transition-all cursor-pointer"
                   title="Eliminar Servicio"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -242,7 +242,7 @@ export const ServiciosPage: React.FC = () => {
       {showModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 max-w-xl w-full space-y-4 my-8 relative">
-            <h2 className="text-xl font-serif font-bold text-white">
+            <h2 className="text-xl font-serif font-bold text-[var(--text-primary)]">
               {editingService ? 'Editar Servicio' : 'Nuevo Servicio de Bienestar'}
             </h2>
 
@@ -255,7 +255,7 @@ export const ServiciosPage: React.FC = () => {
                   onChange={(e) => setFormState({ ...formState, name: e.target.value })}
                   placeholder="ej. Masaje Holístico Essenya Gold"
                   required
-                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-[#C9A55B]"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-[#C9A55B]"
                 />
               </div>
 
@@ -265,7 +265,7 @@ export const ServiciosPage: React.FC = () => {
                   <select
                     value={formState.category}
                     onChange={(e) => setFormState({ ...formState, category: e.target.value as any })}
-                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl text-xs"
+                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] px-3 py-2 rounded-xl text-xs"
                   >
                     <option value="Holístico">Holístico</option>
                     <option value="Terapéutico">Terapéutico</option>
@@ -281,40 +281,40 @@ export const ServiciosPage: React.FC = () => {
                     value={formState.discountPercent}
                     onChange={(e) => setFormState({ ...formState, discountPercent: Number(e.target.value) })}
                     placeholder="0"
-                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl text-xs"
+                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] px-3 py-2 rounded-xl text-xs"
                   />
                 </div>
               </div>
 
               {/* Pricing Matrix */}
               <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-2xl p-4 space-y-3">
-                <span className="font-bold text-white block">Precios por Duración (MXN)</span>
+                <span className="font-bold text-[var(--text-primary)] block">Precios por Duración (MXN)</span>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="block mb-1">60 Minutos</label>
+                    <label className="block mb-1 text-[var(--text-muted)]">60 Minutos</label>
                     <input
                       type="number"
                       value={formState.basePrice}
                       onChange={(e) => setFormState({ ...formState, basePrice: Number(e.target.value) })}
-                      className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] text-white px-3 py-1.5 rounded-xl text-xs"
+                      className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-primary)] px-3 py-1.5 rounded-xl text-xs"
                     />
                   </div>
                   <div>
-                    <label className="block mb-1">90 Minutos</label>
+                    <label className="block mb-1 text-[var(--text-muted)]">90 Minutos</label>
                     <input
                       type="number"
                       value={formState.price90}
                       onChange={(e) => setFormState({ ...formState, price90: Number(e.target.value) })}
-                      className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] text-white px-3 py-1.5 rounded-xl text-xs"
+                      className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-primary)] px-3 py-1.5 rounded-xl text-xs"
                     />
                   </div>
                   <div>
-                    <label className="block mb-1">120 Minutos</label>
+                    <label className="block mb-1 text-[var(--text-muted)]">120 Minutos</label>
                     <input
                       type="number"
                       value={formState.price120}
                       onChange={(e) => setFormState({ ...formState, price120: Number(e.target.value) })}
-                      className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] text-white px-3 py-1.5 rounded-xl text-xs"
+                      className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-primary)] px-3 py-1.5 rounded-xl text-xs"
                     />
                   </div>
                 </div>
@@ -327,7 +327,7 @@ export const ServiciosPage: React.FC = () => {
                   value={formState.tagline}
                   onChange={(e) => setFormState({ ...formState, tagline: e.target.value })}
                   placeholder="ej. Maniobras fluidas para inducir relajación profunda..."
-                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl text-xs"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] px-3 py-2 rounded-xl text-xs"
                 />
               </div>
 
@@ -337,7 +337,7 @@ export const ServiciosPage: React.FC = () => {
                   value={formState.description}
                   onChange={(e) => setFormState({ ...formState, description: e.target.value })}
                   rows={3}
-                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white p-3 rounded-xl text-xs"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] p-3 rounded-xl text-xs"
                 />
               </div>
 
@@ -347,7 +347,7 @@ export const ServiciosPage: React.FC = () => {
                   type="text"
                   value={formState.image}
                   onChange={(e) => setFormState({ ...formState, image: e.target.value })}
-                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl text-xs"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] px-3 py-2 rounded-xl text-xs"
                 />
               </div>
 
@@ -359,7 +359,7 @@ export const ServiciosPage: React.FC = () => {
                     onChange={(e) => setFormState({ ...formState, isActive: e.target.checked })}
                     className="accent-[#C9A55B]"
                   />
-                  <span className="text-white font-semibold">Servicio Activo</span>
+                  <span className="text-[var(--text-primary)] font-semibold">Servicio Activo</span>
                 </label>
 
                 <label className="flex items-center space-x-2 cursor-pointer">
@@ -377,7 +377,7 @@ export const ServiciosPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-[var(--text-muted)] hover:text-white"
+                  className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
                 >
                   Cancelar
                 </button>
