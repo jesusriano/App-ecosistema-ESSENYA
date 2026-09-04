@@ -139,13 +139,13 @@ export const ServiciosPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#262626] pb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[var(--border-color)] pb-4">
         <div>
           <h1 className="text-2xl font-serif font-bold text-white flex items-center gap-2">
             <Sparkles className="w-6 h-6 text-[#C9A55B]" />
             <span>Catálogo de Servicios & Precios ESSENYA</span>
           </h1>
-          <p className="text-xs text-[#888888] mt-1">
+          <p className="text-xs text-[var(--text-muted)] mt-1">
             Administra los rituales de bienestar, ajusta precios por duración (60, 90, 120 min) y aplica promociones.
           </p>
         </div>
@@ -159,7 +159,7 @@ export const ServiciosPage: React.FC = () => {
       {/* Services Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {services.map((s) => (
-          <div key={s.id} className="bg-[#141414] border border-[#262626] hover:border-[#C9A55B]/40 rounded-2xl overflow-hidden flex flex-col justify-between transition-all">
+          <div key={s.id} className="bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-[#C9A55B]/40 rounded-2xl overflow-hidden flex flex-col justify-between transition-all">
             <div>
               <div className="relative h-44 overflow-hidden">
                 <img src={s.image || undefined} alt={s.name} className="w-full h-full object-cover" />
@@ -195,29 +195,29 @@ export const ServiciosPage: React.FC = () => {
                 <p className="text-xs text-[#AAAAAA] line-clamp-2">{s.tagline}</p>
 
                 {/* Price Matrix */}
-                <div className="bg-[#1A1A1A] border border-[#262626] rounded-xl p-3 grid grid-cols-3 text-center divide-x divide-[#262626]">
+                <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl p-3 grid grid-cols-3 text-center divide-x divide-[#262626]">
                   <div>
-                    <span className="text-[10px] text-[#888888] block">60 Min</span>
+                    <span className="text-[10px] text-[var(--text-muted)] block">60 Min</span>
                     <span className="text-xs font-serif font-bold text-[#C9A55B]">${s.basePrice}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-[#888888] block">90 Min</span>
+                    <span className="text-[10px] text-[var(--text-muted)] block">90 Min</span>
                     <span className="text-xs font-serif font-bold text-white">${s.price90}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-[#888888] block">120 Min</span>
+                    <span className="text-[10px] text-[var(--text-muted)] block">120 Min</span>
                     <span className="text-xs font-serif font-bold text-white">${s.price120}</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="p-5 pt-0 flex justify-between items-center border-t border-[#262626] mt-4">
-              <span className="text-[11px] text-[#888888]">ID: {s.id}</span>
+            <div className="p-5 pt-0 flex justify-between items-center border-t border-[var(--border-color)] mt-4">
+              <span className="text-[11px] text-[var(--text-muted)]">ID: {s.id}</span>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => handleOpenEdit(s)}
-                  className="p-2 bg-[#1A1A1A] hover:bg-[#262626] text-stone-300 hover:text-[#C9A55B] rounded-xl transition-all cursor-pointer"
+                  className="p-2 bg-[var(--bg-subcard)] hover:bg-[#262626] text-[var(--text-primary)] hover:text-[#C9A55B] rounded-xl transition-all cursor-pointer"
                   title="Editar Servicio"
                 >
                   <Edit className="w-4 h-4" />
@@ -241,31 +241,31 @@ export const ServiciosPage: React.FC = () => {
       {/* Add / Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[#141414] border border-[#262626] rounded-3xl p-6 max-w-xl w-full space-y-4 my-8 relative">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 max-w-xl w-full space-y-4 my-8 relative">
             <h2 className="text-xl font-serif font-bold text-white">
               {editingService ? 'Editar Servicio' : 'Nuevo Servicio de Bienestar'}
             </h2>
 
-            <form onSubmit={handleSubmit} className="space-y-4 text-xs text-[#888888]">
+            <form onSubmit={handleSubmit} className="space-y-4 text-xs text-[var(--text-muted)]">
               <div>
-                <label className="block mb-1 text-stone-300 font-semibold">Nombre del Servicio</label>
+                <label className="block mb-1 text-[var(--text-primary)] font-semibold">Nombre del Servicio</label>
                 <input
                   type="text"
                   value={formState.name}
                   onChange={(e) => setFormState({ ...formState, name: e.target.value })}
                   placeholder="ej. Masaje Holístico Essenya Gold"
                   required
-                  className="w-full bg-[#1A1A1A] border border-[#333333] text-white px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-[#C9A55B]"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-[#C9A55B]"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block mb-1 text-stone-300 font-semibold">Categoría</label>
+                  <label className="block mb-1 text-[var(--text-primary)] font-semibold">Categoría</label>
                   <select
                     value={formState.category}
                     onChange={(e) => setFormState({ ...formState, category: e.target.value as any })}
-                    className="w-full bg-[#1A1A1A] border border-[#333333] text-white px-3 py-2 rounded-xl text-xs"
+                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl text-xs"
                   >
                     <option value="Holístico">Holístico</option>
                     <option value="Terapéutico">Terapéutico</option>
@@ -275,19 +275,19 @@ export const ServiciosPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block mb-1 text-stone-300 font-semibold">Descuento Promocional %</label>
+                  <label className="block mb-1 text-[var(--text-primary)] font-semibold">Descuento Promocional %</label>
                   <input
                     type="number"
                     value={formState.discountPercent}
                     onChange={(e) => setFormState({ ...formState, discountPercent: Number(e.target.value) })}
                     placeholder="0"
-                    className="w-full bg-[#1A1A1A] border border-[#333333] text-white px-3 py-2 rounded-xl text-xs"
+                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl text-xs"
                   />
                 </div>
               </div>
 
               {/* Pricing Matrix */}
-              <div className="bg-[#1A1A1A] border border-[#262626] rounded-2xl p-4 space-y-3">
+              <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-2xl p-4 space-y-3">
                 <span className="font-bold text-white block">Precios por Duración (MXN)</span>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
@@ -296,7 +296,7 @@ export const ServiciosPage: React.FC = () => {
                       type="number"
                       value={formState.basePrice}
                       onChange={(e) => setFormState({ ...formState, basePrice: Number(e.target.value) })}
-                      className="w-full bg-[#141414] border border-[#333333] text-white px-3 py-1.5 rounded-xl text-xs"
+                      className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] text-white px-3 py-1.5 rounded-xl text-xs"
                     />
                   </div>
                   <div>
@@ -305,7 +305,7 @@ export const ServiciosPage: React.FC = () => {
                       type="number"
                       value={formState.price90}
                       onChange={(e) => setFormState({ ...formState, price90: Number(e.target.value) })}
-                      className="w-full bg-[#141414] border border-[#333333] text-white px-3 py-1.5 rounded-xl text-xs"
+                      className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] text-white px-3 py-1.5 rounded-xl text-xs"
                     />
                   </div>
                   <div>
@@ -314,40 +314,40 @@ export const ServiciosPage: React.FC = () => {
                       type="number"
                       value={formState.price120}
                       onChange={(e) => setFormState({ ...formState, price120: Number(e.target.value) })}
-                      className="w-full bg-[#141414] border border-[#333333] text-white px-3 py-1.5 rounded-xl text-xs"
+                      className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] text-white px-3 py-1.5 rounded-xl text-xs"
                     />
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="block mb-1 text-stone-300 font-semibold">Slogan Corto (Tagline)</label>
+                <label className="block mb-1 text-[var(--text-primary)] font-semibold">Slogan Corto (Tagline)</label>
                 <input
                   type="text"
                   value={formState.tagline}
                   onChange={(e) => setFormState({ ...formState, tagline: e.target.value })}
                   placeholder="ej. Maniobras fluidas para inducir relajación profunda..."
-                  className="w-full bg-[#1A1A1A] border border-[#333333] text-white px-3 py-2 rounded-xl text-xs"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl text-xs"
                 />
               </div>
 
               <div>
-                <label className="block mb-1 text-stone-300 font-semibold">Descripción Completa</label>
+                <label className="block mb-1 text-[var(--text-primary)] font-semibold">Descripción Completa</label>
                 <textarea
                   value={formState.description}
                   onChange={(e) => setFormState({ ...formState, description: e.target.value })}
                   rows={3}
-                  className="w-full bg-[#1A1A1A] border border-[#333333] text-white p-3 rounded-xl text-xs"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white p-3 rounded-xl text-xs"
                 />
               </div>
 
               <div>
-                <label className="block mb-1 text-stone-300 font-semibold">URL Imagen</label>
+                <label className="block mb-1 text-[var(--text-primary)] font-semibold">URL Imagen</label>
                 <input
                   type="text"
                   value={formState.image}
                   onChange={(e) => setFormState({ ...formState, image: e.target.value })}
-                  className="w-full bg-[#1A1A1A] border border-[#333333] text-white px-3 py-2 rounded-xl text-xs"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl text-xs"
                 />
               </div>
 
@@ -373,11 +373,11 @@ export const ServiciosPage: React.FC = () => {
                 </label>
               </div>
 
-              <div className="flex justify-end space-x-2 pt-4 border-t border-[#262626]">
+              <div className="flex justify-end space-x-2 pt-4 border-t border-[var(--border-color)]">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-[#888888] hover:text-white"
+                  className="px-4 py-2 text-[var(--text-muted)] hover:text-white"
                 >
                   Cancelar
                 </button>

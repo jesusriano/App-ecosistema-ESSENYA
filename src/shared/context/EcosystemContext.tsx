@@ -191,14 +191,14 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     if (isUserAdmin) {
       // Administrator: Full visibility
-      unsubReservas = onSnapshot(collection(db, 'reservas'), (snap) => {
+      unsubReservas = onSnapshot(collection(db, 'citas'), (snap) => {
         if (!snap.empty) {
           const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking)).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
           setBookings(list);
         } else {
           setBookings([]);
         }
-      }, err => handleFirestoreError(err, OperationType.LIST, 'reservas'));
+      }, err => handleFirestoreError(err, OperationType.LIST, 'citas'));
 
       unsubClientes = onSnapshot(collection(db, 'clientes'), (snap) => {
         if (!snap.empty) {
@@ -238,7 +238,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     } else if (isUserTherapist) {
       // Therapist role: bookings assigned to therapist
-      const qTherapistBookings = query(collection(db, 'reservas'), where('therapistId', '==', uid));
+      const qTherapistBookings = query(collection(db, 'citas'), where('therapistId', '==', uid));
       unsubReservas = onSnapshot(qTherapistBookings, (snap) => {
         if (!snap.empty) {
           const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking)).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -246,7 +246,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         } else {
           setBookings([]);
         }
-      }, err => handleFirestoreError(err, OperationType.LIST, 'reservas'));
+      }, err => handleFirestoreError(err, OperationType.LIST, 'citas'));
 
       const qPanic = query(collection(db, 'alertas_panico'), where('userId', '==', uid));
       unsubPanic = onSnapshot(qPanic, (snap) => {
@@ -260,7 +260,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     } else {
       // Client role (default logged-in user): Bookings by clientId, own invoices, and own client doc
-      const qClientBookings = query(collection(db, 'reservas'), where('clientId', '==', uid));
+      const qClientBookings = query(collection(db, 'citas'), where('clientId', '==', uid));
       unsubReservas = onSnapshot(qClientBookings, (snap) => {
         if (!snap.empty) {
           const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking)).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -268,7 +268,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         } else {
           setBookings([]);
         }
-      }, err => handleFirestoreError(err, OperationType.LIST, 'reservas'));
+      }, err => handleFirestoreError(err, OperationType.LIST, 'citas'));
 
       unsubClientes = onSnapshot(doc(db, 'clientes', uid), (docSnap) => {
         if (docSnap.exists()) {
@@ -333,7 +333,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
   const handleNewBooking = async (newBooking: Booking) => {
     setBookings(prev => [newBooking, ...prev]);
     try {
-      await setDoc(doc(db, 'reservas', newBooking.id), cleanForFirestore(newBooking));
+      await setDoc(doc(db, 'citas', newBooking.id), cleanForFirestore(newBooking));
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `reservas/${newBooking.id}`, newBooking);
     }
@@ -398,7 +398,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     try {
-      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
+      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore(updatePayload));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
     }
@@ -430,7 +430,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     try {
-      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
+      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore(updatePayload));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
     }
@@ -453,7 +453,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }));
 
     try {
-      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore({ state: newState }));
+      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore({ state: newState }));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, { state: newState });
     }
@@ -492,7 +492,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     try {
-      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
+      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore(updatePayload));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
     }
@@ -658,7 +658,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     try {
-      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
+      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore(updatePayload));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
     }
@@ -803,7 +803,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }));
 
     try {
-      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore({ date: newDate, time: newTime }));
+      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore({ date: newDate, time: newTime }));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, { date: newDate, time: newTime });
     }
@@ -825,7 +825,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }));
 
     try {
-      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore({ state: 'cancelado', cancellationReason: reason }));
+      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore({ state: 'cancelado', cancellationReason: reason }));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, { state: 'cancelado', cancellationReason: reason });
     }
@@ -847,7 +847,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }));
 
     try {
-      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore({ paymentStatus: 'pagado' }));
+      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore({ paymentStatus: 'pagado' }));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, { paymentStatus: 'pagado' });
     }
@@ -862,7 +862,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const handleRejectPayment = async (bookingId: string, reason: string) => {
     try {
-      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore({ paymentStatus: 'rechazado' }));
+      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore({ paymentStatus: 'rechazado' }));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, { paymentStatus: 'rechazado' });
     }

@@ -147,7 +147,7 @@ function MapContent({
           <div className="w-8 h-8 rounded-full bg-amber-500/20 border-2 border-amber-400 flex items-center justify-center text-xs shadow-lg">
             🏡
           </div>
-          <span className="text-[10px] font-bold text-white bg-black/90 px-2 py-0.5 rounded border border-[#333333] mt-0.5">
+          <span className="text-[10px] font-bold text-[var(--text-primary)] bg-black/90 px-2 py-0.5 rounded border border-[var(--border-color)] mt-0.5">
             Cliente ({cityZone})
           </span>
         </div>
@@ -207,14 +207,14 @@ export const ReservasMap: React.FC<ReservasMapProps> = ({
   return (
     <div 
       id="admin-reservas-map-container"
-      className="relative w-full h-80 sm:h-96 rounded-2xl overflow-hidden border border-[#262626] bg-[#141414]"
+      className="relative w-full h-80 sm:h-96 rounded-2xl overflow-hidden border border-[var(--border-color)] bg-[var(--bg-card)]"
     >
       {!isActiveTracking ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-[#0D0D0D] text-[#888888] space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-[#1A1A1A] border border-[#333333] flex items-center justify-center text-[#C9A55B]">
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-[var(--bg-main)] text-[var(--text-muted)] space-y-2">
+          <div className="w-12 h-12 rounded-2xl bg-[var(--bg-subcard)] border border-[var(--border-color)] flex items-center justify-center text-[#C9A55B]">
             <Lock className="w-6 h-6" />
           </div>
-          <h4 className="font-serif font-bold text-sm text-white">
+          <h4 className="font-serif font-bold text-sm text-[var(--text-primary)]">
             Monitoreo GPS en Modo Vista (Solo Lectura)
           </h4>
           <p className="text-xs max-w-sm">
@@ -248,24 +248,24 @@ export const ReservasMap: React.FC<ReservasMapProps> = ({
         <div className="relative w-full h-full bg-[#0B0B0B] flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-[radial-gradient(#262626_1px,transparent_1px)] [background-size:24px_24px] opacity-40 pointer-events-none" />
           
-          <div className="absolute top-4 left-4 bg-black/80 border border-[#333333] px-3 py-1 rounded-xl text-[10px] text-[#C9A55B] font-mono flex items-center gap-1.5 z-10">
+          <div className="absolute top-4 left-4 bg-black/80 border border-[var(--border-color)] px-3 py-1 rounded-xl text-[10px] text-[#C9A55B] font-mono flex items-center gap-1.5 z-10">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             <span>TELEMETRÍA GPS ACTIVA (VISTA ADMINISTRADOR)</span>
           </div>
 
           <div className="space-y-4 text-center z-10 max-w-sm">
-            <div className="w-14 h-14 mx-auto rounded-2xl bg-[#1A1A1A] border border-[#C9A55B]/40 flex items-center justify-center text-[#C9A55B] shadow-lg">
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-[var(--bg-subcard)] border border-[#C9A55B]/40 flex items-center justify-center text-[#C9A55B] shadow-lg">
               <Car className="w-7 h-7" />
             </div>
             <div>
-              <h4 className="font-serif font-bold text-white text-base">
+              <h4 className="font-serif font-bold text-[var(--text-primary)] text-base">
                 {therapistName || 'Terapeuta'} ({bookingState === 'llegue' ? 'En Domicilio' : 'En Camino'})
               </h4>
               <p className="text-xs text-[#AAAAAA] mt-1">
                 Destino: {clientAddress} ({cityZone})
               </p>
             </div>
-            <div className="bg-[#1A1A1A] border border-[#262626] p-3 rounded-xl text-xs text-[#888888]">
+            <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] p-3 rounded-xl text-xs text-[var(--text-muted)]">
               🔒 Vista protegida y bloqueada para modificaciones (Solo lectura administrativa).
             </div>
           </div>

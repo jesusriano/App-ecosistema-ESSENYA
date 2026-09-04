@@ -116,8 +116,44 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const userDocRef = doc(db, 'users', firebaseUser.uid);
           const docSnap = await getDoc(userDocRef);
           
+          let profile: UserAuthProfile | null = null;
+          
           if (docSnap.exists()) {
-            const profile = docSnap.data() as UserAuthProfile;
+            profile = docSnap.data() as UserAuthProfile;
+          } else {
+             // Fallback for AuthStateChange
+             const therapistDoc = await getDoc(doc(db, 'terapeutas', firebaseUser.uid));
+             if (therapistDoc.exists()) {
+               const tData = therapistDoc.data();
+               profile = {
+                  uid: firebaseUser.uid,
+                  nombre: tData.nombre || '',
+                  apellidos: tData.apellidos || '',
+                  correo: tData.email || '',
+                  telefono: tData.telefono || '',
+                  rol: 'terapeuta',
+                  estado: tData.estado || 'activo',
+                  fechaRegistro: tData.fechaAlta || new Date().toISOString()
+               };
+             } else {
+               const clientDoc = await getDoc(doc(db, 'clientes', firebaseUser.uid));
+               if (clientDoc.exists()) {
+                 const cData = clientDoc.data();
+                 profile = {
+                    uid: firebaseUser.uid,
+                    nombre: cData.nombre || '',
+                    apellidos: cData.apellidos || '',
+                    correo: cData.email || '',
+                    telefono: cData.telefono || '',
+                    rol: 'cliente',
+                    estado: cData.estado || 'activo',
+                    fechaRegistro: cData.createdAt || new Date().toISOString()
+                 };
+               }
+             }
+          }
+          
+          if (profile) {
             const role = profile.rol;
             
             setSessions(prev => {
@@ -376,13 +412,50 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         throw getErr;
       }
       
-      if (!docSnap.exists()) {
-        await signOut(auth);
-        setLoading(false);
-        return { success: false, error: 'Perfil de usuario no encontrado en la base de datos.' };
+      let userProfile: UserAuthProfile | null = null;
+      
+      if (docSnap.exists()) {
+        userProfile = docSnap.data() as UserAuthProfile;
+      } else {
+        // Fallback: Check if they exist in role-specific collections (in case created manually)
+        if (role === 'terapeuta') {
+          const therapistDoc = await getDoc(doc(db, 'terapeutas', uid));
+          if (therapistDoc.exists()) {
+            const tData = therapistDoc.data();
+            userProfile = {
+              uid,
+              nombre: tData.nombre || '',
+              apellidos: tData.apellidos || '',
+              correo: tData.email || '',
+              telefono: tData.telefono || '',
+              rol: 'terapeuta',
+              estado: tData.estado || 'activo',
+              fechaRegistro: tData.fechaAlta || new Date().toISOString()
+            };
+          }
+        } else if (role === 'cliente') {
+          const clientDoc = await getDoc(doc(db, 'clientes', uid));
+          if (clientDoc.exists()) {
+            const cData = clientDoc.data();
+            userProfile = {
+              uid,
+              nombre: cData.nombre || '',
+              apellidos: cData.apellidos || '',
+              correo: cData.email || '',
+              telefono: cData.telefono || '',
+              rol: 'cliente',
+              estado: cData.estado || 'activo',
+              fechaRegistro: cData.createdAt || new Date().toISOString()
+            };
+          }
+        }
       }
 
-      const userProfile = docSnap.data() as UserAuthProfile;
+      if (!userProfile) {
+        await signOut(auth);
+        setLoading(false);
+        return { success: false, error: 'Perfil de usuario no encontrado en la base de datos (Ni en users, ni en terapeutas/clientes).' };
+      }
 
       // STRICT ROLE VALIDATION
       if (userProfile.rol !== role) {

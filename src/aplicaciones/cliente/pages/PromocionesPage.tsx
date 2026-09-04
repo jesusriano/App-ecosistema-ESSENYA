@@ -276,57 +276,6 @@ export const PromocionesPage: React.FC<PromocionesPageProps> = ({ onStartBooking
           </LuxuryButton>
         </div>
 
-        {/* PROMO 3: COMPRA DE TARJETA DE REGALO ($1,400 MXN) PARA OBSEQUIAR */}
-        <div 
-          id="promo-tarjeta-regalo-1400"
-          className="rounded-3xl p-6 bg-gradient-to-br from-[#1C1917] via-[#2A241B] to-[#1C1917] text-white border border-[#C9A55B]/60 shadow-lg flex flex-col justify-between space-y-4 relative overflow-hidden"
-        >
-          <div className="space-y-3 relative z-10">
-            <div className="flex justify-between items-start">
-              <span className="bg-[#C9A55B]/20 text-[#E6CA65] border border-[#C9A55B]/40 text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full flex items-center gap-1">
-                <Gift className="w-3 h-3" />
-                <span>Compra para Obsequiar</span>
-              </span>
-
-              <span className="font-serif font-extrabold text-xl text-[#E6CA65]">
-                $1,400 MXN
-              </span>
-            </div>
-
-            <div>
-              <h3 className="font-serif font-bold text-base text-white">
-                Tarjeta de Regalo para Alguien Especial
-              </h3>
-              <p className="text-xs text-[#CCCCCC] mt-1 leading-relaxed">
-                Adquiere este obsequio por <strong>$1,400 MXN</strong> para consentir a tu pareja, amistad o familiar con una experiencia de masaje de autor en su hogar.
-              </p>
-            </div>
-
-            {/* Benefit highlights */}
-            <div className="bg-black/60 p-3 rounded-xl border border-white/15 space-y-1 text-xs text-[#E5DFD3]">
-              <div className="flex items-center gap-1.5 text-[11px]">
-                <Check className="w-3.5 h-3.5 text-[#E6CA65]" />
-                <span>Dedicatoria personalizada incluida</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px]">
-                <Check className="w-3.5 h-3.5 text-[#E6CA65]" />
-                <span>Envío directo por WhatsApp al destinatario</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px]">
-                <Check className="w-3.5 h-3.5 text-[#E6CA65]" />
-                <span>Válido durante 12 meses completos</span>
-              </div>
-            </div>
-          </div>
-
-          <a 
-            href="/cliente/billetera" 
-            className="w-full py-2.5 bg-gradient-to-r from-[#D4AF37] via-[#C9A55B] to-[#9A7B38] hover:from-[#E6CA65] hover:to-[#B38728] text-black font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all text-center flex items-center justify-center gap-1.5 shadow-md shadow-[#C9A55B]/20"
-          >
-            <Gift className="w-4 h-4 text-black" />
-            <span>Comprar Regalo ($1,400 MXN)</span>
-          </a>
-        </div>
       </div>
     </div>
   );

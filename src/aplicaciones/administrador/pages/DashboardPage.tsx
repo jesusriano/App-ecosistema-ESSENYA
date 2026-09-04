@@ -86,7 +86,7 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="space-y-8 pb-12">
       {/* Top Banner / Hero Title */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#141414] border border-[#262626] rounded-3xl p-6 relative overflow-hidden">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 relative overflow-hidden">
         <div className="absolute -right-12 -top-12 w-64 h-64 bg-[#C9A55B]/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="space-y-1 relative z-10">
@@ -99,14 +99,14 @@ export const DashboardPage: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-serif font-bold text-white">
             Monitoreo en Tiempo Real CDMX
           </h1>
-          <p className="text-xs text-[#888888] max-w-xl">
+          <p className="text-xs text-[var(--text-muted)] max-w-xl">
             Control de logística VIP, radar geolocalizado con estricto protocolo de privacidad y despacho inteligente de terapeutas.
           </p>
         </div>
 
         <div className="flex items-center space-x-3 relative z-10">
-          <div className="bg-[#1A1A1A] border border-[#333333] px-4 py-2 rounded-2xl text-right">
-            <span className="text-[10px] text-[#888888] block">Servicios Activos Hoy</span>
+          <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] px-4 py-2 rounded-2xl text-right">
+            <span className="text-[10px] text-[var(--text-muted)] block">Servicios Activos Hoy</span>
             <span className="text-lg font-serif font-bold text-[#C9A55B]">{activeCount} En Curso</span>
           </div>
         </div>
@@ -117,14 +117,14 @@ export const DashboardPage: React.FC = () => {
         <div className={`rounded-3xl p-5 border transition-all ${
           activePanicAlerts.length > 0
             ? 'bg-gradient-to-r from-red-950/70 via-[#1F1212] to-[#141414] border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.2)]'
-            : 'bg-[#141414] border-[#262626]'
+            : 'bg-[var(--bg-card)] border-[var(--border-color)]'
         }`}>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-red-500/30 pb-3">
             <div className="flex items-center space-x-3">
               <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
                 activePanicAlerts.length > 0
                   ? 'bg-red-600 text-white animate-bounce shadow-lg shadow-red-600/40'
-                  : 'bg-[#222222] text-[#888888]'
+                  : 'bg-[#222222] text-[var(--text-muted)]'
               }`}>
                 <ShieldAlert className="w-5 h-5" />
               </div>
@@ -170,7 +170,7 @@ export const DashboardPage: React.FC = () => {
                       ? 'bg-red-950/40 border-red-500 shadow-md ring-1 ring-red-500/50'
                       : isAttending
                       ? 'bg-amber-950/30 border-amber-500/50'
-                      : 'bg-[#1A1A1A] border-[#262626] opacity-75'
+                      : 'bg-[var(--bg-subcard)] border-[var(--border-color)] opacity-75'
                   }`}
                 >
                   <div className="space-y-1.5">
@@ -205,11 +205,11 @@ export const DashboardPage: React.FC = () => {
                     <div className="bg-black/40 p-2 rounded-xl text-[11px] font-mono flex items-center justify-between text-emerald-400 border border-white/5">
                       <span>Lat: {alert.latitude?.toFixed(5) || '19.4326'}</span>
                       <span>Lng: {alert.longitude?.toFixed(5) || '-99.1913'}</span>
-                      <span className="text-[9px] text-[#888888]">±{Math.round(alert.accuracy || 10)}m</span>
+                      <span className="text-[9px] text-[var(--text-muted)]">±{Math.round(alert.accuracy || 10)}m</span>
                     </div>
 
                     {alert.notes && (
-                      <p className="text-[10px] text-[#888888] italic line-clamp-2">
+                      <p className="text-[10px] text-[var(--text-muted)] italic line-clamp-2">
                         "{alert.notes}"
                       </p>
                     )}
@@ -221,7 +221,7 @@ export const DashboardPage: React.FC = () => {
                       href={`https://www.google.com/maps/search/?api=1&query=${alert.latitude},${alert.longitude}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold rounded-lg transition-all flex items-center gap-1"
+                      className="px-2.5 py-1 bg-white dark:bg-[var(--bg-subcard)]/10 hover:bg-white dark:bg-[var(--bg-subcard)]/20 text-white text-[11px] font-bold rounded-lg transition-all flex items-center gap-1"
                     >
                       <Navigation className="w-3 h-3 text-[#C9A55B]" />
                       <span>Ver Mapa</span>
@@ -265,8 +265,8 @@ export const DashboardPage: React.FC = () => {
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1 */}
-        <div className="bg-[#141414] border border-[#262626] rounded-2xl p-4 space-y-2 relative overflow-hidden">
-          <div className="flex justify-between items-center text-[#888888]">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-2 relative overflow-hidden">
+          <div className="flex justify-between items-center text-[var(--text-muted)]">
             <span className="text-xs font-semibold">Reservas Hoy</span>
             <Calendar className="w-4 h-4 text-[#C9A55B]" />
           </div>
@@ -274,25 +274,25 @@ export const DashboardPage: React.FC = () => {
             <span className="text-2xl font-serif font-bold text-white">{bookings.length}</span>
             <span className="text-[10px] text-emerald-400 font-bold">{finishedCount} concluidos</span>
           </div>
-          <p className="text-[10px] text-[#888888]">{canceledCount} cancelaciones registradas</p>
+          <p className="text-[10px] text-[var(--text-muted)]">{canceledCount} cancelaciones registradas</p>
         </div>
 
         {/* KPI 2 */}
-        <div className="bg-[#141414] border border-[#262626] rounded-2xl p-4 space-y-2">
-          <div className="flex justify-between items-center text-[#888888]">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-2">
+          <div className="flex justify-between items-center text-[var(--text-muted)]">
             <span className="text-xs font-semibold">Ingresos Hoy (GMV)</span>
             <DollarSign className="w-4 h-4 text-[#C9A55B]" />
           </div>
           <div className="flex items-baseline space-x-1">
             <span className="text-2xl font-serif font-bold text-[#C9A55B]">${todayRevenue.toLocaleString()}</span>
-            <span className="text-[10px] text-[#888888]">MXN</span>
+            <span className="text-[10px] text-[var(--text-muted)]">MXN</span>
           </div>
           <p className="text-[10px] text-emerald-400 font-semibold">100% cobro garantizado</p>
         </div>
 
         {/* KPI 3 */}
-        <div className="bg-[#141414] border border-[#262626] rounded-2xl p-4 space-y-2">
-          <div className="flex justify-between items-center text-[#888888]">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-2">
+          <div className="flex justify-between items-center text-[var(--text-muted)]">
             <span className="text-xs font-semibold">Red Terapeutas</span>
             <UserCheck className="w-4 h-4 text-[#C9A55B]" />
           </div>
@@ -300,12 +300,12 @@ export const DashboardPage: React.FC = () => {
             <span className="text-2xl font-serif font-bold text-white">{therapists.length}</span>
             <span className="text-[10px] text-[#C9A55B] font-mono">⭐ {avgRating}</span>
           </div>
-          <p className="text-[10px] text-[#888888]">{therapists.filter(t => t.status === 'disponible').length} disponibles en zona</p>
+          <p className="text-[10px] text-[var(--text-muted)]">{therapists.filter(t => t.status === 'disponible').length} disponibles en zona</p>
         </div>
 
         {/* KPI 4 */}
-        <div className="bg-[#141414] border border-[#262626] rounded-2xl p-4 space-y-2">
-          <div className="flex justify-between items-center text-[#888888]">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-2">
+          <div className="flex justify-between items-center text-[var(--text-muted)]">
             <span className="text-xs font-semibold">Socios VIP Activos</span>
             <Users className="w-4 h-4 text-[#C9A55B]" />
           </div>
@@ -313,59 +313,59 @@ export const DashboardPage: React.FC = () => {
             <span className="text-2xl font-serif font-bold text-white">{clients.length}</span>
             <span className="text-[10px] text-emerald-400 font-bold">100% Verificados</span>
           </div>
-          <p className="text-[10px] text-[#888888]">3 Membresías Black & Diamond</p>
+          <p className="text-[10px] text-[var(--text-muted)]">3 Membresías Black & Diamond</p>
         </div>
       </div>
 
       {/* Indicadores de Acreditación de Masajistas */}
-      <div className="bg-[#141414] border border-[#262626] rounded-2xl p-5 space-y-3 relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-[#262626] pb-3">
+      <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-5 space-y-3 relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-[var(--border-color)] pb-3">
           <div className="flex items-center space-x-2">
             <ShieldCheck className="w-5 h-5 text-[#C9A55B]" />
             <h3 className="font-serif font-bold text-sm text-white">
               Estado de Solicitudes y Acreditación de Masajistas
             </h3>
           </div>
-          <span className="text-[10px] text-[#888888] font-mono">Control Aprobación ESSENYA</span>
+          <span className="text-[10px] text-[var(--text-muted)] font-mono">Control Aprobación ESSENYA</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-[#1A1A1A] border border-[#C9A55B]/40 rounded-xl p-3.5 flex items-center justify-between">
+          <div className="bg-[var(--bg-subcard)] border border-[#C9A55B]/40 rounded-xl p-3.5 flex items-center justify-between">
             <div>
               <p className="text-[10px] text-[#C9A55B] font-bold uppercase tracking-wider flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5" />
                 <span>Masajistas Pendientes</span>
               </p>
               <p className="text-2xl font-mono font-bold text-[#C9A55B] mt-1">{pendingTherapistsCount}</p>
-              <p className="text-[10px] text-[#888888] mt-0.5">Expedientes por revisar</p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Expedientes por revisar</p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-[#C9A55B]/10 border border-[#C9A55B]/30 flex items-center justify-center text-[#C9A55B]">
               <Clock className="w-5 h-5" />
             </div>
           </div>
 
-          <div className="bg-[#1A1A1A] border border-emerald-500/30 rounded-xl p-3.5 flex items-center justify-between">
+          <div className="bg-[var(--bg-subcard)] border border-emerald-500/30 rounded-xl p-3.5 flex items-center justify-between">
             <div>
               <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>Masajistas Aprobadas</span>
               </p>
               <p className="text-2xl font-mono font-bold text-emerald-400 mt-1">{approvedTherapistsCount}</p>
-              <p className="text-[10px] text-[#888888] mt-0.5">Acceso activo al Radar</p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Acceso activo al Radar</p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
 
-          <div className="bg-[#1A1A1A] border border-red-500/30 rounded-xl p-3.5 flex items-center justify-between">
+          <div className="bg-[var(--bg-subcard)] border border-red-500/30 rounded-xl p-3.5 flex items-center justify-between">
             <div>
               <p className="text-[10px] text-red-400 font-bold uppercase tracking-wider flex items-center gap-1">
                 <XCircle className="w-3.5 h-3.5" />
                 <span>Masajistas Rechazadas</span>
               </p>
               <p className="text-2xl font-mono font-bold text-red-400 mt-1">{rejectedTherapistsCount}</p>
-              <p className="text-[10px] text-[#888888] mt-0.5">Solicitudes no acreditadas</p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Solicitudes no acreditadas</p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400">
               <XCircle className="w-5 h-5" />
@@ -377,8 +377,8 @@ export const DashboardPage: React.FC = () => {
       {/* Main Operations Radar & Tracking Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Live Tracking Map (Left 2 Columns) */}
-        <div className="lg:col-span-2 bg-[#141414] border border-[#262626] rounded-3xl p-6 space-y-6 flex flex-col justify-between">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-[#262626] pb-4">
+        <div className="lg:col-span-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 space-y-6 flex flex-col justify-between">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-[var(--border-color)] pb-4">
             <div>
               <div className="flex items-center space-x-2 text-[#C9A55B]">
                 <Navigation className="w-4 h-4 animate-pulse" />
@@ -386,7 +386,7 @@ export const DashboardPage: React.FC = () => {
                   Monitoreo GPS en Vivo — Ruta hacia Domicilio CDMX
                 </h3>
               </div>
-              <p className="text-xs text-[#888888] mt-0.5">
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
                 Visualización de la terapeuta en camino al domicilio y estado del servicio en tiempo real.
               </p>
             </div>
@@ -401,7 +401,7 @@ export const DashboardPage: React.FC = () => {
           {/* Real Live Tracking Map Component */}
           {currentTrackBooking ? (
             <div className="w-full space-y-3">
-              <div className="rounded-2xl overflow-hidden border border-[#262626] shadow-xl">
+              <div className="rounded-2xl overflow-hidden border border-[var(--border-color)] shadow-xl">
                 <ReservasMap
                   clientAddress={currentTrackBooking.clientAddress || 'Paseo de las Palmas 781, Lomas de Chapultepec'}
                   cityZone={currentTrackBooking.cityZone || 'Lomas'}
@@ -412,7 +412,7 @@ export const DashboardPage: React.FC = () => {
               </div>
 
               {/* Status Header info */}
-              <div className="bg-[#1A1A1A] border border-[#262626] rounded-2xl p-4 space-y-3">
+              <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-2xl p-4 space-y-3">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                   <div>
                     <span className="text-[10px] font-mono text-[#C9A55B] font-bold uppercase">
@@ -421,7 +421,7 @@ export const DashboardPage: React.FC = () => {
                     <h4 className="font-serif font-bold text-base text-white">
                       {currentTrackBooking.serviceName} ({currentTrackBooking.durationMinutes} min)
                     </h4>
-                    <p className="text-xs text-[#888888]">
+                    <p className="text-xs text-[var(--text-muted)]">
                       Terapeuta: <strong className="text-[#C9A55B]">{currentTrackBooking.therapistName || assignedTherapist?.name || 'Sin asignar'}</strong> • Cliente: <strong className="text-white">{currentTrackBooking.clientName}</strong>
                     </p>
                     <p className="text-[11px] text-[#AAAAAA] mt-0.5 flex items-center gap-1">
@@ -439,8 +439,8 @@ export const DashboardPage: React.FC = () => {
                 </div>
 
                 {/* READ-ONLY Progress Steps Indicator - Controlled EXCLUSIVELY by Therapist */}
-                <div className="pt-2 border-t border-[#262626] space-y-2">
-                  <div className="flex items-center justify-between text-[11px] text-[#888888]">
+                <div className="pt-2 border-t border-[var(--border-color)] space-y-2">
+                  <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
                     <span className="flex items-center gap-1.5 font-semibold text-white/90">
                       <Lock className="w-3.5 h-3.5 text-[#C9A55B]" />
                       <span>Estado del Servicio (Solo Lectura — La terapeuta es quien actualiza las etapas desde su app)</span>
@@ -465,7 +465,7 @@ export const DashboardPage: React.FC = () => {
                               ? 'bg-[#C9A55B] text-black border-[#C9A55B] shadow-md ring-2 ring-[#C9A55B]/40'
                               : isPast
                               ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                              : 'bg-[#141414] text-[#666666] border-[#262626]'
+                              : 'bg-[var(--bg-card)] text-[#666666] border-[var(--border-color)]'
                           }`}
                         >
                           <div className="flex items-center justify-center gap-1">
@@ -491,7 +491,7 @@ export const DashboardPage: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="h-72 flex flex-col items-center justify-center text-center p-8 bg-[#0D0D0D] border border-[#262626] rounded-2xl text-[#888888] space-y-2">
+            <div className="h-72 flex flex-col items-center justify-center text-center p-8 bg-[var(--bg-main)] border border-[var(--border-color)] rounded-2xl text-[var(--text-muted)] space-y-2">
               <Car className="w-10 h-10 text-[#444444]" />
               <p className="text-sm font-semibold text-white">No hay servicios en curso</p>
               <p className="text-xs max-w-sm">Cuando una terapeuta acepte un servicio y se ponga en camino, el mapa y ruta aparecerán aquí automáticamente.</p>
@@ -502,8 +502,8 @@ export const DashboardPage: React.FC = () => {
         {/* Live Active Services Feed & Urgent Alerts (Right 1 Column) */}
         <div className="space-y-6">
           {/* Active Bookings Quick Switch List */}
-          <div className="bg-[#141414] border border-[#262626] rounded-3xl p-5 space-y-4">
-            <div className="flex justify-between items-center border-b border-[#262626] pb-3">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 space-y-4">
+            <div className="flex justify-between items-center border-b border-[var(--border-color)] pb-3">
               <h3 className="font-serif font-bold text-sm text-white flex items-center gap-2">
                 <Clock className="w-4 h-4 text-[#C9A55B]" />
                 <span>Servicios de Hoy ({bookings.length})</span>
@@ -519,14 +519,14 @@ export const DashboardPage: React.FC = () => {
                   className={`p-3 rounded-2xl border transition-all cursor-pointer ${
                     selectedTrackBookingId === b.id
                       ? 'bg-[#C9A55B]/15 border-[#C9A55B]'
-                      : 'bg-[#1A1A1A] border-[#262626] hover:border-[#333333]'
+                      : 'bg-[var(--bg-subcard)] border-[var(--border-color)] hover:border-[var(--border-color)]'
                   }`}
                 >
                   <div className="flex justify-between items-start">
                     <div>
                       <span className="font-mono text-[10px] text-[#C9A55B] font-bold">{b.code}</span>
                       <h4 className="font-serif font-bold text-xs text-white line-clamp-1">{b.serviceName}</h4>
-                      <p className="text-[10px] text-[#888888]">{b.clientName} ({b.cityZone})</p>
+                      <p className="text-[10px] text-[var(--text-muted)]">{b.clientName} ({b.cityZone})</p>
                     </div>
                     <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#262626] text-[#AAAAAA] capitalize">
                       {b.state.replace('_', ' ')}
@@ -538,8 +538,8 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           {/* Operational Alerts & Audit Activity */}
-          <div className="bg-[#141414] border border-[#262626] rounded-3xl p-5 space-y-4">
-            <div className="flex justify-between items-center border-b border-[#262626] pb-3">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 space-y-4">
+            <div className="flex justify-between items-center border-b border-[var(--border-color)] pb-3">
               <h3 className="font-serif font-bold text-sm text-white flex items-center gap-2">
                 <ShieldAlert className="w-4 h-4 text-[#C9A55B]" />
                 <span>Bitácora & Alertas Operativas</span>
@@ -548,8 +548,8 @@ export const DashboardPage: React.FC = () => {
 
             <div className="space-y-3">
               {auditLogs.slice(0, 4).map((log) => (
-                <div key={log.id} className="text-xs border-b border-[#262626] pb-2 space-y-0.5">
-                  <div className="flex justify-between text-[10px] text-[#888888]">
+                <div key={log.id} className="text-xs border-b border-[var(--border-color)] pb-2 space-y-0.5">
+                  <div className="flex justify-between text-[10px] text-[var(--text-muted)]">
                     <span className="font-semibold text-[#C9A55B]">{log.action}</span>
                     <span>{log.timestamp.substring(11, 16)} hrs</span>
                   </div>
@@ -562,10 +562,10 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* Analytics & Monthly Volume / Therapist Occupancy Charts */}
-      <div className="pt-4 border-t border-[#262626]">
+      <div className="pt-4 border-t border-[var(--border-color)]">
         <div className="mb-4">
           <h2 className="text-xl font-serif font-bold text-white">Analítica Ejecutiva & Rendimiento</h2>
-          <p className="text-xs text-[#888888]">Volumen de reservas mensuales y porcentaje de ocupación por terapeuta.</p>
+          <p className="text-xs text-[var(--text-muted)]">Volumen de reservas mensuales y porcentaje de ocupación por terapeuta.</p>
         </div>
         <AdminStatsPanel />
       </div>

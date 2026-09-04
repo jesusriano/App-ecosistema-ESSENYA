@@ -90,34 +90,34 @@ export const ReservasPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#262626] pb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[var(--border-color)] pb-4">
         <div>
           <h1 className="text-2xl font-serif font-bold text-white flex items-center gap-2">
             <Calendar className="w-6 h-6 text-[#C9A55B]" />
             <span>Gestión de Reservas & Asignación Inteligente (IA)</span>
           </h1>
-          <p className="text-xs text-[#888888] mt-1">
+          <p className="text-xs text-[var(--text-muted)] mt-1">
             Centro de control operativo de servicios a domicilio, asignación con Matriz IA y reasignaciones urgentes.
           </p>
         </div>
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-[#141414] border border-[#262626] rounded-2xl p-4 flex flex-col md:flex-row gap-3 justify-between items-center">
+      <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 flex flex-col md:flex-row gap-3 justify-between items-center">
         <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-[#888888] absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Buscar por código, cliente, terapeuta, zona..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-[#1A1A1A] border border-[#333333] text-white pl-9 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-[#C9A55B]"
+            className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white pl-9 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-[#C9A55B]"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
           <Filter className="w-3.5 h-3.5 text-[#C9A55B] shrink-0" />
-          <span className="text-xs text-[#888888] shrink-0">Estado:</span>
+          <span className="text-xs text-[var(--text-muted)] shrink-0">Estado:</span>
           {['todos', 'pendiente', 'aceptado', 'en_camino', 'servicio_iniciado', 'servicio_finalizado', 'cancelado'].map((st) => (
             <button
               key={st}
@@ -125,7 +125,7 @@ export const ReservasPage: React.FC = () => {
               className={`px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all whitespace-nowrap cursor-pointer ${
                 statusFilter === st
                   ? 'bg-[#C9A55B] text-black font-bold'
-                  : 'bg-[#1A1A1A] text-[#888888] hover:text-white border border-[#333333]'
+                  : 'bg-[var(--bg-subcard)] text-[var(--text-muted)] hover:text-white border border-[var(--border-color)]'
               }`}
             >
               {st === 'todos' ? 'Todos' : st.replace('_', ' ')}
@@ -135,10 +135,10 @@ export const ReservasPage: React.FC = () => {
       </div>
 
       {/* Bookings Table / Cards */}
-      <div className="bg-[#141414] border border-[#262626] rounded-2xl overflow-hidden">
+      <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl overflow-hidden">
         <div className="divide-y divide-[#262626]">
           {filteredBookings.length === 0 ? (
-            <div className="p-12 text-center text-[#888888]">
+            <div className="p-12 text-center text-[var(--text-muted)]">
               <Calendar className="w-12 h-12 mx-auto text-[#444444] mb-3" />
               <p className="font-semibold text-sm">No se encontraron reservaciones</p>
               <p className="text-xs mt-1">Ajusta los filtros o la búsqueda.</p>
@@ -148,7 +148,7 @@ export const ReservasPage: React.FC = () => {
               const badge = stateBadges[b.state] || { label: b.state, color: 'bg-zinc-800 text-zinc-300' };
 
               return (
-                <div key={b.id} className="p-5 hover:bg-[#1A1A1A]/50 transition-all flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                <div key={b.id} className="p-5 hover:bg-[var(--bg-subcard)]/50 transition-all flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                   {/* Info Column */}
                   <div className="space-y-2 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -158,7 +158,7 @@ export const ReservasPage: React.FC = () => {
                       <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${badge.color}`}>
                         {badge.label}
                       </span>
-                      <span className="text-[11px] text-[#888888]">
+                      <span className="text-[11px] text-[var(--text-muted)]">
                         📅 {b.date} • {b.time} ({b.durationMinutes} min)
                       </span>
                     </div>
@@ -174,7 +174,7 @@ export const ReservasPage: React.FC = () => {
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-4 text-xs text-[#888888] pt-1">
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-[var(--text-muted)] pt-1">
                       <span>👤 Client VIP: <strong className="text-white">{b.clientName}</strong></span>
                       <span>
                         💆 Terapeuta: {b.therapistName ? (
@@ -229,15 +229,15 @@ export const ReservasPage: React.FC = () => {
       {/* Smart Therapist Assignment AI Modal */}
       {smartBookingModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[#141414] border border-[#C9A55B]/40 rounded-3xl p-6 max-w-2xl w-full space-y-6 relative shadow-2xl">
+          <div className="bg-[var(--bg-card)] border border-[#C9A55B]/40 rounded-3xl p-6 max-w-2xl w-full space-y-6 relative shadow-2xl">
             <button
               onClick={() => setSmartBookingModal(null)}
-              className="absolute right-5 top-5 text-[#888888] hover:text-white cursor-pointer"
+              className="absolute right-5 top-5 text-[var(--text-muted)] hover:text-white cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="border-b border-[#262626] pb-4">
+            <div className="border-b border-[var(--border-color)] pb-4">
               <div className="flex items-center gap-2 text-[#C9A55B]">
                 <Sparkles className="w-5 h-5 animate-spin" />
                 <span className="text-xs font-mono font-bold uppercase tracking-widest">
@@ -247,7 +247,7 @@ export const ReservasPage: React.FC = () => {
               <h2 className="text-xl font-serif font-bold text-white mt-1">
                 Asignación Óptima para Servicio {smartBookingModal.code}
               </h2>
-              <p className="text-xs text-[#888888] mt-0.5">
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
                 Evaluando cercanía geográfica en {smartBookingModal.cityZone}, disponibilidad en horario ({smartBookingModal.time}), calificaciones e historial.
               </p>
             </div>
@@ -260,7 +260,7 @@ export const ReservasPage: React.FC = () => {
                   className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${
                     idx === 0 
                       ? 'bg-[#C9A55B]/10 border-[#C9A55B] shadow-lg shadow-[#C9A55B]/10' 
-                      : 'bg-[#1A1A1A] border-[#262626] hover:border-[#333333]'
+                      : 'bg-[var(--bg-subcard)] border-[var(--border-color)] hover:border-[var(--border-color)]'
                   }`}
                 >
                   <div className="flex items-center space-x-3">
@@ -278,7 +278,7 @@ export const ReservasPage: React.FC = () => {
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-[#888888] mt-0.5 space-x-2">
+                      <div className="text-xs text-[var(--text-muted)] mt-0.5 space-x-2">
                         <span>⭐ {cand.therapist.rating} ({cand.therapist.reviewCount} res)</span>
                         <span>• 🚗 ETA: ~{cand.etaMinutes} min ({cand.distanceKm} km)</span>
                       </div>
@@ -292,10 +292,10 @@ export const ReservasPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 border-[#262626] pt-2 sm:pt-0">
+                  <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 border-[var(--border-color)] pt-2 sm:pt-0">
                     <div className="text-right">
                       <span className="text-xs font-mono font-bold text-[#C9A55B]">{cand.matchScore}% Match</span>
-                      <span className="text-[10px] text-[#888888] block">Puntaje Global</span>
+                      <span className="text-[10px] text-[var(--text-muted)] block">Puntaje Global</span>
                     </div>
 
                     <LuxuryButton
@@ -321,31 +321,31 @@ export const ReservasPage: React.FC = () => {
       {/* Reschedule Modal */}
       {rescheduleBookingModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#141414] border border-[#262626] rounded-3xl p-6 max-w-md w-full space-y-4">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 max-w-md w-full space-y-4">
             <h3 className="font-serif font-bold text-lg text-white">Reprogramar Fecha y Hora</h3>
-            <p className="text-xs text-[#888888]">
+            <p className="text-xs text-[var(--text-muted)]">
               Reserva <strong className="text-[#C9A55B]">{rescheduleBookingModal.code}</strong> para {rescheduleBookingModal.clientName}.
             </p>
 
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-[#888888] block mb-1">Nueva Fecha</label>
+                <label className="text-xs text-[var(--text-muted)] block mb-1">Nueva Fecha</label>
                 <input
                   type="date"
                   value={newDateInput}
                   onChange={(e) => setNewDateInput(e.target.value)}
-                  className="w-full bg-[#1A1A1A] border border-[#333333] text-white px-3 py-2 rounded-xl text-xs"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl text-xs"
                 />
               </div>
 
               <div>
-                <label className="text-xs text-[#888888] block mb-1">Nuevo Horario</label>
+                <label className="text-xs text-[var(--text-muted)] block mb-1">Nuevo Horario</label>
                 <input
                   type="text"
                   placeholder="ej. 16:30 hrs"
                   value={newTimeInput}
                   onChange={(e) => setNewTimeInput(e.target.value)}
-                  className="w-full bg-[#1A1A1A] border border-[#333333] text-white px-3 py-2 rounded-xl text-xs"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl text-xs"
                 />
               </div>
             </div>
@@ -353,7 +353,7 @@ export const ReservasPage: React.FC = () => {
             <div className="flex justify-end space-x-2 pt-2">
               <button
                 onClick={() => setRescheduleBookingModal(null)}
-                className="px-4 py-2 text-xs text-[#888888] hover:text-white"
+                className="px-4 py-2 text-xs text-[var(--text-muted)] hover:text-white"
               >
                 Cancelar
               </button>
@@ -377,30 +377,30 @@ export const ReservasPage: React.FC = () => {
       {/* Cancel Modal */}
       {cancelBookingModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#141414] border border-red-500/40 rounded-3xl p-6 max-w-md w-full space-y-4">
+          <div className="bg-[var(--bg-card)] border border-red-500/40 rounded-3xl p-6 max-w-md w-full space-y-4">
             <h3 className="font-serif font-bold text-lg text-red-400 flex items-center gap-2">
               <AlertTriangle className="w-5 h-5" />
               <span>Cancelar Servicio de Forma Definitiva</span>
             </h3>
-            <p className="text-xs text-[#888888]">
+            <p className="text-xs text-[var(--text-muted)]">
               ¿Estás seguro de cancelar la reserva <strong className="text-white">{cancelBookingModal.code}</strong>? Se notificará al cliente y a la terapeuta.
             </p>
 
             <div>
-              <label className="text-xs text-[#888888] block mb-1">Motivo de Cancelación</label>
+              <label className="text-xs text-[var(--text-muted)] block mb-1">Motivo de Cancelación</label>
               <textarea
                 placeholder="Indica la razón (ej. Solicitud del cliente, contingencia vial)..."
                 value={cancelReasonInput}
                 onChange={(e) => setCancelReasonInput(e.target.value)}
                 rows={3}
-                className="w-full bg-[#1A1A1A] border border-[#333333] text-white p-3 rounded-xl text-xs focus:outline-none focus:border-red-500/50"
+                className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white p-3 rounded-xl text-xs focus:outline-none focus:border-red-500/50"
               />
             </div>
 
             <div className="flex justify-end space-x-2 pt-2">
               <button
                 onClick={() => setCancelBookingModal(null)}
-                className="px-4 py-2 text-xs text-[#888888] hover:text-white"
+                className="px-4 py-2 text-xs text-[var(--text-muted)] hover:text-white"
               >
                 Regresar
               </button>

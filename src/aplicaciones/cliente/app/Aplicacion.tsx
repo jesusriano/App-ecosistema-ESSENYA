@@ -159,13 +159,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   };
 
   // Payment Method Selection State (Apple Pay completely removed)
-  const [paymentMethodType, setPaymentMethodType] = useState<'tarjeta' | 'transferencia' | 'efectivo'>('tarjeta');
-  const [cardDetails, setCardDetails] = useState({
-    number: '•••• •••• •••• 8821',
-    name: client?.name,
-    expiry: '12/28',
-    cvv: '•••',
-  });
+  const [paymentMethodType, setPaymentMethodType] = useState<'transferencia' | 'efectivo'>('transferencia');
   const [clabeCopied, setClabeCopied] = useState<boolean>(false);
 
   // Safety & Emergency Panic Modal State
@@ -874,7 +868,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                       ? 'grid-cols-1' 
                       : (selectedService.allowedDurations || [60, 90, 120]).length === 2 
                       ? 'grid-cols-2' 
-                      : 'grid-cols-1 sm:grid-cols-3'
+                      : 'grid-cols-1 sm:grid-cols-2'
                   }`}>
                     {(selectedService.allowedDurations || [60, 90, 120]).map((m) => {
                       const p = m === 60 ? selectedService.basePrice : m === 90 ? selectedService.price90 : selectedService.price120;
@@ -1126,7 +1120,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                   <label className="text-xs uppercase tracking-wider text-[#6B655F] dark:text-[#AAAAAA] font-semibold block">
                     Preferencia de Género del Terapeuta
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {[
                       { id: 'femenino', label: 'Terapeuta Femenino' },
                       { id: 'masculino', label: 'Terapeuta Masculino' },
@@ -1203,7 +1197,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                     <Music className="w-3.5 h-3.5 text-[#C9A55B]" />
                     <span>Ambiente Sonoro</span>
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {MUSIC_OPTIONS.map((m) => (
                       <button
                         key={m.id}
@@ -1280,7 +1274,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                 </div>
 
                 {/* Gender Options Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Option 1: Mujer (Femenino) */}
                   <div
                     onClick={() => setPreferences(prev => ({ ...prev, genderPreference: 'femenino' }))}
@@ -1697,21 +1691,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                     <label className="text-xs text-[#6B655F] dark:text-[#AAAAAA] uppercase font-semibold block">
                       Selecciona tu Método de Pago
                     </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {/* Option 1: Tarjeta */}
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethodType('tarjeta')}
-                        className={`p-3.5 rounded-xl border flex flex-col items-center justify-center space-y-1.5 transition-all text-xs font-bold ${
-                          paymentMethodType === 'tarjeta'
-                            ? 'bg-[#C9A55B]/15 border-[#C9A55B] text-[#806020] dark:text-[#C9A55B] ring-1 ring-[#C9A55B]'
-                            : 'bg-[#F5F1EA] dark:bg-[#1A1A1A] border-[#E5DFD3] dark:border-[#333333] text-[#6B655F] dark:text-[#AAAAAA]'
-                        }`}
-                      >
-                        <CreditCard className="w-5 h-5 text-[#C9A55B]" />
-                        <span>Tarjeta de Crédito / Débito</span>
-                      </button>
-
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {/* Option 2: Transferencia Bancaria SPEI */}
                       <button
                         type="button"
@@ -1741,36 +1721,6 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                       </button>
                     </div>
 
-                    {/* Payment Details Container */}
-                    {paymentMethodType === 'tarjeta' && (
-                      <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 rounded-xl border border-[#E5DFD3] dark:border-[#333333] space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-[#1C1917] dark:text-white flex items-center">
-                            <CreditCard className="w-4 h-4 mr-1.5 text-[#C9A55B]" />
-                            Tarjeta Registrada ESSENYA Club Black
-                          </span>
-                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                            Encriptado SSL 256-bit
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                          <input
-                            type="text"
-                            value={cardDetails.number}
-                            onChange={(e) => setCardDetails(prev => ({ ...prev, number: e.target.value }))}
-                            placeholder="Número de Tarjeta"
-                            className="bg-white dark:bg-[#222222] border border-[#E5DFD3] dark:border-[#444444] rounded-lg p-2 text-xs text-[#1C1917] dark:text-white"
-                          />
-                          <input
-                            type="text"
-                            value={cardDetails.name}
-                            onChange={(e) => setCardDetails(prev => ({ ...prev, name: e.target.value }))}
-                            placeholder="Titular de la Tarjeta"
-                            className="bg-white dark:bg-[#222222] border border-[#E5DFD3] dark:border-[#444444] rounded-lg p-2 text-xs text-[#1C1917] dark:text-white"
-                          />
-                        </div>
-                      </div>
-                    )}
 
                     {paymentMethodType === 'transferencia' && (
                       <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 rounded-xl border border-[#C9A55B]/40 space-y-3">

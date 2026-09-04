@@ -49,7 +49,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ currentRoute, onNavi
               className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer w-full text-left ${
                 isActive
                   ? 'bg-[#C9A55B]/15 text-[#C9A55B] font-bold border border-[#C9A55B]/40'
-                  : 'text-[#888888] hover:text-white hover:bg-[#1A1A1A]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-subcard)]'
               }`}
             >
               <div className="flex items-center space-x-3 truncate">

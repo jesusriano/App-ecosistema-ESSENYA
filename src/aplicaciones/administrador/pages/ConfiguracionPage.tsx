@@ -84,13 +84,13 @@ export const ConfiguracionPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#262626] pb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[var(--border-color)] pb-4">
         <div>
           <h1 className="text-2xl font-serif font-bold text-white flex items-center gap-2">
             <Settings className="w-6 h-6 text-[#C9A55B]" />
             <span>Configuración de Zonas & Tarifa Dinámica Surge</span>
           </h1>
-          <p className="text-xs text-[#888888] mt-1">
+          <p className="text-xs text-[var(--text-muted)] mt-1">
             Gestión de zonas de cobertura VIP en Ciudad de México, multiplicadores de alta demanda y políticas de seguridad.
           </p>
         </div>
@@ -104,12 +104,12 @@ export const ConfiguracionPage: React.FC = () => {
       {/* Coverage Zones Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {zones.map((zone) => (
-          <div key={zone.id} className="bg-[#141414] border border-[#262626] hover:border-[#C9A55B]/40 rounded-3xl p-5 space-y-4 flex flex-col justify-between transition-all">
+          <div key={zone.id} className="bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-[#C9A55B]/40 rounded-3xl p-5 space-y-4 flex flex-col justify-between transition-all">
             <div className="space-y-3">
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="font-serif font-bold text-lg text-white">{zone.name}</h3>
-                  <p className="text-xs text-[#888888]">
+                  <p className="text-xs text-[var(--text-muted)]">
                     Terapeutas activas en zona: <strong className="text-white">{zone.activeTherapists}</strong>
                   </p>
                 </div>
@@ -123,20 +123,20 @@ export const ConfiguracionPage: React.FC = () => {
                 </span>
               </div>
 
-              <div className="bg-[#1A1A1A] border border-[#262626] rounded-xl p-3 space-y-1 text-xs">
-                <span className="text-[#888888] text-[10px] uppercase font-bold block">Colonias Cubiertas:</span>
-                <p className="text-stone-300 font-sans">
+              <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl p-3 space-y-1 text-xs">
+                <span className="text-[var(--text-muted)] text-[10px] uppercase font-bold block">Colonias Cubiertas:</span>
+                <p className="text-[var(--text-primary)] font-sans">
                   {zone.coloniases ? zone.coloniases.join(', ') : 'Zonas exclusivas integradas'}
                 </p>
               </div>
             </div>
 
             {/* Controls */}
-            <div className="flex justify-between items-center pt-3 border-t border-[#262626]">
+            <div className="flex justify-between items-center pt-3 border-t border-[var(--border-color)]">
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => handleOpenEdit(zone)}
-                  className="p-2 bg-[#1A1A1A] hover:bg-[#262626] text-stone-300 hover:text-[#C9A55B] rounded-xl cursor-pointer"
+                  className="p-2 bg-[var(--bg-subcard)] hover:bg-[#262626] text-[var(--text-primary)] hover:text-[#C9A55B] rounded-xl cursor-pointer"
                   title="Editar Zona"
                 >
                   <Edit className="w-4 h-4" />
@@ -171,26 +171,26 @@ export const ConfiguracionPage: React.FC = () => {
       </div>
 
       {/* Security Policies Section */}
-      <div className="bg-[#141414] border border-[#262626] rounded-3xl p-6 space-y-4">
+      <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 space-y-4">
         <h3 className="font-serif font-bold text-lg text-white flex items-center gap-2">
           <ShieldCheck className="w-5 h-5 text-[#C9A55B]" />
           <span>Políticas de Seguridad & Cierre de Sesión Automático</span>
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-          <div className="bg-[#1A1A1A] border border-[#262626] p-4 rounded-2xl space-y-1">
+          <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] p-4 rounded-2xl space-y-1">
             <strong className="text-white block font-bold">Bloqueo por Inactividad</strong>
-            <p className="text-[#888888]">15 Minutos de inactividad requieren reautenticación del administrador.</p>
+            <p className="text-[var(--text-muted)]">15 Minutos de inactividad requieren reautenticación del administrador.</p>
           </div>
 
-          <div className="bg-[#1A1A1A] border border-[#262626] p-4 rounded-2xl space-y-1">
+          <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] p-4 rounded-2xl space-y-1">
             <strong className="text-white block font-bold">Cambio Forzado Primer Login</strong>
             <p className="text-emerald-400 font-semibold">100% Activo para terapeutas y coordinadores.</p>
           </div>
 
-          <div className="bg-[#1A1A1A] border border-[#262626] p-4 rounded-2xl space-y-1">
+          <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] p-4 rounded-2xl space-y-1">
             <strong className="text-white block font-bold">Cifrado de Sesiones</strong>
-            <p className="text-[#888888]">Tokens JWT firmados con Firebase Admin Auth y reglas de Firestore.</p>
+            <p className="text-[var(--text-muted)]">Tokens JWT firmados con Firebase Admin Auth y reglas de Firestore.</p>
           </div>
         </div>
       </div>
@@ -198,12 +198,12 @@ export const ConfiguracionPage: React.FC = () => {
       {/* Add / Edit Zone Modal */}
       {showZoneModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#141414] border border-[#262626] rounded-3xl p-6 max-w-md w-full space-y-4">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 max-w-md w-full space-y-4">
             <h3 className="font-serif font-bold text-lg text-white">
               {editingZone ? 'Editar Zona de Cobertura' : 'Nueva Zona de Cobertura'}
             </h3>
 
-            <form onSubmit={handleSaveZone} className="space-y-3 text-xs text-[#888888]">
+            <form onSubmit={handleSaveZone} className="space-y-3 text-xs text-[var(--text-muted)]">
               <div>
                 <label className="block mb-1 text-white">Nombre de la Zona</label>
                 <input
@@ -212,7 +212,7 @@ export const ConfiguracionPage: React.FC = () => {
                   onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })}
                   placeholder="ej. Bosque Real & Interlomas"
                   required
-                  className="w-full bg-[#1A1A1A] border border-[#333333] text-white px-3 py-2 rounded-xl text-xs"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl text-xs"
                 />
               </div>
 
@@ -222,7 +222,7 @@ export const ConfiguracionPage: React.FC = () => {
                   value={zoneForm.coloniases}
                   onChange={(e) => setZoneForm({ ...zoneForm, coloniases: e.target.value })}
                   rows={3}
-                  className="w-full bg-[#1A1A1A] border border-[#333333] text-white p-3 rounded-xl text-xs"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white p-3 rounded-xl text-xs"
                 />
               </div>
 
@@ -235,15 +235,15 @@ export const ConfiguracionPage: React.FC = () => {
                   max="2.5"
                   value={zoneForm.surgeMultiplier}
                   onChange={(e) => setZoneForm({ ...zoneForm, surgeMultiplier: Number(e.target.value) })}
-                  className="w-full bg-[#1A1A1A] border border-[#333333] text-white px-3 py-2 rounded-xl text-xs"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl text-xs"
                 />
               </div>
 
-              <div className="flex justify-end space-x-2 pt-3 border-t border-[#262626]">
+              <div className="flex justify-end space-x-2 pt-3 border-t border-[var(--border-color)]">
                 <button
                   type="button"
                   onClick={() => setShowZoneModal(false)}
-                  className="px-4 py-2 text-[#888888] hover:text-white"
+                  className="px-4 py-2 text-[var(--text-muted)] hover:text-white"
                 >
                   Cancelar
                 </button>

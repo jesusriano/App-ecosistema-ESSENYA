@@ -365,7 +365,6 @@ export const PerfilPage: React.FC = () => {
               <span>Método de Pago Predeterminado</span>
             </h3>
             <div className="p-3 bg-[#FAF8F5] dark:bg-[#1A1A1A] rounded-xl border border-[#E5DFD3] dark:border-[#262626]">
-              <p className="font-semibold text-[#1C1917] dark:text-white">Tarjeta AMEX Centurion •••• 8821</p>
               <p className="text-[#6B655F] dark:text-[#888888] mt-0.5">Emisión automática de comprobantes de servicio habilitada</p>
             </div>
           </div>

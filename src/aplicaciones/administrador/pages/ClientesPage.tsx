@@ -90,33 +90,33 @@ export const ClientesPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#262626] pb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[var(--border-color)] pb-4">
         <div>
           <h1 className="text-2xl font-serif font-bold text-white flex items-center gap-2">
             <Users className="w-6 h-6 text-[#C9A55B]" />
             <span>Gestión & Expedientes de Socios VIP</span>
           </h1>
-          <p className="text-xs text-[#888888] mt-1">
+          <p className="text-xs text-[var(--text-muted)] mt-1">
             Directorio exclusivo de clientes registrados, historial de consumos, observaciones de servicio y control de acceso.
           </p>
         </div>
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-[#141414] border border-[#262626] rounded-2xl p-4 flex flex-col md:flex-row gap-3 justify-between items-center">
+      <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 flex flex-col md:flex-row gap-3 justify-between items-center">
         <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-[#888888] absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Buscar por nombre, correo, teléfono, zona..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-[#1A1A1A] border border-[#333333] text-white pl-9 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-[#C9A55B]"
+            className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white pl-9 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-[#C9A55B]"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto">
-          <span className="text-xs text-[#888888] shrink-0">Membresía:</span>
+          <span className="text-xs text-[var(--text-muted)] shrink-0">Membresía:</span>
           {['todos', 'Gold', 'Diamond', 'Black'].map((tier) => (
             <button
               key={tier}
@@ -124,7 +124,7 @@ export const ClientesPage: React.FC = () => {
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 tierFilter === tier
                   ? 'bg-[#C9A55B] text-black font-bold'
-                  : 'bg-[#1A1A1A] text-[#888888] hover:text-white border border-[#333333]'
+                  : 'bg-[var(--bg-subcard)] text-[var(--text-muted)] hover:text-white border border-[var(--border-color)]'
               }`}
             >
               {tier === 'todos' ? 'Todas' : tier}
@@ -144,7 +144,7 @@ export const ClientesPage: React.FC = () => {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: index * 0.04 }}
-              className="bg-[#141414] border border-[#262626] hover:border-[#C9A55B]/40 rounded-3xl p-5 space-y-4 flex flex-col justify-between transition-all relative"
+              className="bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-[#C9A55B]/40 rounded-3xl p-5 space-y-4 flex flex-col justify-between transition-all relative"
             >
               <div className="space-y-3">
                 <div className="flex justify-between items-start gap-2">
@@ -179,21 +179,21 @@ export const ClientesPage: React.FC = () => {
                 </div>
 
                 {c.specialNotes && (
-                  <div className="bg-[#1A1A1A] border border-[#333333] rounded-xl p-2.5 text-[11px] text-amber-300">
+                  <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl p-2.5 text-[11px] text-amber-300">
                     <strong>⚠️ Nota VIP:</strong> {c.specialNotes}
                   </div>
                 )}
               </div>
 
               {/* Stats & Controls Footer */}
-              <div className="pt-3 border-t border-[#262626] space-y-3">
-                <div className="grid grid-cols-2 text-center text-xs bg-[#1A1A1A] rounded-xl p-2">
+              <div className="pt-3 border-t border-[var(--border-color)] space-y-3">
+                <div className="grid grid-cols-2 text-center text-xs bg-[var(--bg-subcard)] rounded-xl p-2">
                   <div>
-                    <span className="text-[10px] text-[#888888] block">Reservas</span>
+                    <span className="text-[10px] text-[var(--text-muted)] block">Reservas</span>
                     <strong className="text-white font-bold">{clientBookings.length || c.totalBookings}</strong>
                   </div>
                   <div>
-                    <span className="text-[10px] text-[#888888] block">Consumo Total</span>
+                    <span className="text-[10px] text-[var(--text-muted)] block">Consumo Total</span>
                     <strong className="text-[#C9A55B] font-bold">${c.spentTotal.toLocaleString()} MXN</strong>
                   </div>
                 </div>
@@ -201,14 +201,14 @@ export const ClientesPage: React.FC = () => {
                 <div className="flex items-center justify-between gap-2">
                   <button
                     onClick={() => setSelectedClient(c)}
-                    className="flex-1 py-2 bg-[#1A1A1A] hover:bg-[#262626] border border-[#333333] text-stone-300 hover:text-white text-xs font-semibold rounded-xl transition-all cursor-pointer text-center"
+                    className="flex-1 py-2 bg-[var(--bg-subcard)] hover:bg-[#262626] border border-[var(--border-color)] text-[var(--text-primary)] hover:text-white text-xs font-semibold rounded-xl transition-all cursor-pointer text-center"
                   >
                     Ver Expediente
                   </button>
 
                   <button
                     onClick={() => handleOpenEdit(c)}
-                    className="p-2 bg-[#1A1A1A] hover:bg-[#262626] border border-[#333333] text-[#C9A55B] rounded-xl cursor-pointer"
+                    className="p-2 bg-[var(--bg-subcard)] hover:bg-[#262626] border border-[var(--border-color)] text-[#C9A55B] rounded-xl cursor-pointer"
                     title="Editar Expediente"
                   >
                     <Edit className="w-4 h-4" />
@@ -235,15 +235,15 @@ export const ClientesPage: React.FC = () => {
       {/* Client Expediente Details Modal */}
       {selectedClient && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#141414] border border-[#C9A55B]/40 rounded-3xl p-6 max-w-lg w-full space-y-4 relative">
+          <div className="bg-[var(--bg-card)] border border-[#C9A55B]/40 rounded-3xl p-6 max-w-lg w-full space-y-4 relative">
             <button
               onClick={() => setSelectedClient(null)}
-              className="absolute right-5 top-5 text-[#888888] hover:text-white cursor-pointer"
+              className="absolute right-5 top-5 text-[var(--text-muted)] hover:text-white cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center space-x-4 border-b border-[#262626] pb-4">
+            <div className="flex items-center space-x-4 border-b border-[var(--border-color)] pb-4">
               <img
                 src={selectedClient?.photo || undefined}
                 alt={selectedClient.name}
@@ -254,19 +254,19 @@ export const ClientesPage: React.FC = () => {
                   Socio VIP {selectedClient.membershipTier}
                 </span>
                 <h3 className="text-xl font-serif font-bold text-white mt-1">{selectedClient.name}</h3>
-                <p className="text-xs text-[#888888]">{selectedClient.email} • {selectedClient.phone}</p>
+                <p className="text-xs text-[var(--text-muted)]">{selectedClient.email} • {selectedClient.phone}</p>
               </div>
             </div>
 
             <div className="space-y-3 text-xs text-[#CCCCCC]">
               <div>
                 <strong className="text-white block mb-1">📍 Domicilio Registrado:</strong>
-                <p className="bg-[#1A1A1A] p-3 rounded-xl border border-[#262626]">{selectedClient.address} ({selectedClient.cityZone})</p>
+                <p className="bg-[var(--bg-subcard)] p-3 rounded-xl border border-[var(--border-color)]">{selectedClient.address} ({selectedClient.cityZone})</p>
               </div>
 
               <div>
                 <strong className="text-[#C9A55B] block mb-1">✨ Preferencias VIP & Observaciones:</strong>
-                <p className="bg-[#1A1A1A] p-3 rounded-xl border border-[#262626] italic">
+                <p className="bg-[var(--bg-subcard)] p-3 rounded-xl border border-[var(--border-color)] italic">
                   {selectedClient.vipPreferences || 'Presión Firme. Aceite de Lavanda Francesa. Frecuencias 432Hz.'}
                 </p>
               </div>
@@ -281,7 +281,7 @@ export const ClientesPage: React.FC = () => {
               )}
             </div>
 
-            <div className="pt-2 border-t border-[#262626] flex justify-end">
+            <div className="pt-2 border-t border-[var(--border-color)] flex justify-end">
               <LuxuryButton variant="gold" size="sm" onClick={() => setSelectedClient(null)}>
                 Cerrar Expediente
               </LuxuryButton>
@@ -293,17 +293,17 @@ export const ClientesPage: React.FC = () => {
       {/* Edit Client Modal */}
       {editClientModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#141414] border border-[#262626] rounded-3xl p-6 max-w-lg w-full space-y-4">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 max-w-lg w-full space-y-4">
             <h3 className="font-serif font-bold text-lg text-white">Editar Expediente VIP</h3>
 
-            <form onSubmit={handleSaveClient} className="space-y-3 text-xs text-[#888888]">
+            <form onSubmit={handleSaveClient} className="space-y-3 text-xs text-[var(--text-muted)]">
               <div>
                 <label className="block mb-1 text-white">Nombre Completo</label>
                 <input
                   type="text"
                   value={formState.name}
                   onChange={(e) => setFormState({ ...formState, name: e.target.value })}
-                  className="w-full bg-[#1A1A1A] border border-[#333333] text-white px-3 py-2 rounded-xl"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl"
                   required
                 />
               </div>
@@ -315,7 +315,7 @@ export const ClientesPage: React.FC = () => {
                     type="email"
                     value={formState.email}
                     onChange={(e) => setFormState({ ...formState, email: e.target.value })}
-                    className="w-full bg-[#1A1A1A] border border-[#333333] text-white px-3 py-2 rounded-xl"
+                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl"
                     required
                   />
                 </div>
@@ -325,7 +325,7 @@ export const ClientesPage: React.FC = () => {
                     type="text"
                     value={formState.phone}
                     onChange={(e) => setFormState({ ...formState, phone: e.target.value })}
-                    className="w-full bg-[#1A1A1A] border border-[#333333] text-white px-3 py-2 rounded-xl"
+                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl"
                     required
                   />
                 </div>
@@ -336,7 +336,7 @@ export const ClientesPage: React.FC = () => {
                 <select
                   value={formState.membershipTier}
                   onChange={(e) => setFormState({ ...formState, membershipTier: e.target.value as any })}
-                  className="w-full bg-[#1A1A1A] border border-[#333333] text-white px-3 py-2 rounded-xl"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl"
                 >
                   <option value="Gold">Gold VIP</option>
                   <option value="Diamond">Diamond VIP</option>
@@ -350,7 +350,7 @@ export const ClientesPage: React.FC = () => {
                   type="text"
                   value={formState.address}
                   onChange={(e) => setFormState({ ...formState, address: e.target.value })}
-                  className="w-full bg-[#1A1A1A] border border-[#333333] text-white px-3 py-2 rounded-xl"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl"
                 />
               </div>
 
@@ -360,7 +360,7 @@ export const ClientesPage: React.FC = () => {
                   type="text"
                   value={formState.vipPreferences}
                   onChange={(e) => setFormState({ ...formState, vipPreferences: e.target.value })}
-                  className="w-full bg-[#1A1A1A] border border-[#333333] text-white px-3 py-2 rounded-xl"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white px-3 py-2 rounded-xl"
                 />
               </div>
 
@@ -370,15 +370,15 @@ export const ClientesPage: React.FC = () => {
                   value={formState.specialNotes}
                   onChange={(e) => setFormState({ ...formState, specialNotes: e.target.value })}
                   rows={2}
-                  className="w-full bg-[#1A1A1A] border border-[#333333] text-white p-3 rounded-xl"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-white p-3 rounded-xl"
                 />
               </div>
 
-              <div className="flex justify-end space-x-2 pt-3 border-t border-[#262626]">
+              <div className="flex justify-end space-x-2 pt-3 border-t border-[var(--border-color)]">
                 <button
                   type="button"
                   onClick={() => setEditClientModal(null)}
-                  className="px-4 py-2 text-[#888888] hover:text-white"
+                  className="px-4 py-2 text-[var(--text-muted)] hover:text-white"
                 >
                   Cancelar
                 </button>

@@ -31,40 +31,40 @@ export const AdminStatsPanel: React.FC<AdminStatsPanelProps> = () => {
     <div className="space-y-6">
       {/* Metric Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-[#141414] border border-[#262626] rounded-2xl p-5 space-y-2">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-5 space-y-2">
           <div className="flex justify-between items-center text-[#C9A55B]">
             <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Volumen Anual</span>
             <Calendar className="w-4 h-4" />
           </div>
-          <div className="text-2xl font-serif font-bold text-white">646 <span className="text-xs font-sans text-emerald-400 font-normal">+18.4%</span></div>
-          <p className="text-[11px] text-[#888888]">Total reservas confirmadas YTD</p>
+          <div className="text-2xl font-serif font-bold text-[var(--text-primary)]">646 <span className="text-xs font-sans text-emerald-400 font-normal">+18.4%</span></div>
+          <p className="text-[11px] text-[var(--text-muted)]">Total reservas confirmadas YTD</p>
         </div>
 
-        <div className="bg-[#141414] border border-[#262626] rounded-2xl p-5 space-y-2">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-5 space-y-2">
           <div className="flex justify-between items-center text-[#C9A55B]">
             <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Ocupación Promedio</span>
             <Users className="w-4 h-4" />
           </div>
-          <div className="text-2xl font-serif font-bold text-white">83.6% <span className="text-xs font-sans text-emerald-400 font-normal">Alta demanda</span></div>
-          <p className="text-[11px] text-[#888888]">Eficiencia operativa de terapeutas</p>
+          <div className="text-2xl font-serif font-bold text-[var(--text-primary)]">83.6% <span className="text-xs font-sans text-emerald-400 font-normal">Alta demanda</span></div>
+          <p className="text-[11px] text-[var(--text-muted)]">Eficiencia operativa de terapeutas</p>
         </div>
 
-        <div className="bg-[#141414] border border-[#262626] rounded-2xl p-5 space-y-2">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-5 space-y-2">
           <div className="flex justify-between items-center text-[#C9A55B]">
             <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Ingresos Estimados</span>
             <TrendingUp className="w-4 h-4" />
           </div>
-          <div className="text-2xl font-serif font-bold text-white">$968,500 <span className="text-xs font-sans text-emerald-400 font-normal">MXN</span></div>
-          <p className="text-[11px] text-[#888888]">Facturación acumulada del periodo</p>
+          <div className="text-2xl font-serif font-bold text-[var(--text-primary)]">$968,500 <span className="text-xs font-sans text-emerald-400 font-normal">MXN</span></div>
+          <p className="text-[11px] text-[var(--text-muted)]">Facturación acumulada del periodo</p>
         </div>
 
-        <div className="bg-[#141414] border border-[#262626] rounded-2xl p-5 space-y-2">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-5 space-y-2">
           <div className="flex justify-between items-center text-[#C9A55B]">
             <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Calidad & Satisfacción</span>
             <Award className="w-4 h-4" />
           </div>
-          <div className="text-2xl font-serif font-bold text-white">4.98 / 5.0</div>
-          <p className="text-[11px] text-[#888888]">Basado en 512 valoraciones de clientes</p>
+          <div className="text-2xl font-serif font-bold text-[var(--text-primary)]">4.98 / 5.0</div>
+          <p className="text-[11px] text-[var(--text-muted)]">Basado en 512 valoraciones de clientes</p>
         </div>
       </div>
 
@@ -72,13 +72,13 @@ export const AdminStatsPanel: React.FC<AdminStatsPanelProps> = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Monthly Booking Volume Chart */}
-        <div className="bg-[#141414] border border-[#262626] rounded-3xl p-6 space-y-4 shadow-xl">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 space-y-4 shadow-xl">
           <div className="flex justify-between items-center">
             <div>
               <span className="text-[10px] font-mono text-[#C9A55B] font-bold uppercase tracking-wider">Demanda & Tendencia</span>
-              <h3 className="text-base font-serif font-bold text-white">Volumen de Reservas Mensuales</h3>
+              <h3 className="text-base font-serif font-bold text-[var(--text-primary)]">Volumen de Reservas Mensuales</h3>
             </div>
-            <span className="text-xs text-[#888888] font-mono">2026 YTD</span>
+            <span className="text-xs text-[var(--text-muted)] font-mono">2026 YTD</span>
           </div>
 
           <div className="h-72 w-full pt-4">
@@ -102,13 +102,13 @@ export const AdminStatsPanel: React.FC<AdminStatsPanelProps> = () => {
         </div>
 
         {/* Therapist Occupancy Chart */}
-        <div className="bg-[#141414] border border-[#262626] rounded-3xl p-6 space-y-4 shadow-xl">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 space-y-4 shadow-xl">
           <div className="flex justify-between items-center">
             <div>
               <span className="text-[10px] font-mono text-[#C9A55B] font-bold uppercase tracking-wider">Rendimiento de Personal</span>
-              <h3 className="text-base font-serif font-bold text-white">Índice de Ocupación por Terapeuta</h3>
+              <h3 className="text-base font-serif font-bold text-[var(--text-primary)]">Índice de Ocupación por Terapeuta</h3>
             </div>
-            <span className="text-xs text-[#888888] font-mono">% Agenda Activa</span>
+            <span className="text-xs text-[var(--text-muted)] font-mono">% Agenda Activa</span>
           </div>
 
           <div className="h-72 w-full pt-4">
