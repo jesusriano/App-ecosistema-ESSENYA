@@ -31,6 +31,8 @@ interface EcosystemContextType {
   handleNewBooking: (newBooking: Booking) => void;
   handleAcceptBooking: (bookingId: string, acceptingTherapist: Partial<Therapist>) => void;
   handleRejectBooking: (bookingId: string, reason?: string) => void;
+  handleAdminAcceptBooking: (bookingId: string) => Promise<void>;
+  handleAdminRejectBooking: (bookingId: string, reason: string) => Promise<void>;
   handleUpdateBookingState: (bookingId: string, newState: BookingState) => void;
   handleReassignTherapist: (bookingId: string, therapistId: string) => void;
   handleToggleZoneSurge: (zoneId: string, multiplier: number) => void;
@@ -191,14 +193,14 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     if (isUserAdmin) {
       // Administrator: Full visibility
-      unsubReservas = onSnapshot(collection(db, 'citas'), (snap) => {
+      unsubReservas = onSnapshot(collection(db, 'reservas'), (snap) => {
         if (!snap.empty) {
           const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking)).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
           setBookings(list);
         } else {
           setBookings([]);
         }
-      }, err => handleFirestoreError(err, OperationType.LIST, 'citas'));
+      }, err => handleFirestoreError(err, OperationType.LIST, 'reservas'));
 
       unsubClientes = onSnapshot(collection(db, 'clientes'), (snap) => {
         if (!snap.empty) {
@@ -238,7 +240,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     } else if (isUserTherapist) {
       // Therapist role: bookings assigned to therapist
-      const qTherapistBookings = query(collection(db, 'citas'), where('therapistId', '==', uid));
+      const qTherapistBookings = query(collection(db, 'reservas'), where('therapistId', '==', uid));
       unsubReservas = onSnapshot(qTherapistBookings, (snap) => {
         if (!snap.empty) {
           const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking)).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -246,7 +248,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         } else {
           setBookings([]);
         }
-      }, err => handleFirestoreError(err, OperationType.LIST, 'citas'));
+      }, err => handleFirestoreError(err, OperationType.LIST, 'reservas'));
 
       const qPanic = query(collection(db, 'alertas_panico'), where('userId', '==', uid));
       unsubPanic = onSnapshot(qPanic, (snap) => {
@@ -260,7 +262,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     } else {
       // Client role (default logged-in user): Bookings by clientId, own invoices, and own client doc
-      const qClientBookings = query(collection(db, 'citas'), where('clientId', '==', uid));
+      const qClientBookings = query(collection(db, 'reservas'), where('clientId', '==', uid));
       unsubReservas = onSnapshot(qClientBookings, (snap) => {
         if (!snap.empty) {
           const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking)).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -268,7 +270,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         } else {
           setBookings([]);
         }
-      }, err => handleFirestoreError(err, OperationType.LIST, 'citas'));
+      }, err => handleFirestoreError(err, OperationType.LIST, 'reservas'));
 
       unsubClientes = onSnapshot(doc(db, 'clientes', uid), (docSnap) => {
         if (docSnap.exists()) {
@@ -331,41 +333,60 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Handlers with Firestore Persistence
   const handleNewBooking = async (newBooking: Booking) => {
-    setBookings(prev => [newBooking, ...prev]);
+    const resolvedClientId = newBooking.clientId || (firebaseUser ? firebaseUser.uid : (client?.id || ''));
+    const resolvedClientName = newBooking.clientName || client?.name || (firebaseUser?.displayName || 'Cliente VIP');
+    const resolvedClientPhone = newBooking.clientPhone || client?.phone || '';
+
+    const finalizedBooking: Booking = {
+      ...newBooking,
+      clientId: resolvedClientId,
+      clientName: resolvedClientName,
+      clientPhone: resolvedClientPhone,
+      createdAt: newBooking.createdAt || new Date().toISOString(),
+      state: newBooking.state || 'pendiente',
+    };
+
+    // 1. Write to Firestore 'reservas' FIRST
     try {
-      await setDoc(doc(db, 'citas', newBooking.id), cleanForFirestore(newBooking));
+      await setDoc(doc(db, 'reservas', finalizedBooking.id), cleanForFirestore(finalizedBooking));
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `reservas/${newBooking.id}`, newBooking);
+      handleFirestoreError(err, OperationType.CREATE, `reservas/${finalizedBooking.id}`, finalizedBooking);
+      throw err;
     }
 
-    // Generate Invoice
+    // 2. Update local state
+    setBookings(prev => [finalizedBooking, ...prev.filter(b => b.id !== finalizedBooking.id)]);
+
+    // 3. Generate Invoice
     const newInv: Invoice = {
-      id: newBooking.invoiceId || `inv-${Date.now()}`,
-      bookingId: newBooking.id,
-      clientId: newBooking.clientId || (firebaseUser ? firebaseUser.uid : 'client-1'),
+      id: finalizedBooking.invoiceId || `inv-${Date.now()}`,
+      bookingId: finalizedBooking.id,
+      clientId: resolvedClientId || (firebaseUser ? firebaseUser.uid : 'client-1'),
       invoiceNumber: `ESS-FAC-2026-${Math.floor(100 + Math.random() * 900)}`,
-      date: newBooking.date,
+      date: finalizedBooking.date,
       rfc: 'DELA850412VIP',
       businessName: 'ESSENYA PRIVÉ S.A. DE C.V.',
-      subtotal: Number((newBooking.total * 0.84).toFixed(2)),
-      tax: Number((newBooking.total * 0.16).toFixed(2)),
-      total: newBooking.total,
+      subtotal: Number((finalizedBooking.total * 0.84).toFixed(2)),
+      tax: Number((finalizedBooking.total * 0.16).toFixed(2)),
+      total: finalizedBooking.total,
       status: 'emitida',
       pdfUrl: '#'
     };
-    setInvoices(prev => [newInv, ...prev]);
     try {
       await setDoc(doc(db, 'invoices', newInv.id), cleanForFirestore(newInv));
+      setInvoices(prev => [newInv, ...prev]);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `invoices/${newInv.id}`, newInv);
     }
 
-    addLog(
-      'Cliente VIP',
-      client.name || 'Cliente Real',
-      'Creación de Reserva',
-      `Nueva reserva ${newBooking.code} de ${newBooking.serviceName} por $${newBooking.total} MXN.`
-    );
+    try {
+      await addLog(
+        'Cliente VIP',
+        resolvedClientName,
+        'Creación de Reserva',
+        `Nueva reserva ${finalizedBooking.code} de ${finalizedBooking.serviceName} por $${finalizedBooking.total} MXN.`
+      );
+    } catch {}
   };
 
   // Therapist Booking Acceptance & Rejection Handlers
@@ -398,7 +419,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     try {
-      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore(updatePayload));
+      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
     }
@@ -430,7 +451,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     try {
-      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore(updatePayload));
+      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
     }
@@ -444,6 +465,92 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     );
   };
 
+  const handleAdminAcceptBooking = async (bookingId: string) => {
+    const targetBooking = bookings.find(b => b.id === bookingId);
+    if (!targetBooking) {
+      throw new Error('La reserva especificada no existe.');
+    }
+    if (targetBooking.state !== 'pendiente') {
+      throw new Error(`La reserva no se puede aceptar porque su estado actual es "${targetBooking.state}".`);
+    }
+
+    const updatePayload = {
+      state: 'aceptada' as BookingState,
+      acceptedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
+      throw err;
+    }
+
+    setBookings(prev => prev.map(b => {
+      if (b.id === bookingId) {
+        return {
+          ...b,
+          ...updatePayload
+        };
+      }
+      return b;
+    }));
+
+    try {
+      await addLog(
+        'Administración',
+        'Central ESSENYA',
+        'Aceptación de Reserva',
+        `Reserva ${targetBooking.code} de ${targetBooking.clientName} ha sido ACEPTADA por la Administración.`
+      );
+    } catch {}
+  };
+
+  const handleAdminRejectBooking = async (bookingId: string, reason: string) => {
+    const targetBooking = bookings.find(b => b.id === bookingId);
+    if (!targetBooking) {
+      throw new Error('La reserva especificada no existe.');
+    }
+    if (targetBooking.state !== 'pendiente') {
+      throw new Error(`La reserva no se puede rechazar porque su estado actual es "${targetBooking.state}".`);
+    }
+
+    const updatePayload = {
+      state: 'rechazada' as BookingState,
+      motivoRechazo: reason,
+      cancellationReason: reason,
+      rejectedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
+      throw err;
+    }
+
+    setBookings(prev => prev.map(b => {
+      if (b.id === bookingId) {
+        return {
+          ...b,
+          ...updatePayload
+        };
+      }
+      return b;
+    }));
+
+    try {
+      await addLog(
+        'Administración',
+        'Central ESSENYA',
+        'Rechazo de Reserva',
+        `Reserva ${targetBooking.code} de ${targetBooking.clientName} ha sido RECHAZADA por la Administración. Motivo: ${reason}`
+      );
+    } catch {}
+  };
+
   const handleUpdateBookingState = async (bookingId: string, newState: BookingState) => {
     setBookings(prev => prev.map(b => {
       if (b.id === bookingId) {
@@ -453,7 +560,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }));
 
     try {
-      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore({ state: newState }));
+      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore({ state: newState }));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, { state: newState });
     }
@@ -492,7 +599,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     try {
-      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore(updatePayload));
+      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
     }
@@ -658,7 +765,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     try {
-      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore(updatePayload));
+      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
     }
@@ -823,7 +930,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }));
 
     try {
-      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore({ date: newDate, time: newTime }));
+      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore({ date: newDate, time: newTime }));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, { date: newDate, time: newTime });
     }
@@ -845,7 +952,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }));
 
     try {
-      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore({ state: 'cancelado', cancellationReason: reason }));
+      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore({ state: 'cancelado', cancellationReason: reason }));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, { state: 'cancelado', cancellationReason: reason });
     }
@@ -867,7 +974,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }));
 
     try {
-      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore({ paymentStatus: 'pagado' }));
+      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore({ paymentStatus: 'pagado' }));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, { paymentStatus: 'pagado' });
     }
@@ -882,7 +989,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const handleRejectPayment = async (bookingId: string, reason: string) => {
     try {
-      await updateDoc(doc(db, 'citas', bookingId), cleanForFirestore({ paymentStatus: 'rechazado' }));
+      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore({ paymentStatus: 'rechazado' }));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, { paymentStatus: 'rechazado' });
     }
@@ -960,6 +1067,8 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       handleNewBooking,
       handleAcceptBooking,
       handleRejectBooking,
+      handleAdminAcceptBooking,
+      handleAdminRejectBooking,
       handleUpdateBookingState,
       handleReassignTherapist,
       handleToggleZoneSurge,

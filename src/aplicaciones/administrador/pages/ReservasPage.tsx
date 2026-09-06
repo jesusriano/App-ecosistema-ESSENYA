@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Calendar, Search, Filter, RefreshCw, UserCheck, Clock, MapPin, 
-  Sparkles, CheckCircle2, AlertTriangle, X, ShieldAlert, FileText, Check, ChevronRight
+  Sparkles, CheckCircle2, AlertTriangle, X, ShieldAlert, FileText, Check, ChevronRight, ChevronDown
 } from 'lucide-react';
 import { useAdmin } from '../hooks/useAdmin';
 import { useToast } from '../../../shared/context/ToastContext';
@@ -11,13 +11,20 @@ import { Booking, Therapist, BookingState } from '../../../shared/types';
 export const ReservasPage: React.FC = () => {
   const { 
     bookings, therapists, handleUpdateBookingState, 
-    handleReassignTherapist, handleRescheduleBooking, handleCancelBooking 
+    handleReassignTherapist, handleRescheduleBooking, handleCancelBooking,
+    handleAdminAcceptBooking, handleAdminRejectBooking
   } = useAdmin();
   const { showToast } = useToast();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   
+  // Custom Administrative Actions
+  const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [rejectBookingModal, setRejectBookingModal] = useState<Booking | null>(null);
+  const [rejectReasonInput, setRejectReasonInput] = useState('');
+
   // Smart Recommendation Modal
   const [smartBookingModal, setSmartBookingModal] = useState<Booking | null>(null);
   
@@ -30,6 +37,41 @@ export const ReservasPage: React.FC = () => {
   const [cancelBookingModal, setCancelBookingModal] = useState<Booking | null>(null);
   const [cancelReasonInput, setCancelReasonInput] = useState('');
 
+  // Custom Administrative Handlers
+  const onAcceptBooking = async (booking: Booking) => {
+    if (processingId) return; // Prevent double operations
+    setProcessingId(booking.id);
+    try {
+      await handleAdminAcceptBooking(booking.id);
+      showToast(`¡Reserva ${booking.code} aprobada y aceptada exitosamente!`);
+    } catch (err: any) {
+      const friendlyMsg = err?.message || 'Error al actualizar Firestore';
+      showToast(`Error al aceptar la reserva: ${friendlyMsg}`, 'error');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const onRejectBooking = async () => {
+    if (!rejectBookingModal || processingId) return;
+    if (!rejectReasonInput.trim()) {
+      showToast('Por favor, indica un motivo de rechazo.', 'warning');
+      return;
+    }
+    const b = rejectBookingModal;
+    setProcessingId(b.id);
+    try {
+      await handleAdminRejectBooking(b.id, rejectReasonInput.trim());
+      showToast(`Reserva ${b.code} rechazada de forma definitiva.`);
+      setRejectBookingModal(null);
+      setRejectReasonInput('');
+    } catch (err: any) {
+      const friendlyMsg = err?.message || 'Error al actualizar Firestore';
+      showToast(`Error al rechazar la reserva: ${friendlyMsg}`, 'error');
+    } finally {
+      setProcessingId(null);
+    }
+  };
   // Filter Bookings
   const filteredBookings = bookings.filter(b => {
     const matchesSearch = 
@@ -77,9 +119,11 @@ export const ReservasPage: React.FC = () => {
     }).sort((a, b) => b.matchScore - a.matchScore);
   };
 
-  const stateBadges: Record<BookingState, { label: string; color: string }> = {
-    pendiente: { label: 'Pendiente Asignación', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+  const stateBadges: Record<string, { label: string; color: string }> = {
+    pendiente: { label: 'Pendiente de Aprobación', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+    aceptada: { label: 'Solicitud Aceptada', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
     aceptado: { label: 'Confirmado / En Agenda', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+    rechazada: { label: 'Solicitud Rechazada', color: 'bg-rose-500/20 text-rose-400 border-rose-500/30 font-bold' },
     en_camino: { label: 'Terapeuta En Camino', color: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
     llegue: { label: 'Terapeuta en Domicilio', color: 'bg-[#22C55E]/20 text-[#22C55E] border-[#22C55E]/40' },
     servicio_iniciado: { label: 'En Sesión Activa', color: 'bg-[#16A34A] text-white font-bold border border-[#22C55E]/50 shadow-sm' },
@@ -118,7 +162,7 @@ export const ReservasPage: React.FC = () => {
         <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
           <Filter className="w-3.5 h-3.5 text-[#C9A55B] shrink-0" />
           <span className="text-xs text-[var(--text-muted)] shrink-0">Estado:</span>
-          {['todos', 'pendiente', 'aceptado', 'en_camino', 'servicio_iniciado', 'servicio_finalizado', 'cancelado'].map((st) => (
+          {['todos', 'pendiente', 'aceptada', 'rechazada', 'aceptado', 'en_camino', 'servicio_iniciado', 'servicio_finalizado', 'cancelado'].map((st) => (
             <button
               key={st}
               onClick={() => setStatusFilter(st)}
@@ -148,77 +192,182 @@ export const ReservasPage: React.FC = () => {
               const badge = stateBadges[b.state] || { label: b.state, color: 'bg-[var(--bg-subcard)] text-[var(--text-muted)]' };
 
               return (
-                <div key={b.id} className="p-5 hover:bg-[var(--bg-subcard)]/50 transition-all flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-                  {/* Info Column */}
-                  <div className="space-y-2 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs text-[#C9A55B] font-bold bg-[#C9A55B]/10 border border-[#C9A55B]/30 px-2 py-0.5 rounded-lg">
-                        {b.code}
-                      </span>
-                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${badge.color}`}>
-                        {badge.label}
-                      </span>
-                      <span className="text-[11px] text-[var(--text-muted)]">
-                        📅 {b.date} • {b.time} ({b.durationMinutes} min)
-                      </span>
+                <div key={b.id} className="p-5 hover:bg-[var(--bg-subcard)]/50 transition-all flex flex-col justify-start gap-4">
+                  <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                    {/* Info Column */}
+                    <div className="space-y-2 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-xs text-[#C9A55B] font-bold bg-[#C9A55B]/10 border border-[#C9A55B]/30 px-2 py-0.5 rounded-lg">
+                          {b.code}
+                        </span>
+                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${badge.color}`}>
+                          {badge.label}
+                        </span>
+                        <span className="text-[11px] text-[var(--text-muted)]">
+                          📅 {b.date} • {b.time} ({b.durationMinutes} min)
+                        </span>
+                      </div>
+
+                      <div>
+                        <h3 className="font-serif font-bold text-base text-[var(--text-primary)] flex items-center gap-2">
+                          <span>{b.serviceName}</span>
+                          <span className="text-xs font-sans text-[#C9A55B] font-semibold">${b.total} MXN</span>
+                        </h3>
+                        <p className="text-xs text-[var(--text-muted)] mt-0.5 flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-[#C9A55B] shrink-0" />
+                          <span>{b.clientAddress} ({b.cityZone})</span>
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-4 text-xs text-[var(--text-muted)] pt-1">
+                        <span>👤 Client VIP: <strong className="text-[var(--text-primary)]">{b.clientName}</strong></span>
+                        <span>
+                          💆 Terapeuta: {b.therapistName ? (
+                            <strong className="text-[#C9A55B]">{b.therapistName}</strong>
+                          ) : (
+                            <span className="text-amber-500 dark:text-amber-400 italic">Sin Terapeuta Asignada</span>
+                          )}
+                        </span>
+                        <button
+                          onClick={() => setExpandedBookingId(expandedBookingId === b.id ? null : b.id)}
+                          className="text-xs text-[#C9A55B] hover:underline flex items-center gap-1 cursor-pointer select-none ml-2"
+                        >
+                          {expandedBookingId === b.id ? (
+                            <>
+                              <ChevronDown className="w-3.5 h-3.5" />
+                              <span>Ocultar Solicitud</span>
+                            </>
+                          ) : (
+                            <>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                              <span>Revisar Ficha Completa</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
 
-                    <div>
-                      <h3 className="font-serif font-bold text-base text-[var(--text-primary)] flex items-center gap-2">
-                        <span>{b.serviceName}</span>
-                        <span className="text-xs font-sans text-[#C9A55B] font-semibold">${b.total} MXN</span>
-                      </h3>
-                      <p className="text-xs text-[var(--text-muted)] mt-0.5 flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-[#C9A55B] shrink-0" />
-                        <span>{b.clientAddress} ({b.cityZone})</span>
-                      </p>
-                    </div>
+                    {/* Actions Column */}
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      {b.state === 'pendiente' ? (
+                        <div className="flex items-center gap-2">
+                          <button
+                            disabled={!!processingId}
+                            onClick={() => onAcceptBooking(b)}
+                            className={`px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-md shadow-emerald-900/10 flex items-center gap-1 ${
+                              processingId === b.id ? 'opacity-80' : ''
+                            }`}
+                          >
+                            {processingId === b.id ? (
+                              <span>Procesando...</span>
+                            ) : (
+                              <>
+                                <Check className="w-3.5 h-3.5" />
+                                <span>ACEPTAR RESERVA</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            disabled={!!processingId}
+                            onClick={() => {
+                              setRejectBookingModal(b);
+                              setRejectReasonInput('');
+                            }}
+                            className="px-4 py-2 bg-rose-600/10 hover:bg-rose-600/20 disabled:bg-rose-950/10 border border-rose-500/30 text-rose-500 dark:text-rose-400 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            <span>RECHAZAR RESERVA</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
+                          {(b.state === 'aceptada' || b.state === 'aceptado') && (
+                            <LuxuryButton
+                              variant="gold"
+                              size="sm"
+                              onClick={() => setSmartBookingModal(b)}
+                            >
+                              <Sparkles className="w-3.5 h-3.5 mr-1" />
+                              <span>{b.therapistName ? 'Reasignar (IA)' : 'Asignar con IA'}</span>
+                            </LuxuryButton>
+                          )}
 
-                    <div className="flex flex-wrap items-center gap-4 text-xs text-[var(--text-muted)] pt-1">
-                      <span>👤 Client VIP: <strong className="text-[var(--text-primary)]">{b.clientName}</strong></span>
-                      <span>
-                        💆 Terapeuta: {b.therapistName ? (
-                          <strong className="text-[#C9A55B]">{b.therapistName}</strong>
-                        ) : (
-                          <span className="text-amber-500 dark:text-amber-400 italic">Sin Terapeuta Asignada</span>
+                          {b.state !== 'cancelado' && b.state !== 'rechazada' && b.state !== 'servicio_finalizado' && (
+                            <LuxuryButton
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setRescheduleBookingModal(b);
+                                setNewDateInput(b.date);
+                                setNewTimeInput(b.time);
+                              }}
+                            >
+                              <Clock className="w-3.5 h-3.5 mr-1" />
+                              <span>Reprogramar</span>
+                            </LuxuryButton>
+                          )}
+
+                          {b.state !== 'cancelado' && b.state !== 'rechazada' && b.state !== 'servicio_finalizado' && (
+                            <button
+                              onClick={() => setCancelBookingModal(b)}
+                              className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-500 dark:text-red-400 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                            >
+                              Cancelar
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Expandable Details Section */}
+                  {expandedBookingId === b.id && (
+                    <div className="pt-4 border-t border-[var(--border-color)] grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs text-[var(--text-muted)] animate-fadeIn">
+                      {/* Col 1: Cliente & Contacto */}
+                      <div className="space-y-1.5 bg-[var(--bg-subcard)] p-3.5 rounded-xl border border-[var(--border-color)]">
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-[#C9A55B] block mb-1">Contacto del Cliente</span>
+                        <div>👤 Nombre: <strong className="text-[var(--text-primary)]">{b.clientName}</strong></div>
+                        <div>📞 Teléfono: <span className="text-[var(--text-primary)] font-mono">{b.clientPhone || 'VIP (Sin registrar)'}</span></div>
+                        <div>📍 Dirección: <span className="text-[var(--text-primary)]">{b.clientAddress} ({b.cityZone})</span></div>
+                        {b.arrivalInstructions && (
+                          <div className="mt-1 pt-1.5 border-t border-[var(--border-color)]">
+                            🔑 <strong className="text-[var(--text-primary)]">Acceso/Llegada:</strong> {b.arrivalInstructions}
+                          </div>
                         )}
-                      </span>
+                      </div>
+
+                      {/* Col 2: Preferencias del Ritual */}
+                      <div className="space-y-1.5 bg-[var(--bg-subcard)] p-3.5 rounded-xl border border-[var(--border-color)]">
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-[#C9A55B] block mb-1">Preferencias del Ritual</span>
+                        <div>💪 Presión: <strong className="text-[var(--text-primary)]">{b.preferences?.pressureLevel || 'Media'}</strong></div>
+                        <div>🌿 Aromaterapia: <strong className="text-[var(--text-primary)]">{b.preferences?.essentialOil || 'Aceite de olor'}</strong></div>
+                        <div>🎵 Ambiente: <strong className="text-[var(--text-primary)]">{b.preferences?.musicStyle || 'Sonido de la naturaleza'}</strong></div>
+                        {b.painPoints && (
+                          <div className="mt-1 pt-1.5 border-t border-[var(--border-color)] text-amber-500">
+                            ⚠️ <strong className="text-amber-500 font-semibold">Puntos de Dolor:</strong> {b.painPoints}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Col 3: Transacción & Administrativo */}
+                      <div className="space-y-1.5 bg-[var(--bg-subcard)] p-3.5 rounded-xl border border-[var(--border-color)]">
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-[#C9A55B] block mb-1">Transacción & Auditoría</span>
+                        <div>💵 Precio Total: <strong className="text-[#C9A55B] font-bold">${b.total} MXN</strong></div>
+                        <div>💳 Método Pago: <span className="text-[var(--text-primary)]">{b.paymentMethod}</span></div>
+                        <div>🏷️ Estado Pago: <span className="text-[var(--text-primary)] font-semibold">{b.paymentStatus === 'pagado' ? '✅ Pagado' : '⏳ Pendiente'}</span></div>
+                        {b.motivoRechazo && (
+                          <div className="mt-1 pt-1.5 border-t border-[var(--border-color)] text-rose-500">
+                            ❌ <strong className="text-rose-500">Motivo de Rechazo:</strong> {b.motivoRechazo}
+                          </div>
+                        )}
+                        {b.cancellationReason && !b.motivoRechazo && (
+                          <div className="mt-1 pt-1.5 border-t border-[var(--border-color)] text-rose-500">
+                            ❌ <strong className="text-rose-500">Cancelación/Rechazo:</strong> {b.cancellationReason}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-
-                  {/* Actions Column */}
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
-                    <LuxuryButton
-                      variant="gold"
-                      size="sm"
-                      onClick={() => setSmartBookingModal(b)}
-                    >
-                      <Sparkles className="w-3.5 h-3.5 mr-1" />
-                      <span>{b.therapistName ? 'Reasignar (IA)' : 'Asignar con IA'}</span>
-                    </LuxuryButton>
-
-                    <LuxuryButton
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setRescheduleBookingModal(b);
-                        setNewDateInput(b.date);
-                        setNewTimeInput(b.time);
-                      }}
-                    >
-                      <Clock className="w-3.5 h-3.5 mr-1" />
-                      <span>Reprogramar</span>
-                    </LuxuryButton>
-
-                    {b.state !== 'cancelado' && b.state !== 'servicio_finalizado' && (
-                      <button
-                        onClick={() => setCancelBookingModal(b)}
-                        className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-500 dark:text-red-400 text-xs font-semibold rounded-xl transition-all cursor-pointer"
-                      >
-                        Cancelar
-                      </button>
-                    )}
-                  </div>
+                  )}
                 </div>
               );
             })
@@ -414,6 +563,75 @@ export const ReservasPage: React.FC = () => {
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer"
               >
                 Confirmar Cancelación
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Modal */}
+      {rejectBookingModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[var(--bg-card)] border border-rose-500/40 rounded-3xl p-6 max-w-md w-full space-y-4">
+            <h3 className="font-serif font-bold text-lg text-rose-500 dark:text-rose-400 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              <span>Rechazar Solicitud de Reserva</span>
+            </h3>
+            <p className="text-xs text-[var(--text-muted)]">
+              Indica la razón de rechazo para la reserva <strong className="text-[var(--text-primary)]">{rejectBookingModal.code}</strong>. Esta decisión se guardará en Firestore y se mostrará al cliente en tiempo real.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-[var(--text-muted)] block mb-1">Razón o Motivo de Rechazo</label>
+                <select
+                  value={rejectReasonInput}
+                  onChange={(e) => setRejectReasonInput(e.target.value)}
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] px-3 py-2.5 rounded-xl text-xs focus:outline-none focus:border-rose-500/40 mb-2"
+                >
+                  <option value="">-- Selecciona un motivo predefinido --</option>
+                  <option value="Sin disponibilidad de terapeuta certificada en la zona">Sin disponibilidad de terapeuta certificada en la zona</option>
+                  <option value="Horario solicitado fuera de servicio">Horario solicitado fuera de servicio</option>
+                  <option value="Dirección fuera del área de cobertura ESSENYA">Dirección fuera del área de cobertura ESSENYA</option>
+                  <option value="Inconsistencia o error en los datos de facturación/pago">Inconsistencia o error en los datos de facturación/pago</option>
+                  <option value="custom">Otro (especificar abajo)...</option>
+                </select>
+
+                <textarea
+                  placeholder="Escribe un motivo detallado y comprensible para el cliente..."
+                  value={rejectReasonInput === 'custom' ? '' : rejectReasonInput}
+                  onChange={(e) => setRejectReasonInput(e.target.value)}
+                  disabled={rejectReasonInput !== 'custom' && rejectReasonInput !== '' && ['Sin disponibilidad de terapeuta certificada en la zona', 'Horario solicitado fuera de servicio', 'Dirección fuera del área de cobertura ESSENYA', 'Inconsistencia o error en los datos de facturación/pago'].includes(rejectReasonInput)}
+                  rows={3}
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] p-3 rounded-xl text-xs focus:outline-none focus:border-rose-500/50"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2">
+              <button
+                disabled={!!processingId}
+                onClick={() => {
+                  setRejectBookingModal(null);
+                  setRejectReasonInput('');
+                }}
+                className="px-4 py-2 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={!!processingId || !rejectReasonInput.trim()}
+                onClick={onRejectBooking}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1"
+              >
+                {processingId ? (
+                  <span>Procesando...</span>
+                ) : (
+                  <>
+                    <X className="w-3.5 h-3.5" />
+                    <span>Confirmar Rechazo</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

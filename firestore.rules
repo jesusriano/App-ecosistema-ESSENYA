@@ -16,10 +16,16 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
+        (request.auth.token.email != null && (
+          request.auth.token.email == 'essenya222@gmail.com' ||
+          request.auth.token.email == 'admin.test.phase1@essenya.com' ||
+          request.auth.token.email == 'admin@essenya.com'
+        )) ||
         exists(/databases/$(database)/documents/administradores/$(request.auth.uid)) ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol.lower() in ['administrador', 'admin'])
+         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'administrador' ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'admin'))
       );
     }
 
@@ -88,7 +94,7 @@ service cloud.firestore {
       
       // Self registration is restricted to 'cliente' or 'terapeuta' roles only
       allow create: if isSignedIn() && isOwner(userId) && 
-                    request.resource.data.rol in ['cliente', 'terapeuta'] &&
+                    (request.resource.data.rol in ['cliente', 'terapeuta'] || isAdmin()) &&
                     request.resource.data.uid == userId;
                     
       // Prevent role privilege escalation by clients or therapists

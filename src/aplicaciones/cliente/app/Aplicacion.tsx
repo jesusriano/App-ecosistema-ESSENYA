@@ -43,7 +43,7 @@ interface ClientAppProps {
   therapists: Therapist[];
   bookings: Booking[];
   invoices: Invoice[];
-  onNewBooking: (booking: Booking) => void;
+  onNewBooking: (booking: Booking) => Promise<void> | void;
   onUpdateBookingState: (bookingId: string, newState: BookingState) => void;
   onViewInvoice: (invoice: Invoice) => void;
   onSendMessage: (bookingId: string, text: string) => void;
@@ -110,6 +110,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   const [tipAmount, setTipAmount] = useState<number>(0);
   const [isCustomTip, setIsCustomTip] = useState<boolean>(false);
   const [customTipVal, setCustomTipVal] = useState<string>('0');
+  const [isSubmittingBooking, setIsSubmittingBooking] = useState<boolean>(false);
 
   // Client Photo State & Local Persistence
   const [clientPhoto, setClientPhoto] = useState<string>(() => {
@@ -306,8 +307,9 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   };
 
   // Submit Booking
-  const handleConfirmBooking = () => {
-    if (!selectedService) return;
+  const handleConfirmBooking = async () => {
+    if (!selectedService || isSubmittingBooking) return;
+    setIsSubmittingBooking(true);
 
     // NO therapist is assigned at creation time
     const therapistDisplayName = undefined;
@@ -368,35 +370,47 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       invoiceId: `inv-${Math.floor(1000 + Math.random() * 9000)}`
     };
 
-    // Consume VIP15 courtesy benefit if applied (single-use)
-    if (appliedPromo?.type === 'VIP15') {
-      markVipCourtesyAsUsed();
-    }
+    try {
+      await onNewBooking(newBk);
 
-    // Deduct Gift Card balance if applied
-    if (appliedGiftCard && giftCardDeduction > 0) {
-      applyGiftCardToBooking(
-        appliedGiftCard.code,
-        giftCardDeduction,
-        newBk.code,
-        selectedService?.name || 'Masaje ESSENYA'
+      // Consume VIP15 courtesy benefit if applied (single-use)
+      if (appliedPromo?.type === 'VIP15') {
+        markVipCourtesyAsUsed();
+      }
+
+      // Deduct Gift Card balance if applied
+      if (appliedGiftCard && giftCardDeduction > 0) {
+        applyGiftCardToBooking(
+          appliedGiftCard.code,
+          giftCardDeduction,
+          newBk.code,
+          selectedService?.name || 'Masaje ESSENYA'
+        );
+      }
+
+      showToast(
+        'Reserva Confirmada',
+        `Su código es ${newBk.code}. La solicitud ha sido registrada en tiempo real en la Central de Operaciones.`,
+        'gold'
       );
+      
+      // Reset coupon & gift card states
+      setAppliedPromo(null);
+      setAppliedGiftCard(null);
+      setCouponCode('');
+
+      setActiveTab('tracking');
+      setStep(1);
+    } catch (bookingErr: any) {
+      console.error('Error guardando reserva en Firestore:', bookingErr);
+      showToast(
+        'Error al procesar reserva',
+        bookingErr?.message || 'No fue posible conectar con Firestore. Intente nuevamente.',
+        'error'
+      );
+    } finally {
+      setIsSubmittingBooking(false);
     }
-
-    onNewBooking(newBk);
-    showToast(
-      'Reserva Confirmada',
-      `Su código es ${newBk.code}. Estamos buscando una profesional disponible que cumpla con tus preferencias.`,
-      'gold'
-    );
-    
-    // Reset coupon & gift card states
-    setAppliedPromo(null);
-    setAppliedGiftCard(null);
-    setCouponCode('');
-
-    setActiveTab('tracking');
-    setStep(1);
   };
 
   // Call AI Concierge Server Endpoint
@@ -1831,10 +1845,20 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
                   <button
                     onClick={handleConfirmBooking}
-                    className="flex items-center space-x-2 bg-gradient-to-r from-[#E6CA65] via-[#C9A55B] to-[#9A7B38] text-black font-extrabold text-sm px-8 py-3.5 rounded-xl gold-button-hover shadow-lg shadow-[#C9A55B]/20"
+                    disabled={isSubmittingBooking}
+                    className={`flex items-center space-x-2 bg-gradient-to-r from-[#E6CA65] via-[#C9A55B] to-[#9A7B38] text-black font-extrabold text-sm px-8 py-3.5 rounded-xl gold-button-hover shadow-lg shadow-[#C9A55B]/20 transition-all ${isSubmittingBooking ? 'opacity-70 cursor-not-allowed' : ''}`}
                   >
-                    <CheckCircle2 className="w-5 h-5 text-black" />
-                    <span>Confirmar y Reservar Cita</span>
+                    {isSubmittingBooking ? (
+                      <>
+                        <RefreshCw className="w-5 h-5 text-black animate-spin" />
+                        <span>Guardando en Central ESSENYA...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-5 h-5 text-black" />
+                        <span>Confirmar y Reservar Cita</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -1871,38 +1895,82 @@ export const ClientApp: React.FC<ClientAppProps> = ({
             <div className="bg-white dark:bg-[#141414] p-6 rounded-2xl border border-[#E5DFD3] dark:border-[#C9A55B]/20 space-y-4 shadow-sm">
               <h4 className="text-xs uppercase text-[#6B655F] dark:text-[#AAAAAA] tracking-wider font-semibold">Estado de Progreso en Tiempo Real</h4>
               
-              <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 text-center">
-                {[
-                  { stateKey: 'pendiente', label: '1. Pendiente' },
-                  { stateKey: 'aceptado', label: '2. Aceptado' },
-                  { stateKey: 'en_camino', label: '3. En Camino' },
-                  { stateKey: 'llegue', label: '4. Llegué' },
-                  { stateKey: 'servicio_iniciado', label: '5. En Sesión' },
-                  { stateKey: 'servicio_finalizado', label: '6. Finalizado' }
-                ].map((st, idx) => {
-                  const isCurrent = activeBooking.state === st.stateKey;
-                  return (
-                    <div
-                      key={st.stateKey}
-                      
-                      className={`p-3 rounded-xl border transition-all ${
-                        isCurrent
-                          ? 'bg-[#C9A55B] text-black font-extrabold border-[#C9A55B] shadow-lg shadow-[#C9A55B]/20'
-                          : 'bg-[#F5F1EA] dark:bg-[#1A1A1A] text-[#6B655F] dark:text-[#888888] border-[#E5DFD3] dark:border-[#333333] hover:text-[#1C1917] dark:hover:text-white'
-                      }`}
-                    >
-                      <span className="text-xs block">{st.label}</span>
-                    </div>
-                  );
-                })}
-              </div>
+              {activeBooking.state === 'rechazada' ? (
+                <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 text-center text-rose-500 dark:text-rose-400 font-bold text-sm">
+                  🛑 Solicitud Rechazada por la Administración
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-7 gap-2 text-center">
+                  {[
+                    { stateKey: 'pendiente', label: '1. Solicitud' },
+                    { stateKey: 'aceptada', label: '2. Aceptada' },
+                    { stateKey: 'aceptado', label: '3. Agenda' },
+                    { stateKey: 'en_camino', label: '4. En Camino' },
+                    { stateKey: 'llegue', label: '5. Llegué' },
+                    { stateKey: 'servicio_iniciado', label: '6. Sesión' },
+                    { stateKey: 'servicio_finalizado', label: '7. Concluido' }
+                  ].map((st) => {
+                    const isCurrent = activeBooking.state === st.stateKey;
+                    return (
+                      <div
+                        key={st.stateKey}
+                        className={`p-3 rounded-xl border transition-all ${
+                          isCurrent
+                            ? 'bg-[#C9A55B] text-black font-extrabold border-[#C9A55B] shadow-lg shadow-[#C9A55B]/20'
+                            : 'bg-[#F5F1EA] dark:bg-[#1A1A1A] text-[#6B655F] dark:text-[#888888] border-[#E5DFD3] dark:border-[#333333] hover:text-[#1C1917] dark:hover:text-white'
+                        }`}
+                      >
+                        <span className="text-xs block">{st.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               <div className="text-xs text-center text-[#6B655F] dark:text-[#AAAAAA] pt-2">
               </div>
             </div>
 
             {/* Live GPS Google Maps SDK View & Therapist Card Grid */}
-            {(!activeBooking.therapistId || activeBooking.state === 'pendiente') ? (
+            {activeBooking.state === 'rechazada' ? (
+              <div className="bg-white dark:bg-[#141414] p-8 sm:p-10 rounded-2xl border-2 border-rose-500/40 text-center space-y-5 shadow-sm">
+                <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
+                  <div className="absolute inset-0 rounded-full bg-rose-500/20 animate-ping"></div>
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-rose-500 to-red-600 flex items-center justify-center shadow-lg shadow-rose-500/30 z-10 text-2xl">
+                    ❌
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="bg-rose-500/15 text-rose-700 dark:text-rose-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider border border-rose-500/30">
+                    Solicitud Rechazada por la Administración
+                  </span>
+                  <h3 className="text-2xl font-serif font-bold text-[#1C1917] dark:text-white">Lo sentimos, tu solicitud no ha podido ser procesada</h3>
+                  <p className="text-sm text-[#6B655F] dark:text-[#AAAAAA] max-w-md mx-auto">
+                    La administración central de ESSENYA ha evaluado tu solicitud y no ha sido aprobada en esta ocasión.
+                  </p>
+                  
+                  {activeBooking.motivoRechazo && (
+                    <div className="bg-rose-500/5 dark:bg-rose-950/10 p-4 rounded-xl border border-rose-500/20 max-w-lg mx-auto text-sm text-rose-700 dark:text-rose-300 mt-2">
+                      <strong>Motivo del rechazo:</strong> "{activeBooking.motivoRechazo}"
+                    </div>
+                  )}
+
+                  <p className="text-xs text-[#6B655F] dark:text-[#888888] italic pt-2">
+                    Si tienes alguna duda o deseas reprogramar con otros datos, por favor contacta con soporte o inicia una nueva solicitud.
+                  </p>
+                </div>
+
+                <div className="pt-4 border-t border-[#E5DFD3] dark:border-[#262626] max-w-xs mx-auto flex justify-center">
+                  <button
+                    onClick={() => setActiveTab('reservar')}
+                    className="bg-[#C9A55B] text-black font-bold px-5 py-2 rounded-xl text-xs hover:bg-[#E6CA65] transition-all cursor-pointer shadow-sm"
+                  >
+                    Crear Nueva Solicitud
+                  </button>
+                </div>
+              </div>
+            ) : (!activeBooking.therapistId || activeBooking.state === 'pendiente' || activeBooking.state === 'aceptada') ? (
               <div className="bg-white dark:bg-[#141414] p-8 sm:p-10 rounded-2xl border-2 border-dashed border-[#C9A55B]/40 text-center space-y-5 shadow-sm">
                 <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
                   <div className="absolute inset-0 rounded-full bg-[#C9A55B]/20 animate-ping"></div>
@@ -1913,14 +1981,20 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
                 <div className="space-y-2">
                   <span className="bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B] text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider border border-[#C9A55B]/30">
-                    Notificación enviada a terapeutas
+                    {activeBooking.state === 'pendiente' ? 'Esperando Aprobación' : 'Solicitud Aprobada por Administración'}
                   </span>
-                  <h3 className="text-2xl font-serif font-bold text-[#1C1917] dark:text-white">Buscando Terapeuta Disponible...</h3>
+                  <h3 className="text-2xl font-serif font-bold text-[#1C1917] dark:text-white">
+                    {activeBooking.state === 'pendiente' 
+                      ? 'Procesando tu Solicitud...' 
+                      : 'Buscando Terapeuta Certificada...'}
+                  </h3>
                   <p className="text-sm text-[#6B655F] dark:text-[#AAAAAA] max-w-md mx-auto">
-                    Tu solicitud para <strong>{activeBooking.serviceName}</strong> ha sido enviada a las terapeutas certificadas en tu zona (<span className="text-[#806020] dark:text-[#C9A55B] font-semibold">{activeBooking.cityZone}</span>).
+                    {activeBooking.state === 'pendiente' 
+                      ? 'Nuestra administración central está evaluando los detalles de tu ritual para proceder con su aprobación inmediata.'
+                      : `¡Excelente! Tu solicitud para ${activeBooking.serviceName} ha sido aprobada y se está asignando la mejor terapeuta certificada disponible en la zona de ${activeBooking.cityZone}.`}
                   </p>
                   <p className="text-xs text-[#6B655F] dark:text-[#888888] italic">
-                    En cuanto una profesional acepte el masaje, verás aquí inmediatamente su <strong>nombre completo</strong>, <strong>fotografía</strong> y seguimiento en tiempo real.
+                    En cuanto una profesional sea asignada, verás aquí inmediatamente su <strong>nombre completo</strong>, <strong>fotografía</strong> y seguimiento en tiempo real.
                   </p>
                 </div>
 
@@ -1930,9 +2004,9 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                     <strong className="text-[#1C1917] dark:text-white">{activeBooking.date} • {activeBooking.time}</strong>
                   </div>
                   <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-2.5 rounded-xl border border-[#E5DFD3] dark:border-[#333333]">
-                    <span className="text-[10px] text-[#888888] block">Preferencia</span>
-                    <strong className="text-[#1C1917] dark:text-white">
-                      {activeBooking.preferences.genderPreference === 'femenino' ? 'Terapeuta Mujer' : activeBooking.preferences.genderPreference === 'masculino' ? 'Terapeuta Hombre' : 'Sin Preferencia'}
+                    <span className="text-[10px] text-[#888888] block">Estado Administrativo</span>
+                    <strong className="text-[#1C1917] dark:text-white capitalize">
+                      {activeBooking.state === 'aceptada' ? 'Aprobada (Sin Asignar)' : activeBooking.state}
                     </strong>
                   </div>
                 </div>

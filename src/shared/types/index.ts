@@ -7,7 +7,9 @@ export type MembershipTier = 'Platino' | 'Gold' | 'Diamond' | string;
 
 export type BookingState = 
   | 'pendiente' 
+  | 'aceptada'
   | 'aceptado' 
+  | 'rechazada'
   | 'en_camino' 
   | 'llegue' 
   | 'servicio_iniciado' 
@@ -131,6 +133,7 @@ export interface Booking {
   dualTherapistNote?: string;
   adminNotes?: string;
   cancellationReason?: string;
+  motivoRechazo?: string;
   paymentProofUrl?: string;
 }
 

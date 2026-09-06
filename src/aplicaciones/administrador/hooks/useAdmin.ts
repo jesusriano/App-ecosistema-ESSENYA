@@ -14,6 +14,8 @@ export const useAdmin = () => {
     activeInvoice: ecosystem.activeInvoice,
     setActiveInvoice: ecosystem.setActiveInvoice,
     handleUpdateBookingState: ecosystem.handleUpdateBookingState,
+    handleAdminAcceptBooking: ecosystem.handleAdminAcceptBooking,
+    handleAdminRejectBooking: ecosystem.handleAdminRejectBooking,
     handleReassignTherapist: ecosystem.handleReassignTherapist,
     handleToggleZoneSurge: ecosystem.handleToggleZoneSurge,
     handleAddTherapist: ecosystem.handleAddTherapist,
