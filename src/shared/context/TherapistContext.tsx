@@ -374,7 +374,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     const initialStatus: AccountStatus = data.estado || 'activo';
 
     // Check duplicate: only error if there is another therapist with the same email and a DIFFERENT id
-    const existingOther = therapists.find(t => t.correo.toLowerCase() === trimmedEmail && t.id !== newId);
+    const existingOther = therapists.find(t => (t.correo || '').toLowerCase() === trimmedEmail && t.id !== newId);
     if (existingOther) {
       return { success: false, error: 'Ya existe una terapeuta registrada con este correo electrónico.' };
     }
@@ -485,7 +485,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
 
       setTherapists(prev => {
-        const remaining = prev.filter(t => t.id !== newId && t.correo.toLowerCase() !== trimmedEmail);
+        const remaining = prev.filter(t => t.id !== newId && (t.correo || '').toLowerCase() !== trimmedEmail);
         return [newTherapist, ...remaining];
       });
       logAudit(newId, `${nombre} ${apellidos}`, initialStatus === 'pendiente' ? 'Postulación de Terapeuta Registrada' : 'Creación de Cuenta por Administradora', `Estado Inicial: ${initialStatus.toUpperCase()}`);

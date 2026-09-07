@@ -288,11 +288,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Filtered Therapists
   const filteredTherapists = therapists.filter(t => {
-    const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (t.coverageZones && t.coverageZones.some(z => z.toLowerCase().includes(searchTerm.toLowerCase())));
+    const term = (searchTerm || '').toLowerCase();
+    const name = (t.name || '').toLowerCase();
+    const matchesSearch = name.includes(term) ||
+      (Array.isArray(t.coverageZones) && t.coverageZones.some(z => String(z || '').toLowerCase().includes(term)));
     
     if (selectedZoneFilter === 'todos') return matchesSearch;
-    return matchesSearch && t.coverageZones && t.coverageZones.includes(selectedZoneFilter);
+    return matchesSearch && Array.isArray(t.coverageZones) && t.coverageZones.includes(selectedZoneFilter);
   });
 
   return (
@@ -446,7 +448,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div className="space-y-3">
                   {zones.map((z) => {
                     const coveringCount = therapists.filter(t => 
-                      t.coverageZones && t.coverageZones.some(cz => z.coloniases.some(col => col.toLowerCase().includes(cz.toLowerCase()) || cz.toLowerCase().includes(col.toLowerCase())))
+                      Array.isArray(t.coverageZones) && t.coverageZones.some(cz => Array.isArray(z.coloniases) && z.coloniases.some(col => String(col || '').toLowerCase().includes(String(cz || '').toLowerCase()) || String(cz || '').toLowerCase().includes(String(col || '').toLowerCase())))
                     ).length;
 
                     return (
@@ -678,9 +680,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               {zones.map((z) => {
                 // Find therapists whose coverageZones list contains any of this zone's subareas
                 const assignedTherapists = therapists.filter(t => 
-                  t.coverageZones && t.coverageZones.some(cz => 
-                    z.name.toLowerCase().includes(cz.toLowerCase()) || 
-                    z.coloniases.some(col => col.toLowerCase().includes(cz.toLowerCase()) || cz.toLowerCase().includes(col.toLowerCase()))
+                  Array.isArray(t.coverageZones) && t.coverageZones.some(cz => 
+                    String(z.name || '').toLowerCase().includes(String(cz || '').toLowerCase()) || 
+                    (Array.isArray(z.coloniases) && z.coloniases.some(col => String(col || '').toLowerCase().includes(String(cz || '').toLowerCase()) || String(cz || '').toLowerCase().includes(String(col || '').toLowerCase())))
                   )
                 );
 
@@ -847,9 +849,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         const fullLocation = `${bookingZone} ${bookingAddress}`.toLowerCase();
 
         const suggestedTherapists = therapists.filter(t => {
-          if (!t.coverageZones || t.coverageZones.length === 0) return false;
+          if (!Array.isArray(t.coverageZones) || t.coverageZones.length === 0) return false;
           return t.coverageZones.some(cz => 
-            fullLocation.includes(cz.toLowerCase()) || cz.toLowerCase().includes(bookingZone.toLowerCase())
+            fullLocation.includes(String(cz || '').toLowerCase()) || String(cz || '').toLowerCase().includes(bookingZone.toLowerCase())
           );
         });
 

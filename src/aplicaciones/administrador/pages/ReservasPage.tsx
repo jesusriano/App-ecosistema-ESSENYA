@@ -8,6 +8,80 @@ import { useToast } from '../../../shared/context/ToastContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { Booking, Therapist, BookingState } from '../../../shared/types';
 
+export const sanitizeBooking = (raw: any): Booking => {
+  if (!raw) {
+    return {
+      id: `booking-${Date.now()}`,
+      code: `ESS-${Math.floor(1000 + Math.random() * 9000)}`,
+      clientId: '',
+      clientName: 'Cliente',
+      clientPhone: '',
+      clientAddress: '',
+      cityZone: 'Polanco',
+      serviceId: 'serv-1',
+      serviceName: 'Masaje Holístico',
+      durationMinutes: 60,
+      price: 1500,
+      tip: 0,
+      total: 1500,
+      date: new Date().toISOString().split('T')[0],
+      time: '12:00',
+      preferences: {
+        genderPreference: 'sin_preferencia',
+        pressureLevel: 'Media',
+        essentialOil: 'Lavanda Francesa',
+        musicStyle: 'Acoustic Zen'
+      },
+      state: 'pendiente',
+      etaMinutes: 20,
+      paymentMethod: 'Tarjeta de Crédito / Débito',
+      paymentStatus: 'pendiente',
+      createdAt: new Date().toISOString()
+    };
+  }
+
+  const code = raw.code || raw.bookingCode || raw.folio || (raw.id ? `ESS-${String(raw.id).substring(0, 6).toUpperCase()}` : `ESS-${Math.floor(1000 + Math.random() * 9000)}`);
+  const clientName = raw.clientName || raw.nombreCliente || [raw.clienteNombre, raw.clienteApellidos].filter(Boolean).join(' ') || 'Cliente';
+  const therapistName = raw.therapistName || raw.nombreTerapeuta || undefined;
+  const serviceName = raw.serviceName || raw.servicioNombre || raw.service?.name || 'Servicio Essenya';
+  const cityZone = raw.cityZone || raw.zona || raw.ciudad || 'Ciudad de México';
+  const clientAddress = raw.clientAddress || raw.direccion || '';
+
+  return {
+    ...raw,
+    id: String(raw.id || `booking-${Date.now()}`),
+    code: String(code),
+    clientId: String(raw.clientId || ''),
+    clientName: String(clientName),
+    clientPhone: String(raw.clientPhone || raw.telefono || ''),
+    clientAddress: String(clientAddress),
+    cityZone: String(cityZone),
+    therapistId: raw.therapistId ? String(raw.therapistId) : undefined,
+    therapistName: therapistName ? String(therapistName) : undefined,
+    therapistPhoto: raw.therapistPhoto || raw.fotografiaTerapeuta || undefined,
+    therapistPhone: raw.therapistPhone || raw.telefonoTerapeuta || undefined,
+    serviceId: String(raw.serviceId || 'serv-1'),
+    serviceName: String(serviceName),
+    durationMinutes: Number(raw.durationMinutes || raw.duracion || 60),
+    price: Number(raw.price || raw.precio || 0),
+    tip: Number(raw.tip || raw.propina || 0),
+    total: Number(raw.total || (Number(raw.price || 0) + Number(raw.tip || 0))),
+    date: String(raw.date || raw.fecha || new Date().toISOString().split('T')[0]),
+    time: String(raw.time || raw.hora || '12:00'),
+    preferences: raw.preferences || {
+      genderPreference: 'sin_preferencia',
+      pressureLevel: 'Media',
+      essentialOil: 'Lavanda Francesa',
+      musicStyle: 'Acoustic Zen'
+    },
+    state: raw.state || raw.estado || 'pendiente',
+    etaMinutes: Number(raw.etaMinutes || 20),
+    paymentMethod: raw.paymentMethod || 'Tarjeta de Crédito / Débito',
+    paymentStatus: raw.paymentStatus || 'pendiente',
+    createdAt: String(raw.createdAt || new Date().toISOString())
+  };
+};
+
 export const ReservasPage: React.FC = () => {
   const { 
     bookings, therapists, handleUpdateBookingState, 
@@ -73,34 +147,47 @@ export const ReservasPage: React.FC = () => {
     }
   };
   // Filter Bookings
-  const filteredBookings = bookings.filter(b => {
-    const matchesSearch = 
-      b.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      b.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (b.therapistName && b.therapistName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      b.serviceName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      b.cityZone.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredBookings = (bookings || [])
+    .filter(Boolean)
+    .map(sanitizeBooking)
+    .filter(b => {
+      const term = (searchTerm || '').toLowerCase().trim();
+      const code = (b.code || '').toLowerCase();
+      const clientName = (b.clientName || '').toLowerCase();
+      const therapistName = (b.therapistName || '').toLowerCase();
+      const serviceName = (b.serviceName || '').toLowerCase();
+      const cityZone = (b.cityZone || '').toLowerCase();
 
-    const matchesStatus = statusFilter === 'todos' || b.state === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+      const matchesSearch = 
+        !term ||
+        code.includes(term) ||
+        clientName.includes(term) ||
+        therapistName.includes(term) ||
+        serviceName.includes(term) ||
+        cityZone.includes(term);
+
+      const matchesStatus = statusFilter === 'todos' || b.state === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
 
   // Calculate Smart Match Score for Therapists
   const calculateSmartCandidates = (booking: Booking) => {
-    return therapists.map(t => {
+    return (therapists || []).filter(Boolean).map(t => {
       let score = 50;
 
       // 1. Zone Coverage (Up to 30 pts)
-      const coversZone = t.coverageZones.includes(booking.cityZone);
+      const coverageZones = Array.isArray(t?.coverageZones) ? t.coverageZones : [];
+      const coversZone = booking?.cityZone ? coverageZones.some(z => (z || '').toLowerCase() === (booking.cityZone || '').toLowerCase()) : false;
       if (coversZone) score += 30;
       else score += 10;
 
       // 2. Rating (Up to 15 pts)
-      score += Math.round((t.rating / 5) * 15);
+      const ratingVal = Number(t?.rating || 5);
+      score += Math.round((ratingVal / 5) * 15);
 
       // 3. Status & Workload (Up to 15 pts)
-      if (t.status === 'disponible') score += 15;
-      else if (t.status === 'en_camino') score += 5;
+      if (t?.status === 'disponible') score += 15;
+      else if (t?.status === 'en_camino') score += 5;
 
       // Ensure cap at 99
       const finalScore = Math.min(99, Math.max(60, score));
@@ -111,9 +198,9 @@ export const ReservasPage: React.FC = () => {
         etaMinutes: coversZone ? Math.floor(12 + Math.random() * 10) : Math.floor(25 + Math.random() * 15),
         distanceKm: coversZone ? (1.5 + Math.random() * 2.5).toFixed(1) : (6.0 + Math.random() * 4).toFixed(1),
         reasons: [
-          coversZone ? `Cubre zona ${booking.cityZone}` : `Zona cercana`,
-          `Calificación ${t.rating} ⭐`,
-          `${t.totalServices} servicios realizados`
+          coversZone ? `Cubre zona ${booking?.cityZone || ''}` : `Zona cercana`,
+          `Calificación ${ratingVal} ⭐`,
+          `${t?.totalServices || 0} servicios realizados`
         ]
       };
     }).sort((a, b) => b.matchScore - a.matchScore);

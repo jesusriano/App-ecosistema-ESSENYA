@@ -228,7 +228,38 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Administrator: Full visibility
       unsubReservas = onSnapshot(collection(db, 'reservas'), (snap) => {
         if (!snap.empty) {
-          const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking)).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+          const list = snap.docs.map(doc => {
+            const d = (doc.data() || {}) as any;
+            return {
+              ...d,
+              id: doc.id,
+              code: d.code || d.folio || `ESS-${doc.id.substring(0, 6).toUpperCase()}`,
+              clientId: d.clientId || '',
+              clientName: d.clientName || d.nombreCliente || 'Cliente VIP',
+              clientPhone: d.clientPhone || d.telefono || '',
+              clientAddress: d.clientAddress || d.direccion || '',
+              cityZone: d.cityZone || d.zona || d.ciudad || 'Ciudad de México',
+              serviceId: d.serviceId || 'serv-1',
+              serviceName: d.serviceName || d.servicioNombre || 'Masaje Holístico',
+              durationMinutes: Number(d.durationMinutes || 60),
+              price: Number(d.price || 0),
+              tip: Number(d.tip || 0),
+              total: Number(d.total || (Number(d.price || 0) + Number(d.tip || 0))),
+              date: d.date || d.fecha || new Date().toISOString().split('T')[0],
+              time: d.time || d.hora || '12:00',
+              preferences: d.preferences || {
+                genderPreference: 'sin_preferencia',
+                pressureLevel: 'Media',
+                essentialOil: 'Lavanda Francesa',
+                musicStyle: 'Acoustic Zen'
+              },
+              state: d.state || d.estado || 'pendiente',
+              etaMinutes: Number(d.etaMinutes || 20),
+              paymentMethod: d.paymentMethod || 'Tarjeta de Crédito / Débito',
+              paymentStatus: d.paymentStatus || 'pendiente',
+              createdAt: d.createdAt || new Date().toISOString()
+            } as Booking;
+          }).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
           setBookings(list);
         } else {
           setBookings([]);
@@ -237,7 +268,23 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       unsubClientes = onSnapshot(collection(db, 'clientes'), (snap) => {
         if (!snap.empty) {
-          const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ClientUser));
+          const list = snap.docs.map(doc => {
+            const d = (doc.data() || {}) as any;
+            return {
+              ...d,
+              id: doc.id,
+              name: d.name || [d.nombre, d.apellidos].filter(Boolean).join(' ') || d.displayName || 'Cliente VIP',
+              email: d.email || d.correo || '',
+              phone: d.phone || d.telefono || '',
+              membershipTier: (d.membershipTier === 'Diamond' || d.membershipTier === 'Gold' || d.membershipTier === 'Platino') ? d.membershipTier : 'Platino',
+              totalBookings: Number(d.totalBookings || 0),
+              spentTotal: Number(d.spentTotal || 0),
+              address: d.address || d.direccion || '',
+              cityZone: d.cityZone || d.ciudad || d.zone || 'Ciudad de México',
+              photo: d.photo || d.fotografia || d.photoURL || '',
+              rewardsPoints: Number(d.rewardsPoints || 0)
+            } as ClientUser;
+          });
           setClients(list);
         } else {
           setClients([]);

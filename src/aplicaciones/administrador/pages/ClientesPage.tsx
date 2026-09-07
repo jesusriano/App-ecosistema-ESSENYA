@@ -10,6 +10,48 @@ import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { ClientUser } from '../../../shared/types';
 import { calculateMembershipTier } from '../../cliente/services/membershipService';
 
+export const sanitizeClientUser = (raw: any): ClientUser => {
+  if (!raw) {
+    return {
+      id: `client-${Date.now()}`,
+      name: 'Cliente VIP',
+      email: '',
+      phone: '',
+      membershipTier: 'Platino',
+      totalBookings: 0,
+      spentTotal: 0,
+      address: '',
+      cityZone: 'Polanco / Reforma',
+      photo: '',
+      rewardsPoints: 0
+    };
+  }
+  const name = raw.name || [raw.nombre, raw.apellidos].filter(Boolean).join(' ') || raw.displayName || 'Cliente VIP';
+  const email = raw.email || raw.correo || '';
+  const phone = raw.phone || raw.telefono || '';
+  const cityZone = raw.cityZone || raw.ciudad || raw.zone || 'Ciudad de México';
+  const address = raw.address || raw.direccion || '';
+  const photo = raw.photo || raw.fotografia || raw.photoURL || '';
+  const tier = (raw.membershipTier === 'Diamond' || raw.membershipTier === 'Gold' || raw.membershipTier === 'Platino')
+    ? raw.membershipTier
+    : 'Platino';
+
+  return {
+    ...raw,
+    id: String(raw.id || raw.userId || `client-${Date.now()}`),
+    name: String(name),
+    email: String(email),
+    phone: String(phone),
+    membershipTier: tier,
+    totalBookings: Number(raw.totalBookings || 0),
+    spentTotal: Number(raw.spentTotal || 0),
+    address: String(address),
+    cityZone: String(cityZone),
+    photo: String(photo),
+    rewardsPoints: Number(raw.rewardsPoints || 0)
+  };
+};
+
 export const ClientesPage: React.FC = () => {
   const { clients, bookings, handleEditClient, handleToggleBlockClient } = useAdmin();
   const { showToast } = useToast();
@@ -43,12 +85,13 @@ export const ClientesPage: React.FC = () => {
   });
 
   const getEffectiveTier = (c: ClientUser): 'Platino' | 'Gold' | 'Diamond' => {
+    if (!c) return 'Platino';
     if (c.membershipTier === 'Diamond' || c.membershipTier === 'Gold' || c.membershipTier === 'Platino') {
       return c.membershipTier;
     }
-    const clientBookings = bookings.filter(b => b.clientId === c.id);
+    const clientBookings = (bookings || []).filter(b => b && b.clientId === c.id);
     const finishedAndPaid = clientBookings.filter(b => 
-      b.state === 'servicio_finalizado' && (b.paymentStatus === 'pagado' || b.paid === true)
+      b && b.state === 'servicio_finalizado' && (b.paymentStatus === 'pagado' || b.paid === true)
     ).length;
     const computed = calculateMembershipTier(finishedAndPaid || c.totalBookings || 0);
     return computed.tierName as any;
@@ -66,17 +109,27 @@ export const ClientesPage: React.FC = () => {
     }
   };
 
-  const filteredClients = clients.filter(c => {
-    const effectiveTier = getEffectiveTier(c);
-    const matchesSearch = 
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.phone.includes(searchTerm) ||
-      c.cityZone.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredClients = (clients || [])
+    .filter(Boolean)
+    .map(sanitizeClientUser)
+    .filter(c => {
+      const effectiveTier = getEffectiveTier(c);
+      const term = (searchTerm || '').toLowerCase().trim();
+      const name = (c.name || '').toLowerCase();
+      const email = (c.email || '').toLowerCase();
+      const phone = String(c.phone || '').toLowerCase();
+      const cityZone = (c.cityZone || '').toLowerCase();
 
-    const matchesTier = tierFilter === 'todos' || effectiveTier === tierFilter;
-    return matchesSearch && matchesTier;
-  });
+      const matchesSearch = 
+        !term ||
+        name.includes(term) ||
+        email.includes(term) ||
+        phone.includes(term) ||
+        cityZone.includes(term);
+
+      const matchesTier = tierFilter === 'todos' || effectiveTier === tierFilter;
+      return matchesSearch && matchesTier;
+    });
 
   const handleOpenEdit = (c: ClientUser) => {
     setEditClientModal(c);

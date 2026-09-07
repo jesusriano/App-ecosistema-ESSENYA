@@ -113,7 +113,7 @@ export const TerapeutasPage: React.FC = () => {
     .filter(Boolean)
     .map(sanitizeTherapist)
     .filter(t => {
-      const term = searchTerm.toLowerCase().trim();
+      const term = (searchTerm || '').toLowerCase().trim();
       const fullName = `${t.nombre || ''} ${t.apellidos || ''}`.toLowerCase();
       const email = (t.correo || '').toLowerCase();
       const curp = (t.curp || '').toLowerCase();
