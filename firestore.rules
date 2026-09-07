@@ -76,9 +76,9 @@ service cloud.firestore {
       allow create: if isSignedIn() && (
         isAdmin() || 
         (!isAdmin() && 
-         request.resource.data.actorId == request.auth.uid && // Must match actual UID
-         !(request.resource.data.userRole in ['Administrador', 'Sistema / App', 'Sistema']) &&
-         !(request.resource.data.role in ['Administrador', 'Sistema / App', 'Sistema'])
+          request.resource.data.actorId == request.auth.uid && // Must match actual UID
+          !(request.resource.data.userRole in ['Administrador', 'Sistema / App', 'Sistema']) &&
+          !(request.resource.data.role in ['Administrador', 'Sistema / App', 'Sistema'])
         )
       );
       allow update, delete: if false; // Immutable audit trail
