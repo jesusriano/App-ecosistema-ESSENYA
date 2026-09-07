@@ -96,15 +96,6 @@ async function verifyFirebaseToken(authHeader?: string): Promise<{ uid: string; 
     });
 
     if (!res.ok) {
-      // Fallback decode for valid structural payload if network is isolated
-      const parts = token.split(".");
-      if (parts.length === 3) {
-        const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"));
-        const now = Math.floor(Date.now() / 1000);
-        if (payload.exp && payload.exp > now && payload.sub) {
-          return { uid: payload.sub, email: payload.email };
-        }
-      }
       return null;
     }
 

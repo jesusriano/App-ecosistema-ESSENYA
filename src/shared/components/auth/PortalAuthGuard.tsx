@@ -657,7 +657,24 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
           <div className="bg-red-500/10 border border-red-500/30 p-3.5 rounded-2xl flex flex-col space-y-2 text-red-600 dark:text-red-400 text-xs">
             <div className="flex items-start space-x-3">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span className="leading-relaxed font-bold">{errorMessage}</span>
+              <div className="flex-1 space-y-2">
+                <span className="leading-relaxed font-bold block">{errorMessage}</span>
+                {(errorMessage.includes('temporalmente ocupado') || errorMessage.includes('reconectando')) && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      setErrorMessage(null);
+                      if (email && password) {
+                        handleSubmit(e as any);
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-700 dark:text-red-300 font-semibold transition-colors cursor-pointer text-[11px]"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Reintentar conexión ahora</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}

@@ -11,6 +11,7 @@ interface WhatsAppButtonProps {
   label?: string;
   buttonText?: string;
   size?: 'sm' | 'md' | 'lg';
+  className?: string;
 }
 
 export const WhatsAppButton: React.FC<WhatsAppButtonProps> = ({
@@ -22,6 +23,7 @@ export const WhatsAppButton: React.FC<WhatsAppButtonProps> = ({
   variant = 'primary',
   label,
   buttonText,
+  className = '',
 }) => {
   const targetPhone = phone || phoneNumber || '';
   const targetMsg = messagePreset || message || 'Hola, te contacto desde la aplicación ESSENYA Haute Massage para coordinar los detalles del servicio.';
@@ -39,7 +41,7 @@ export const WhatsAppButton: React.FC<WhatsAppButtonProps> = ({
         target="_blank"
         rel="noopener noreferrer"
         title={`Contactar a ${recipientName} por WhatsApp`}
-        className="inline-flex items-center space-x-1 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 font-semibold text-xs rounded-xl transition-all shadow-xs"
+        className={`inline-flex items-center space-x-1 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 font-semibold text-xs rounded-xl transition-all shadow-xs ${className}`}
       >
         <MessageCircle className="w-3.5 h-3.5" />
         <span>WhatsApp</span>
@@ -53,7 +55,7 @@ export const WhatsAppButton: React.FC<WhatsAppButtonProps> = ({
         href={waUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center justify-center space-x-2 px-4 py-2 bg-emerald-950/20 hover:bg-emerald-900/40 border border-emerald-500/50 text-emerald-600 dark:text-emerald-300 font-semibold text-xs rounded-xl transition-all shadow-xs"
+        className={`flex items-center justify-center space-x-2 px-4 py-2 bg-emerald-950/20 hover:bg-emerald-900/40 border border-emerald-500/50 text-emerald-600 dark:text-emerald-300 font-semibold text-xs rounded-xl transition-all shadow-xs ${className}`}
       >
         <MessageCircle className="w-4 h-4 text-emerald-500" />
         <span>{displayLabel}</span>
@@ -66,7 +68,7 @@ export const WhatsAppButton: React.FC<WhatsAppButtonProps> = ({
       href={waUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center justify-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-md transition-all"
+      className={`flex items-center justify-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-md transition-all ${className}`}
     >
       <MessageCircle className="w-4 h-4" />
       <span>{displayLabel}</span>

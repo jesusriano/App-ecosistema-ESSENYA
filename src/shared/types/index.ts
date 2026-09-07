@@ -7,8 +7,7 @@ export type MembershipTier = 'Platino' | 'Gold' | 'Diamond' | string;
 
 export type BookingState = 
   | 'pendiente' 
-  | 'aceptada'
-  | 'aceptado' 
+  | 'aceptada' 
   | 'rechazada'
   | 'en_camino' 
   | 'llegue' 
@@ -62,6 +61,8 @@ export interface Therapist {
   vehicleType: 'Auto Ejecutivo' | 'SUV Premium' | 'Servicio Chofer';
   lat: number;
   lng: number;
+  specialties?: string[];
+  completedServicesCount?: number;
 }
 
 export interface ClientUser {
@@ -121,6 +122,11 @@ export interface Booking {
   liveLng?: number;
   paymentMethod: 'Tarjeta de Crédito / Débito' | 'Tarjeta Crédito VIP' | 'Transferencia Interbancaria (SPEI)' | 'Transferencia Bank VIP' | 'Efectivo (Pago al Recibir)' | 'Tarjeta de Regalo (Saldo Billetera)';
   paymentStatus: 'pagado' | 'pendiente' | 'reembolsado' | 'rechazado';
+  paid?: boolean;
+  updatedAt?: string;
+  acceptedAt?: string;
+  rejectedAt?: string;
+  reviewedAt?: string;
   painPoints?: string;
   arrivalInstructions?: string;
   createdAt: string;
@@ -167,7 +173,10 @@ export interface Invoice {
   subtotal: number;
   tax: number;
   total: number;
-  status: 'emitida' | 'cancelada';
+  status: 'emitida' | 'cancelada' | 'pagada';
+  paymentStatus?: 'pagado' | 'pendiente' | 'reembolsado' | 'rechazado';
+  paidAt?: string;
+  updatedAt?: string;
   pdfUrl?: string;
 }
 

@@ -18,7 +18,8 @@ import {
   registerFailedAttempt, 
   clearFailedAttempts,
   validateEmail,
-  validatePasswordStrength
+  validatePasswordStrength,
+  isTransientNetworkError
 } from '../utils/authValidations';
 import { handleFirestoreError, OperationType } from '../utils/firestoreDebug';
 import { checkIsAdminInFirestore, AdminVerificationResult } from '../services/adminAuthService';
@@ -337,6 +338,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             fechaAlta: new Date().toISOString()
           };
           await setDoc(doc(db, 'terapeutas', uid), therapistData);
+          await setDoc(doc(db, 'terapeutas_publicos', uid), {
+            id: uid,
+            nombre: therapistData.nombre,
+            apellidos: therapistData.apellidos,
+            especialidades: therapistData.especialidades,
+            zonasCobertura: therapistData.zonasCobertura,
+            puntuacion: therapistData.puntuacion,
+            resenasCount: therapistData.resenasCount,
+            serviciosCompletados: therapistData.serviciosCompletados,
+            estado: therapistData.estado,
+            fotografia: ''
+          });
         }
       } catch (dbErr: any) {
         const errorInfo = handleFirestoreError(
@@ -399,14 +412,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     setLoading(true);
 
+    // Helper to retry transient network / reconnect errors
+    const retryAsync = async <T,>(fn: () => Promise<T>, maxRetries = 2, delayMs = 600): Promise<T> => {
+      let lastError: any;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          return await fn();
+        } catch (error: any) {
+          lastError = error;
+          if (!isTransientNetworkError(error) || attempt === maxRetries) {
+            throw error;
+          }
+          await new Promise((resolve) => setTimeout(resolve, delayMs * (attempt + 1)));
+        }
+      }
+      throw lastError;
+    };
+
     try {
-      // 1. Firebase Auth Sign in
-      const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, pass);
+      // 1. Firebase Auth Sign in with automated retry on temporary connection drops
+      const userCredential = await retryAsync(() => signInWithEmailAndPassword(auth, trimmedEmail, pass));
       const uid = userCredential.user.uid;
 
       // 2. Specialized Check for Administrator Role in Firestore 'administradores' Collection
       if (role === 'administrador') {
-        const adminCheck = await checkIsAdminInFirestore({ uid, email: trimmedEmail });
+        const adminCheck = await retryAsync(() => checkIsAdminInFirestore({ uid, email: trimmedEmail }));
 
         if (!adminCheck.isAdmin) {
           await signOut(auth);
@@ -456,8 +486,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const userDocRef = doc(db, 'users', uid);
       let docSnap;
       try {
-        docSnap = await getDoc(userDocRef);
-      } catch (getErr) {
+        docSnap = await retryAsync(() => getDoc(userDocRef), 2, 700);
+      } catch (getErr: any) {
+        // Fallback for transient reconnects if local valid session matches authenticated UID
+        if (isTransientNetworkError(getErr)) {
+          const cachedRaw = localStorage.getItem(`essenya_auth_${role}`);
+          if (cachedRaw) {
+            try {
+              const cachedProfile = JSON.parse(cachedRaw);
+              if (cachedProfile && (cachedProfile.uid === uid || cachedProfile.id === uid) && cachedProfile.rol === role) {
+                console.info('Session restored from cache during temporary Firebase reconnect');
+                clearFailedAttempts(role, trimmedEmail);
+                updateSession(role, cachedProfile);
+                setLoading(false);
+                return { success: true };
+              }
+            } catch {}
+          }
+        }
         handleFirestoreError(getErr, OperationType.GET, `users/${uid}`);
         throw getErr;
       }
@@ -553,13 +599,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (err: any) {
       setLoading(false);
 
-      // Register failed attempt for lockout
-      const failed = registerFailedAttempt(role, trimmedEmail);
-      if (failed.isLocked) {
-        return { 
-          success: false, 
-          error: `Múltiples intentos fallidos. Tu acceso ha sido bloqueado por 15 minutos por ciberseguridad.` 
-        };
+      // Only register failed attempts for actual credential failures, not transient connection drops
+      if (!isTransientNetworkError(err)) {
+        const failed = registerFailedAttempt(role, trimmedEmail);
+        if (failed.isLocked) {
+          return { 
+            success: false, 
+            error: `Múltiples intentos fallidos. Tu acceso ha sido bloqueado por 15 minutos por ciberseguridad.` 
+          };
+        }
       }
 
       const friendlyMsg = getFriendlyErrorMessage(err);

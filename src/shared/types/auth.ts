@@ -44,6 +44,7 @@ export interface TherapistFullProfile {
   cuentaBancariaCLABE?: string;
   contactoEmergencia?: EmergencyContact;
   motivoRechazoAccount?: string;
+  biografia?: string;
   
   // Professional
   especialidades: string[];
@@ -78,6 +79,8 @@ export interface UserAuthProfile {
   ultimoAcceso: string; // ISO date string
   correoVerificado: boolean;
   rol: UserRole;
+  fotografia?: string;
+  biografia?: string;
   fechaActualizacion: string; // ISO date string
   mustChangePassword?: boolean; // First login password reset flag
   therapistProfile?: TherapistFullProfile;

@@ -1904,7 +1904,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                   {[
                     { stateKey: 'pendiente', label: '1. Solicitud' },
                     { stateKey: 'aceptada', label: '2. Aceptada' },
-                    { stateKey: 'aceptado', label: '3. Agenda' },
+                    { stateKey: 'aceptada', label: '3. Agenda' },
                     { stateKey: 'en_camino', label: '4. En Camino' },
                     { stateKey: 'llegue', label: '5. Llegué' },
                     { stateKey: 'servicio_iniciado', label: '6. Sesión' },
@@ -1963,7 +1963,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
                 <div className="pt-4 border-t border-[#E5DFD3] dark:border-[#262626] max-w-xs mx-auto flex justify-center">
                   <button
-                    onClick={() => setActiveTab('reservar')}
+                    onClick={() => setActiveTab('book')}
                     className="bg-[#C9A55B] text-black font-bold px-5 py-2 rounded-xl text-xs hover:bg-[#E6CA65] transition-all cursor-pointer shadow-sm"
                   >
                     Crear Nueva Solicitud

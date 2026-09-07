@@ -29,16 +29,24 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
   onAcceptBooking,
   onRejectBooking,
 }) => {
-  const activeTherapist = therapist || {
+  const activeTherapist: Therapist = therapist || {
     id: 'ther-1',
     name: 'Elena Rostova',
     photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
     phone: '525512345678',
+    email: 'elena.rostova@essenya.mx',
     rating: 4.9,
     reviewCount: 128,
+    totalServices: 342,
+    gender: 'femenino',
     specialties: ['Masaje Tejido Profundo', 'Descontracturante VIP'],
     status: 'disponible',
+    currentZone: 'Polanco',
     coverageZones: ['Polanco', 'Lomas de Chapultepec'],
+    certifications: ['Certificación Internacional Spa & Wellness'],
+    vehicleType: 'Auto Ejecutivo',
+    lat: 19.4326,
+    lng: -99.1332,
     completedServicesCount: 342,
     bio: 'Especialista certificada con 8 años de experiencia en masajes terapéuticos de alto nivel.'
   };
@@ -60,7 +68,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
     if (onAcceptBooking) {
       onAcceptBooking(booking.id, activeTherapist);
     } else {
-      onUpdateBookingState(booking.id, 'aceptado');
+      onUpdateBookingState(booking.id, 'aceptada');
     }
     showToast(
       '¡Servicio Aceptado!',
@@ -421,7 +429,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                   clientAddress={currentBooking.clientAddress}
                   cityZone={currentBooking.cityZone}
                   therapistName={activeTherapist.name}
-                  therapistPhoto={activeTherapist.photoUrl}
+                  therapistPhoto={activeTherapist.photo}
                   bookingState={currentBooking.state}
                 />
               </div>
@@ -434,11 +442,11 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
                   {(() => {
-                    const stateOrder = ['pendiente', 'aceptado', 'en_camino', 'llegue', 'servicio_iniciado', 'servicio_finalizado'];
+                    const stateOrder = ['pendiente', 'aceptada', 'en_camino', 'llegue', 'servicio_iniciado', 'servicio_finalizado'];
                     const currentIndex = stateOrder.indexOf(currentBooking.state);
                     
                     return [
-                      { key: 'aceptado', label: '1. Aceptar Solicitud', icon: CheckCircle2 },
+                      { key: 'aceptada', label: '1. Aceptar Solicitud', icon: CheckCircle2 },
                       { key: 'en_camino', label: '2. En Camino (GPS)', icon: Navigation },
                       { key: 'llegue', label: '3. Llegué a Domicilio', icon: MapPin },
                       { key: 'servicio_iniciado', label: '4. Iniciar Masaje', icon: Play },

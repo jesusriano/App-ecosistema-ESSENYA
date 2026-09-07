@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import { collection, onSnapshot, doc, getDoc, setDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { db, auth } from '../../lib/firebase';
 import { useAuth } from './AuthContext';
 import { handleFirestoreError, OperationType, cleanForFirestore } from '../utils/firestoreDebug';
@@ -27,6 +27,7 @@ interface EcosystemContextType {
   activePanicAlertsCount: number;
   activeInvoice: Invoice | null;
   setActiveInvoice: (invoice: Invoice | null) => void;
+  handleViewInvoice: (invoice: Invoice) => void;
   
   handleNewBooking: (newBooking: Booking) => void;
   handleAcceptBooking: (bookingId: string, acceptingTherapist: Partial<Therapist>) => void;
@@ -71,6 +72,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const { getUser, firebaseUser, sessions } = useAuth();
   const authClient = getUser('cliente');
+  const authTherapist = getUser('terapeuta');
 
   // Shared Ecosystem Connected State
   const [services, setServices] = useState<ServiceItem[]>(INITIAL_SERVICES);
@@ -91,6 +93,36 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [authClient]);
 
   const [therapists, setTherapists] = useState<Therapist[]>(INITIAL_THERAPISTS);
+
+  // Derive activeTherapist dynamically from logged-in therapist session
+  const activeTherapist: Therapist = useMemo(() => {
+    if (authTherapist) {
+      const match = therapists.find(t => t.id === authTherapist.id || t.id === authTherapist.uid);
+      if (match) return match;
+      return {
+        id: authTherapist.id || authTherapist.uid || firebaseUser?.uid || 'ther-1',
+        name: `${authTherapist.nombre} ${authTherapist.apellidos || ''}`.trim() || 'Terapeuta Certificada',
+        photo: authTherapist.fotografia || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
+        phone: authTherapist.telefono || '525512345678',
+        email: authTherapist.correo || 'terapeuta@essenya.mx',
+        rating: 5.0,
+        reviewCount: 0,
+        totalServices: (authTherapist as any).serviciosCompletados || 0,
+        gender: 'femenino',
+        bio: authTherapist.biografia || 'Especialista certificada ESSENYA.',
+        certifications: (authTherapist as any).certificaciones || ['Certificación Holística SEP-CONOCER'],
+        specialties: (authTherapist as any).especialidades || ['Masaje Relajante'],
+        status: 'disponible',
+        currentZone: 'Polanco',
+        coverageZones: (authTherapist as any).zonasCobertura || ['Polanco'],
+        vehicleType: 'Auto Ejecutivo',
+        lat: 19.4326,
+        lng: -99.1332,
+        completedServicesCount: (authTherapist as any).serviciosCompletados || 0
+      };
+    }
+    return therapists[0] || INITIAL_THERAPISTS[0];
+  }, [authTherapist, therapists, firebaseUser]);
   const [client, setClient] = useState<ClientUser>(INITIAL_CLIENT);
   const [clients, setClients] = useState<ClientUser[]>([]);
   
@@ -158,7 +190,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
     }, err => handleFirestoreError(err, OperationType.LIST, 'servicios'));
 
-    const unsubTerapeuta = onSnapshot(collection(db, 'terapeutas'), (snap) => {
+    const unsubTerapeuta = onSnapshot(collection(db, 'terapeutas_publicos'), (snap) => {
       if (!snap.empty) {
         const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Therapist));
         setTherapists(list);
@@ -186,6 +218,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     const isUserTherapist = Boolean(sessions?.terapeuta || currentPortal === 'therapist');
 
     let unsubReservas = () => {};
+    let unsubPending = () => {};
     let unsubClientes = () => {};
     let unsubInvoices = () => {};
     let unsubAudit = () => {};
@@ -239,16 +272,34 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       }, err => handleFirestoreError(err, OperationType.LIST, 'alertas_panico'));
 
     } else if (isUserTherapist) {
-      // Therapist role: bookings assigned to therapist
+      // Therapist role: bookings assigned to therapist + open pending bookings queue
+      let assignedBookings: Booking[] = [];
+      let pendingBookings: Booking[] = [];
+
+      const syncTherapistBookings = () => {
+        const mergedMap = new Map<string, Booking>();
+        [...assignedBookings, ...pendingBookings].forEach(b => mergedMap.set(b.id, b));
+        const list = Array.from(mergedMap.values()).sort(
+          (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+        );
+        setBookings(list);
+      };
+
       const qTherapistBookings = query(collection(db, 'reservas'), where('therapistId', '==', uid));
       unsubReservas = onSnapshot(qTherapistBookings, (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking)).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-          setBookings(list);
-        } else {
-          setBookings([]);
-        }
+        assignedBookings = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking));
+        syncTherapistBookings();
       }, err => handleFirestoreError(err, OperationType.LIST, 'reservas'));
+
+      try {
+        const qPendingBookings = query(collection(db, 'reservas'), where('state', '==', 'pendiente'));
+        unsubPending = onSnapshot(qPendingBookings, (snap) => {
+          pendingBookings = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking));
+          syncTherapistBookings();
+        }, () => {
+          // Fallback gracefully if rules require active activation
+        });
+      } catch {}
 
       const qPanic = query(collection(db, 'alertas_panico'), where('userId', '==', uid));
       unsubPanic = onSnapshot(qPanic, (snap) => {
@@ -306,6 +357,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       unsubTerapeuta();
       unsubZonas();
       unsubReservas();
+      unsubPending();
       unsubClientes();
       unsubInvoices();
       unsubAudit();
@@ -391,31 +443,35 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Therapist Booking Acceptance & Rejection Handlers
   const handleAcceptBooking = async (bookingId: string, acceptingTherapist: Partial<Therapist>) => {
-    const updatedTherapistName = acceptingTherapist.name || 'Dra. Elena Rostova';
-    const updatedTherapistId = acceptingTherapist.id || 'ther-1';
-    const updatedTherapistPhoto = acceptingTherapist.photo || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400';
-    const updatedTherapistPhone = acceptingTherapist.phone || '525512345678';
+    const updatedTherapistId = acceptingTherapist?.id || authTherapist?.id || authTherapist?.uid || firebaseUser?.uid || 'ther-1';
+    const updatedTherapistName = acceptingTherapist?.name || (authTherapist ? `${authTherapist.nombre} ${authTherapist.apellidos || ''}`.trim() : 'Dra. Elena Rostova');
+    const updatedTherapistPhoto = acceptingTherapist?.photo || authTherapist?.fotografia || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400';
+    const updatedTherapistPhone = acceptingTherapist?.phone || authTherapist?.telefono || '525512345678';
+    const nowIso = new Date().toISOString();
 
     setBookings(prev => prev.map(b => {
       if (b.id === bookingId) {
         return {
           ...b,
-          state: 'aceptado' as BookingState,
+          state: 'aceptada' as BookingState,
           therapistId: updatedTherapistId,
           therapistName: updatedTherapistName,
           therapistPhoto: updatedTherapistPhoto,
           therapistPhone: updatedTherapistPhone,
+          acceptedAt: nowIso,
+          updatedAt: nowIso,
         };
       }
       return b;
     }));
 
     const updatePayload = {
-      state: 'aceptado',
+      state: 'aceptada',
       therapistId: updatedTherapistId,
       therapistName: updatedTherapistName,
       therapistPhoto: updatedTherapistPhoto,
       therapistPhone: updatedTherapistPhone,
+      updatedAt: nowIso,
     };
 
     try {
@@ -552,20 +608,40 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const handleUpdateBookingState = async (bookingId: string, newState: BookingState) => {
+    const nowIso = new Date().toISOString();
     setBookings(prev => prev.map(b => {
       if (b.id === bookingId) {
-        return { ...b, state: newState };
+        return { ...b, state: newState, updatedAt: nowIso };
       }
       return b;
     }));
 
+    const updatePayload = { state: newState, updatedAt: nowIso };
+
     try {
-      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore({ state: newState }));
+      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, { state: newState });
+      handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
     }
 
     const bk = bookings.find(b => b.id === bookingId);
+
+    // If service finished, increment completed services in public therapist profile
+    if (newState === 'servicio_finalizado' && bk?.therapistId) {
+      try {
+        const thDocRef = doc(db, 'terapeutas_publicos', bk.therapistId);
+        const thDoc = await getDoc(thDocRef);
+        if (thDoc.exists()) {
+          const count = (thDoc.data()?.completedServicesCount || thDoc.data()?.serviciosCompletados || 0) + 1;
+          await updateDoc(thDocRef, {
+            completedServicesCount: count,
+            serviciosCompletados: count,
+            updatedAt: nowIso
+          });
+        }
+      } catch {}
+    }
+
     addLog(
       'Sistema / App',
       bk?.therapistName || 'ESSENYA Core',
@@ -575,41 +651,73 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const handleReassignTherapist = async (bookingId: string, therapistId: string) => {
-    const newTher = therapists.find(t => t.id === therapistId);
+    let newTher = therapists.find(t => t.id === therapistId);
+    if (!newTher) {
+      try {
+        const dSnap = await getDoc(doc(db, 'terapeutas_publicos', therapistId));
+        if (dSnap.exists()) {
+          const dData = dSnap.data();
+          newTher = {
+            id: dSnap.id,
+            name: dData.name || dData.nombre || 'Terapeuta Certificada',
+            photo: dData.photo || dData.fotografia || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
+            phone: dData.phone || dData.telefono || '525512345678',
+            email: dData.email || dData.correo || 'terapeuta@essenya.mx',
+            rating: dData.rating || 5.0,
+            reviewCount: dData.reviewCount || 0,
+            totalServices: dData.totalServices || dData.completedServicesCount || 0,
+            gender: dData.gender || 'femenino',
+            bio: dData.bio || dData.biografia || '',
+            certifications: dData.certifications || ['Certificación Holística SEP-CONOCER'],
+            specialties: dData.specialties || ['Masaje Relajante'],
+            status: 'disponible',
+            currentZone: dData.currentZone || 'Polanco',
+            coverageZones: dData.coverageZones || ['Polanco'],
+            vehicleType: dData.vehicleType || 'Auto Ejecutivo',
+            lat: dData.lat || 19.4326,
+            lng: dData.lng || -99.1332,
+            completedServicesCount: dData.completedServicesCount || 0
+          };
+        }
+      } catch {}
+    }
     if (!newTher) return;
-
-    setBookings(prev => prev.map(b => {
-      if (b.id === bookingId) {
-        return {
-          ...b,
-          therapistId: newTher.id,
-          therapistName: newTher.name,
-          therapistPhoto: newTher.photo,
-          therapistPhone: newTher.phone
-        };
-      }
-      return b;
-    }));
 
     const updatePayload = {
       therapistId: newTher.id,
       therapistName: newTher.name,
       therapistPhoto: newTher.photo,
-      therapistPhone: newTher.phone
+      therapistPhone: newTher.phone,
+      updatedAt: new Date().toISOString()
     };
 
     try {
       await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
+      
+      setBookings(prev => prev.map(b => {
+        if (b.id === bookingId) {
+          return {
+            ...b,
+            therapistId: newTher!.id,
+            therapistName: newTher!.name,
+            therapistPhoto: newTher!.photo,
+            therapistPhone: newTher!.phone
+          };
+        }
+        return b;
+      }));
+
+      addLog(
+        'Administrador',
+        'Director Operativo',
+        'Reasignación de Terapeuta',
+        `Reserva ${bookingId} reasignada manualmente a ${newTher.name}.`
+      );
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
+      console.error("Error al reasignar terapeuta en Firestore:", err);
+      throw err; 
     }
-
-    addLog(
-      'Administrador',
-      'Director Operativo',
-      'Reasignación de Terapeuta',
-      `Reserva ${bookingId} reasignada manualmente a ${newTher.name}.`
-    );
   };
 
   const handleToggleZoneSurge = async (zoneId: string, multiplier: number) => {
@@ -645,6 +753,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     setTherapists(prev => [...prev, newTherapist]);
     try {
       await setDoc(doc(db, 'terapeutas', newTherapist.id), cleanForFirestore(newTherapist));
+      await setDoc(doc(db, 'terapeutas_publicos', newTherapist.id), cleanForFirestore(newTherapist));
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `terapeutas/${newTherapist.id}`, newTherapist);
     }
@@ -661,6 +770,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     setTherapists(prev => prev.map(t => t.id === updatedTherapist.id ? updatedTherapist : t));
     try {
       await setDoc(doc(db, 'terapeutas', updatedTherapist.id), cleanForFirestore(updatedTherapist));
+      await setDoc(doc(db, 'terapeutas_publicos', updatedTherapist.id), cleanForFirestore(updatedTherapist), { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `terapeutas/${updatedTherapist.id}`, updatedTherapist);
     }
@@ -678,6 +788,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     setTherapists(prev => prev.filter(t => t.id !== therapistId));
     try {
       await deleteDoc(doc(db, 'terapeutas', therapistId));
+      await deleteDoc(doc(db, 'terapeutas_publicos', therapistId));
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `terapeutas/${therapistId}`);
     }
@@ -753,7 +864,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     const reviewedAt = new Date().toISOString();
     setBookings(prev => prev.map(b => {
       if (b.id === bookingId) {
-        return { ...b, rating, reviewComment: comment };
+        return { ...b, rating, reviewComment: comment, reviewedAt };
       }
       return b;
     }));
@@ -761,7 +872,8 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     const updatePayload = {
       rating,
       reviewComment: comment,
-      reviewedAt
+      reviewedAt,
+      updatedAt: reviewedAt
     };
 
     try {
@@ -772,14 +884,48 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     const bk = bookings.find(b => b.id === bookingId);
     if (bk?.therapistId) {
+      const currentTherapist = therapists.find(t => t.id === bk.therapistId);
+      const prevCount = currentTherapist?.reviewCount || 0;
+      const prevRating = currentTherapist?.rating || 5;
+      const newCount = prevCount + 1;
+      const newRating = Number(((prevRating * prevCount + rating) / newCount).toFixed(1));
+
       setTherapists(prev => prev.map(t => {
         if (t.id === bk.therapistId) {
-          const newCount = (t.reviewCount || 0) + 1;
-          const newRating = Number((((t.rating || 5) * (t.reviewCount || 0) + rating) / newCount).toFixed(1));
           return { ...t, rating: newRating, reviewCount: newCount };
         }
         return t;
       }));
+
+      // Persist rating & review count to Firestore terapeutas_publicos
+      try {
+        await updateDoc(doc(db, 'terapeutas_publicos', bk.therapistId), cleanForFirestore({
+          rating: newRating,
+          puntuacion: newRating,
+          reviewCount: newCount,
+          resenasCount: newCount,
+          updatedAt: reviewedAt
+        }));
+      } catch {
+        try {
+          await setDoc(doc(db, 'terapeutas_publicos', bk.therapistId), cleanForFirestore({
+            rating: newRating,
+            puntuacion: newRating,
+            reviewCount: newCount,
+            resenasCount: newCount,
+            updatedAt: reviewedAt
+          }), { merge: true });
+        } catch {}
+      }
+
+      // Also update private doc if exists
+      try {
+        await updateDoc(doc(db, 'terapeutas', bk.therapistId), cleanForFirestore({
+          puntuacion: newRating,
+          resenasCount: newCount,
+          fechaActualizacion: reviewedAt
+        }));
+      } catch {}
     }
 
     addLog(
@@ -966,17 +1112,45 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const handleConfirmPayment = async (bookingId: string) => {
+    const nowIso = new Date().toISOString();
+    const updatePayload: { paymentStatus: 'pagado'; paid: boolean; updatedAt: string } = {
+      paymentStatus: 'pagado',
+      paid: true,
+      updatedAt: nowIso
+    };
+
     setBookings(prev => prev.map(b => {
       if (b.id === bookingId) {
-        return { ...b, paymentStatus: 'pagado' };
+        return { ...b, ...updatePayload };
       }
       return b;
     }));
 
     try {
-      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore({ paymentStatus: 'pagado' }));
+      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, { paymentStatus: 'pagado' });
+      handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
+    }
+
+    // Sync corresponding invoice if exists
+    const targetBooking = bookings.find(b => b.id === bookingId);
+    const relatedInvoice = invoices.find(inv => inv.bookingId === bookingId || inv.id === targetBooking?.invoiceId);
+    if (relatedInvoice) {
+      const invPayload: { paymentStatus: 'pagado'; status: 'pagada'; paidAt: string; updatedAt: string } = {
+        paymentStatus: 'pagado',
+        status: 'pagada',
+        paidAt: nowIso,
+        updatedAt: nowIso
+      };
+      setInvoices(prev => prev.map(inv => {
+        if (inv.id === relatedInvoice.id) {
+          return { ...inv, status: 'pagada' as const, paymentStatus: 'pagado' as const };
+        }
+        return inv;
+      }));
+      try {
+        await updateDoc(doc(db, 'invoices', relatedInvoice.id), cleanForFirestore(invPayload));
+      } catch {}
     }
 
     addLog(
@@ -1044,6 +1218,10 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     );
   };
 
+  const handleViewInvoice = (invoice: Invoice) => {
+    setActiveInvoice(invoice);
+  };
+
   const activeBookingCount = bookings.filter(b => b.state !== 'servicio_finalizado' && b.state !== 'cancelado').length;
   const activePanicAlertsCount = panicAlerts.filter(a => a.status === 'activa' || a.status === 'en_atencion').length;
 
@@ -1053,7 +1231,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       setCurrentPortal,
       services,
       therapists,
-      activeTherapist: therapists[0],
+      activeTherapist,
       client,
       clients,
       bookings,
@@ -1064,6 +1242,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       activePanicAlertsCount,
       activeInvoice,
       setActiveInvoice,
+      handleViewInvoice,
       handleNewBooking,
       handleAcceptBooking,
       handleRejectBooking,

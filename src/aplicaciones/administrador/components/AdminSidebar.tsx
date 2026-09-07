@@ -22,7 +22,7 @@ interface AdminSidebarProps {
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({ currentRoute, onNavigate }) => {
   const { therapists } = useTherapistContext();
-  const pendingCount = therapists.filter(t => t.estado === 'pendiente').length;
+  const pendingCount = (therapists || []).filter(t => t && t.estado === 'pendiente').length;
 
   const menuItems = [
     { path: '/dashboard' as AdminRoutePath, label: 'Dashboard Live', icon: LayoutDashboard },

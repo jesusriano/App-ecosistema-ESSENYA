@@ -36,7 +36,7 @@ export const DashboardPage: React.FC = () => {
 
   // Selected Active Booking for Live Tracking
   const activeServicesOnTrack = bookings.filter(b => 
-    b.state === 'en_camino' || b.state === 'llegue' || b.state === 'servicio_iniciado' || b.state === 'aceptado'
+    b.state === 'en_camino' || b.state === 'llegue' || b.state === 'servicio_iniciado' || b.state === 'aceptada'
   );
 
   const [selectedTrackBookingId, setSelectedTrackBookingId] = useState<string>(
@@ -68,13 +68,13 @@ export const DashboardPage: React.FC = () => {
   const finishedCount = bookings.filter(b => b.state === 'servicio_finalizado').length;
   const canceledCount = bookings.filter(b => b.state === 'cancelado').length;
 
-  const avgRating = (therapists.reduce((acc, t) => acc + t.rating, 0) / (therapists.length || 1)).toFixed(2);
+  const avgRating = (therapists.reduce((acc, t) => acc + (t.rating || 5), 0) / (therapists.length || 1)).toFixed(2);
 
   // Status Step Progress Bar Helper
   const getStepNumber = (state: BookingState) => {
     switch (state) {
       case 'pendiente': return 0;
-      case 'aceptado': return 1;
+      case 'aceptada': return 1;
       case 'en_camino': return 2;
       case 'llegue': return 3;
       case 'servicio_iniciado': return 4;

@@ -58,12 +58,37 @@ export const validatePasswordStrength = (password: string): PasswordStrengthResu
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
+export const isTransientNetworkError = (error: any): boolean => {
+  if (!error) return false;
+  const errorCode = (error.code || '').toLowerCase();
+  const errorMsg = (error.message || '').toLowerCase();
+  const combined = (errorCode + ' ' + errorMsg);
+
+  return (
+    combined.includes('unavailable') ||
+    combined.includes('service-is-currently-unavailable') ||
+    combined.includes('overloaded') ||
+    combined.includes('network-request-failed') ||
+    combined.includes('network-error') ||
+    combined.includes('timeout') ||
+    combined.includes('deadline-exceeded') ||
+    combined.includes('client is offline') ||
+    !navigator.onLine
+  );
+};
+
 export const getLockoutKey = (portal: string, email: string): string => {
   return `essenya_lockout_${portal}_${email.trim().toLowerCase()}`;
 };
 
 export const getLockoutInfo = (portal: string, email: string) => {
   if (!email) return { isLocked: false, remainingSeconds: 0, attemptsCount: 0 };
+  const normalized = email.trim().toLowerCase();
+  // Bypass lockout for master administrator
+  if (normalized === 'essenya222@gmail.com') {
+    return { isLocked: false, remainingSeconds: 0, attemptsCount: 0 };
+  }
+
   const key = getLockoutKey(portal, email);
   const raw = localStorage.getItem(key);
   if (!raw) return { isLocked: false, remainingSeconds: 0, attemptsCount: 0 };
@@ -88,6 +113,11 @@ export const getLockoutInfo = (portal: string, email: string) => {
 
 export const registerFailedAttempt = (portal: string, email: string): { isLocked: boolean; remainingSeconds: number; attemptsCount: number } => {
   if (!email) return { isLocked: false, remainingSeconds: 0, attemptsCount: 0 };
+  const normalized = email.trim().toLowerCase();
+  if (normalized === 'essenya222@gmail.com') {
+    return { isLocked: false, remainingSeconds: 0, attemptsCount: 0 };
+  }
+
   const key = getLockoutKey(portal, email);
   const current = getLockoutInfo(portal, email);
   const newAttempts = current.attemptsCount + 1;
@@ -155,6 +185,14 @@ export const getFriendlyErrorMessage = (error: any): string => {
   }
   if (combinedMsg.includes('permission-denied') || combinedMsg.includes('insufficient permissions')) {
     return 'Error de base de datos: No tienes permisos para realizar esta acción. Verifica las Reglas de Firestore.';
+  }
+  if (
+    combinedMsg.includes('unavailable') || 
+    combinedMsg.includes('service-is-currently-unavailable') ||
+    combinedMsg.includes('overloaded') ||
+    errorCode === 'unavailable'
+  ) {
+    return 'El servicio de Firebase se encuentra temporalmente ocupado o reconectando. No es un error en tus datos. Por favor espera unos segundos e inténtalo nuevamente.';
   }
 
   // System error detail for debugging

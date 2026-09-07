@@ -3,7 +3,7 @@ import { doc, setDoc, updateDoc, collection, deleteDoc, onSnapshot } from 'fireb
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { db, auth } from '../../lib/firebase';
 import { TherapistFullProfile, TherapistDocument, DocumentStatus, AccountStatus } from '../types/auth';
-import { handleFirestoreError, OperationType } from '../utils/firestoreDebug';
+import { handleFirestoreError, OperationType, cleanForFirestore } from '../utils/firestoreDebug';
 import { useAuth } from './AuthContext';
 
 interface AuditLog {
@@ -20,9 +20,11 @@ interface TherapistContextType {
   therapists: TherapistFullProfile[];
   auditLogs: AuditLog[];
   loading: boolean;
+  firestoreError: string | null;
   
   // Admin Operations
   createTherapist: (data: {
+    id?: string;
     nombre: string;
     apellidos: string;
     correo: string;
@@ -62,6 +64,181 @@ interface TherapistContextType {
 
 const TherapistContext = createContext<TherapistContextType | undefined>(undefined);
 
+// Helper to guarantee complete and non-null data structure for therapists
+export const sanitizeTherapist = (raw: any): TherapistFullProfile => {
+  const defaultDate = new Date().toISOString();
+
+  if (!raw || typeof raw !== 'object') {
+    return {
+      id: `therapist-${Date.now()}`,
+      nombre: 'Terapeuta',
+      apellidos: '',
+      correo: '',
+      telefono: '',
+      fotografia: '',
+      especialidades: [],
+      experienciaAnos: 1,
+      idiomas: ['Español'],
+      disponibilidad: 'Lunes a Sábado',
+      zonasCobertura: [],
+      zonasCoordinadas: [],
+      estado: 'pendiente',
+      documentos: [],
+      puntuacion: 5.0,
+      resenasCount: 0,
+      serviciosCompletados: 0,
+      fechaAlta: defaultDate,
+      fechaIngreso: defaultDate,
+      ultimoAcceso: defaultDate,
+      fechaActualizacion: defaultDate
+    } as TherapistFullProfile;
+  }
+
+  // 1. Safe Names & Contacts
+  const nombre = String(raw.nombre || raw.name || 'Terapeuta');
+  const apellidos = String(raw.apellidos || '');
+  const correo = String(raw.correo || raw.email || '');
+  const telefono = String(raw.telefono || raw.phone || '');
+  const fotografia = raw.fotografia || raw.photo || raw.photoURL || '';
+
+  // 2. Status normalization (maps legacy or english variants)
+  let rawStatus = String(raw.estado || raw.status || 'pendiente').toLowerCase();
+  if (rawStatus === 'active' || rawStatus === 'disponible') rawStatus = 'activo';
+  else if (rawStatus === 'pending') rawStatus = 'pendiente';
+  else if (rawStatus === 'rejected') rawStatus = 'rechazado';
+  else if (rawStatus === 'blocked' || rawStatus === 'suspendido' || rawStatus === 'suspended') rawStatus = 'bloqueado';
+  else if (rawStatus === 'inactive') rawStatus = 'inactivo';
+  const estado: AccountStatus = (['activo', 'inactivo', 'bloqueado', 'pendiente', 'rechazado'].includes(rawStatus)
+    ? rawStatus
+    : 'pendiente') as AccountStatus;
+
+  // 3. Specialties normalization (accepts array, string comma-separated, or specialties)
+  let especialidades: string[] = [];
+  if (Array.isArray(raw.especialidades)) {
+    especialidades = raw.especialidades.map((s: any) => String(s || '').trim()).filter(Boolean);
+  } else if (Array.isArray(raw.specialties)) {
+    especialidades = raw.specialties.map((s: any) => String(s || '').trim()).filter(Boolean);
+  } else if (typeof raw.especialidades === 'string' && raw.especialidades.trim()) {
+    especialidades = raw.especialidades.split(',').map((s: string) => s.trim()).filter(Boolean);
+  } else if (typeof raw.specialties === 'string' && raw.specialties.trim()) {
+    especialidades = raw.specialties.split(',').map((s: string) => s.trim()).filter(Boolean);
+  }
+
+  // 4. Coverage Zones normalization (zonasCobertura, coverageZones, zonasCoordinadas)
+  let zonasCobertura: string[] = [];
+  if (Array.isArray(raw.zonasCobertura)) {
+    zonasCobertura = raw.zonasCobertura.map((z: any) => String(z || '').trim()).filter(Boolean);
+  } else if (Array.isArray(raw.coverageZones)) {
+    zonasCobertura = raw.coverageZones.map((z: any) => String(z || '').trim()).filter(Boolean);
+  } else if (Array.isArray(raw.zonasCoordinadas)) {
+    zonasCobertura = raw.zonasCoordinadas.map((z: any) => String(z || '').trim()).filter(Boolean);
+  } else if (typeof raw.zonasCobertura === 'string' && raw.zonasCobertura.trim()) {
+    zonasCobertura = raw.zonasCobertura.split(',').map((z: string) => z.trim()).filter(Boolean);
+  } else if (typeof raw.coverageZones === 'string' && raw.coverageZones.trim()) {
+    zonasCobertura = raw.coverageZones.split(',').map((z: string) => z.trim()).filter(Boolean);
+  }
+
+  // 5. Numerical metrics normalization (puntuacion/rating, resenasCount/reviewCount, serviciosCompletados/totalServices)
+  const rawRating = typeof raw.puntuacion === 'number' ? raw.puntuacion : Number(raw.puntuacion || raw.rating);
+  const puntuacion = !isNaN(rawRating) && rawRating > 0 ? rawRating : 5.0;
+
+  const rawReviews = typeof raw.resenasCount === 'number' ? raw.resenasCount : Number(raw.resenasCount || raw.reviewCount);
+  const resenasCount = !isNaN(rawReviews) && rawReviews >= 0 ? rawReviews : 0;
+
+  const rawCompleted = typeof raw.serviciosCompletados === 'number' 
+    ? raw.serviciosCompletados 
+    : Number(raw.serviciosCompletados || raw.totalServices || raw.completedServicesCount);
+  const serviciosCompletados = !isNaN(rawCompleted) && rawCompleted >= 0 ? rawCompleted : 0;
+
+  // 6. Emergency Contact normalization (object or string)
+  let contactoEmergencia: { nombre: string; parentesco: string; telefono: string } | undefined = undefined;
+  if (raw.contactoEmergencia && typeof raw.contactoEmergencia === 'object') {
+    contactoEmergencia = {
+      nombre: String(raw.contactoEmergencia.nombre || raw.contactoEmergencia.name || ''),
+      parentesco: String(raw.contactoEmergencia.parentesco || 'Familiar'),
+      telefono: String(raw.contactoEmergencia.telefono || raw.contactoEmergencia.phone || '')
+    };
+  } else if (typeof raw.contactoEmergencia === 'string' && raw.contactoEmergencia.trim()) {
+    contactoEmergencia = {
+      nombre: raw.contactoEmergencia.trim(),
+      parentesco: 'Familiar',
+      telefono: ''
+    };
+  }
+
+  // 7. Documents normalization (array or object map with robust field defaults)
+  const rawDocs = Array.isArray(raw.documentos)
+    ? raw.documentos
+    : (raw.documentos && typeof raw.documentos === 'object' ? Object.values(raw.documentos) : []);
+
+  const documentos: TherapistDocument[] = rawDocs
+    .filter((d: any) => d && typeof d === 'object')
+    .map((d: any, idx: number) => {
+      const dId = String(d.id || `doc-${Date.now()}-${idx}`);
+      const dName = String(d.nombreDocumento || d.nombre || d.name || 'Documento de Certificación');
+      const dTipo = String(d.tipo || d.type || 'diploma');
+      const dInst = String(d.institucion || d.institution || 'Institución Oficial');
+      const dEmision = String(d.fechaEmision || d.emisionDate || 'No disponible');
+      const dUrl = String(d.fileUrl || d.url || d.file_url || '');
+      const dFileType = String(d.fileType || d.typeFormat || (dUrl.includes('.pdf') ? 'pdf' : 'archivo'));
+      
+      const rawDocEstado = String(d.estado || d.status || 'pendiente').toLowerCase();
+      let dEstado: DocumentStatus = 'pendiente';
+      if (rawDocEstado === 'aprobado' || rawDocEstado === 'validado' || rawDocEstado === 'approved') {
+        dEstado = 'validado';
+      } else if (rawDocEstado === 'rechazado' || rawDocEstado === 'rejected') {
+        dEstado = 'rechazado';
+      }
+
+      return {
+        id: dId,
+        nombreDocumento: dName,
+        tipo: dTipo,
+        institucion: dInst,
+        fechaEmision: dEmision,
+        fileUrl: dUrl,
+        fileType: dFileType,
+        estado: dEstado,
+        fechaSubida: d.fechaSubida || defaultDate,
+        fechaRevision: d.fechaRevision || undefined,
+        revisadoPor: d.revisadoPor || undefined,
+        motivoRechazo: d.motivoRechazo ? String(d.motivoRechazo) : undefined
+      };
+    });
+
+  return {
+    ...raw,
+    id: String(raw.id || raw.uid || `therapist-${Date.now()}`),
+    nombre,
+    apellidos,
+    correo,
+    telefono,
+    fotografia,
+    curp: raw.curp || raw.CURP || undefined,
+    ineNumber: raw.ineNumber || raw.ine || raw.INE || undefined,
+    cuentaBancariaCLABE: raw.cuentaBancariaCLABE || raw.clabe || raw.CLABE || undefined,
+    direccion: raw.direccion || undefined,
+    fechaNacimiento: raw.fechaNacimiento || undefined,
+    certificacionesInfo: raw.certificacionesInfo || undefined,
+    contactoEmergencia,
+    especialidades,
+    experienciaAnos: typeof raw.experienciaAnos === 'number' ? raw.experienciaAnos : 3,
+    idiomas: Array.isArray(raw.idiomas) && raw.idiomas.length ? raw.idiomas : ['Español'],
+    disponibilidad: raw.disponibilidad || 'Lunes a Sábado, 8:00 - 20:00',
+    zonasCobertura,
+    zonasCoordinadas: zonasCobertura,
+    estado,
+    documentos,
+    puntuacion,
+    resenasCount,
+    serviciosCompletados,
+    fechaAlta: raw.fechaAlta || raw.fechaIngreso || defaultDate,
+    fechaIngreso: raw.fechaIngreso || raw.fechaAlta || defaultDate,
+    ultimoAcceso: raw.ultimoAcceso || 'Nunca',
+    fechaActualizacion: raw.fechaActualizacion || defaultDate
+  } as TherapistFullProfile;
+};
+
 // Initial professional therapists dataset (starts clean for production)
 const INITIAL_THERAPISTS: TherapistFullProfile[] = [];
 
@@ -69,7 +246,13 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [therapists, setTherapists] = useState<TherapistFullProfile[]>(() => {
     try {
       const stored = localStorage.getItem('essenya_therapists_list');
-      return stored ? JSON.parse(stored) : INITIAL_THERAPISTS;
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          return parsed.map(sanitizeTherapist);
+        }
+      }
+      return INITIAL_THERAPISTS;
     } catch {
       return INITIAL_THERAPISTS;
     }
@@ -85,20 +268,46 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
   });
 
   const [loading, setLoading] = useState(false);
+  const [firestoreError, setFirestoreError] = useState<string | null>(null);
   const { firebaseUser } = useAuth();
 
   // Firestore Realtime Subscription for Therapists
   useEffect(() => {
+    setLoading(true);
     const unsubscribe = onSnapshot(collection(db, 'terapeutas'), (snapshot) => {
-      if (!snapshot.empty) {
-        const loaded: TherapistFullProfile[] = snapshot.docs.map(docSnap => ({
-          id: docSnap.id,
-          ...docSnap.data()
-        } as TherapistFullProfile));
+      setFirestoreError(null);
+      setLoading(false);
+      if (snapshot.empty) {
+        setTherapists([]);
+        try {
+          localStorage.setItem('essenya_therapists_list', JSON.stringify([]));
+        } catch {}
+      } else {
+        const loaded: TherapistFullProfile[] = snapshot.docs
+          .map(docSnap => {
+            try {
+              return sanitizeTherapist({
+                id: docSnap.id,
+                ...docSnap.data()
+              });
+            } catch (e) {
+              console.error('Error sanitizing therapist profile:', docSnap.id, e);
+              return null;
+            }
+          })
+          .filter((t): t is TherapistFullProfile => t !== null);
         setTherapists(loaded);
       }
     }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'terapeutas');
+      setLoading(false);
+      const isPermissionDenied = err.code === 'permission-denied' || (err.message && err.message.includes('permission-denied'));
+      if (isPermissionDenied) {
+        console.error('Firestore permission-denied en colección "terapeutas":', err);
+        setFirestoreError('No fue posible cargar las solicitudes de terapeutas.');
+      } else {
+        handleFirestoreError(err, OperationType.LIST, 'terapeutas');
+        setFirestoreError('No fue posible cargar las solicitudes de terapeutas.');
+      }
     });
 
     return () => unsubscribe();
@@ -242,9 +451,39 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         fechaActualizacion: new Date().toISOString(),
         mustChangePassword: initialStatus === 'activo'
       };
-      await setDoc(doc(db, 'users', newId), userPayload, { merge: true });
-      await setDoc(doc(db, 'terapeutas', newId), newTherapist, { merge: true });
+      await setDoc(doc(db, 'users', newId), cleanForFirestore(userPayload), { merge: true });
+      await setDoc(doc(db, 'terapeutas', newId), cleanForFirestore(newTherapist), { merge: true });
       
+      if (initialStatus === 'activo') {
+        const publicPayload = {
+          id: newId,
+          name: `${nombre} ${apellidos}`.trim(),
+          nombre: `${nombre} ${apellidos}`.trim(),
+          photo: data.fotografia || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
+          fotografia: data.fotografia || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
+          phone: telefono,
+          telefono,
+          rating: 5.0,
+          puntuacion: 5.0,
+          reviewCount: 0,
+          resenasCount: 0,
+          specialties: especialidades,
+          especialidades,
+          status: 'disponible',
+          estado: 'activo',
+          coverageZones: zonasCobertura,
+          zonasCobertura,
+          completedServicesCount: 0,
+          serviciosCompletados: 0,
+          bio: data.certificacionesInfo || 'Terapeuta certificada ESSENYA.',
+          biografia: data.certificacionesInfo || 'Terapeuta certificada ESSENYA.',
+          updatedAt: new Date().toISOString()
+        };
+        try {
+          await setDoc(doc(db, 'terapeutas_publicos', newId), cleanForFirestore(publicPayload), { merge: true });
+        } catch {}
+      }
+
       setTherapists(prev => {
         const remaining = prev.filter(t => t.id !== newId && t.correo.toLowerCase() !== trimmedEmail);
         return [newTherapist, ...remaining];
@@ -272,11 +511,11 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     try {
-      await updateDoc(doc(db, 'terapeutas', id), updatePayload);
+      await updateDoc(doc(db, 'terapeutas', id), cleanForFirestore(updatePayload));
       try {
-        await updateDoc(doc(db, 'users', id), {
+        await updateDoc(doc(db, 'users', id), cleanForFirestore({
           fechaActualizacion: new Date().toISOString()
-        });
+        }));
       } catch {}
 
       setTherapists(prev => prev.map(t => {
@@ -289,6 +528,28 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
         return t;
       }));
+
+      // Sync public directory if active
+      if (target.estado === 'activo' || updates.estado === 'activo') {
+        const publicUpdates = {
+          name: updatedName.trim(),
+          nombre: updatedName.trim(),
+          photo: updates.fotografia || target.fotografia,
+          fotografia: updates.fotografia || target.fotografia,
+          phone: updates.telefono || target.telefono,
+          telefono: updates.telefono || target.telefono,
+          specialties: updates.especialidades || target.especialidades,
+          especialidades: updates.especialidades || target.especialidades,
+          coverageZones: updates.zonasCobertura || target.zonasCobertura,
+          zonasCobertura: updates.zonasCobertura || target.zonasCobertura,
+          bio: updates.biografia || target.biografia,
+          biografia: updates.biografia || target.biografia,
+          updatedAt: new Date().toISOString()
+        };
+        try {
+          await updateDoc(doc(db, 'terapeutas_publicos', id), cleanForFirestore(publicUpdates));
+        } catch {}
+      }
 
       logAudit(id, updatedName, 'Modificación de Expediente', 'Perfil actualizado por la Administradora.');
       return { success: true };
@@ -318,13 +579,52 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     try {
-      await updateDoc(doc(db, 'terapeutas', id), statusPayload);
+      await updateDoc(doc(db, 'terapeutas', id), cleanForFirestore(statusPayload));
       try {
-        await updateDoc(doc(db, 'users', id), {
+        await updateDoc(doc(db, 'users', id), cleanForFirestore({
           estado: status,
           fechaActualizacion: new Date().toISOString()
-        });
+        }));
       } catch {}
+
+      // Sync with terapeutas_publicos collection for client visibility
+      if (status === 'activo') {
+        const publicPayload = {
+          id: target.id,
+          name: `${target.nombre} ${target.apellidos || ''}`.trim(),
+          nombre: `${target.nombre} ${target.apellidos || ''}`.trim(),
+          photo: target.fotografia || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
+          fotografia: target.fotografia || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
+          phone: target.telefono || '',
+          telefono: target.telefono || '',
+          rating: target.puntuacion || 5.0,
+          puntuacion: target.puntuacion || 5.0,
+          reviewCount: target.resenasCount || 0,
+          resenasCount: target.resenasCount || 0,
+          specialties: target.especialidades || ['Masaje Relajante'],
+          especialidades: target.especialidades || ['Masaje Relajante'],
+          status: 'disponible',
+          estado: 'activo',
+          coverageZones: target.zonasCobertura || ['Polanco'],
+          zonasCobertura: target.zonasCobertura || ['Polanco'],
+          completedServicesCount: target.serviciosCompletados || 0,
+          serviciosCompletados: target.serviciosCompletados || 0,
+          bio: target.biografia || 'Terapeuta certificada ESSENYA.',
+          biografia: target.biografia || 'Terapeuta certificada ESSENYA.',
+          updatedAt: new Date().toISOString()
+        };
+        try {
+          await setDoc(doc(db, 'terapeutas_publicos', id), cleanForFirestore(publicPayload), { merge: true });
+        } catch {}
+      } else {
+        try {
+          await updateDoc(doc(db, 'terapeutas_publicos', id), {
+            status: 'desconectado',
+            estado: status,
+            updatedAt: new Date().toISOString()
+          });
+        } catch {}
+      }
 
       setTherapists(prev => prev.map(t => {
         if (t.id === id) {
@@ -401,6 +701,9 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       try {
         await deleteDoc(doc(db, 'users', id));
       } catch {}
+      try {
+        await deleteDoc(doc(db, 'terapeutas_publicos', id));
+      } catch {}
 
       setTherapists(prev => prev.filter(t => t.id !== id));
       logAudit(id, `${target.nombre} ${target.apellidos}`, 'Eliminación de Cuenta', 'Cuenta eliminada permanentemente del sistema.');
@@ -442,7 +745,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     try {
-      await updateDoc(doc(db, 'terapeutas', therapistId), updatePayload);
+      await updateDoc(doc(db, 'terapeutas', therapistId), cleanForFirestore(updatePayload));
 
       setTherapists(prev => prev.map(t => {
         if (t.id === therapistId) {
@@ -487,7 +790,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     try {
-      await updateDoc(doc(db, 'terapeutas', therapistId), updatePayload);
+      await updateDoc(doc(db, 'terapeutas', therapistId), cleanForFirestore(updatePayload));
 
       setTherapists(prev => prev.map(t => {
         if (t.id === therapistId) {
@@ -537,7 +840,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     try {
-      await updateDoc(doc(db, 'terapeutas', therapistId), updatePayload);
+      await updateDoc(doc(db, 'terapeutas', therapistId), cleanForFirestore(updatePayload));
 
       setTherapists(prev => prev.map(t => {
         if (t.id === therapistId) {
@@ -572,7 +875,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     try {
-      await updateDoc(doc(db, 'terapeutas', therapistId), updatePayload);
+      await updateDoc(doc(db, 'terapeutas', therapistId), cleanForFirestore(updatePayload));
 
       setTherapists(prev => prev.map(t => {
         if (t.id === therapistId) {
@@ -603,7 +906,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     try {
-      await updateDoc(doc(db, 'terapeutas', therapistId), updatePayload);
+      await updateDoc(doc(db, 'terapeutas', therapistId), cleanForFirestore(updatePayload));
 
       setTherapists(prev => prev.map(t => {
         if (t.id === therapistId) {
@@ -633,6 +936,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         therapists,
         auditLogs,
         loading,
+        firestoreError,
         createTherapist,
         updateTherapist,
         changeTherapistStatus,

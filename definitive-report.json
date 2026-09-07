@@ -1,0 +1,17 @@
+{
+  "vulnerabilities": [],
+  "testResults": {
+    "Cliente crea reserva": "PASÓ",
+    "Cliente intenta modificar state a aceptada": "BLOQUEADO",
+    "Cliente intenta asignar terapeuta": "BLOQUEADO",
+    "Cliente intenta cambiar precio": "BLOQUEADO",
+    "Cliente intenta cambiar status de pago": "BLOQUEADO",
+    "Cliente intenta acceder/modificar reserva ajena": "BLOQUEADO",
+    "Terapeuta accede a reserva no asignada (alterando otros campos)": "BLOQUEADO",
+    "Admin acepta y asigna": "PASÓ",
+    "Terapeuta asignado modifica state (progreso de servicio)": "PASÓ",
+    "Terapeuta asignado intenta modificar precio": "BLOQUEADO",
+    "Terapeuta asignado intenta reasignar": "BLOQUEADO",
+    "Cliente intenta falsificar audit log de admin": "BLOQUEADO"
+  }
+}

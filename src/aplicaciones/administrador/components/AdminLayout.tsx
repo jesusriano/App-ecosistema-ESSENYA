@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AdminHeader } from './AdminHeader';
 import { AdminSidebar, AdminRoutePath } from './AdminSidebar';
 import { Menu, X } from 'lucide-react';
+import { ErrorBoundary } from '../../../shared/components/ErrorBoundary';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -70,7 +71,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
         {/* Contenido Principal de Administrador */}
         <main className="flex-1 p-3 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto overflow-y-auto min-w-0">
-          {children}
+          <ErrorBoundary fallbackTitle="Error al cargar el módulo administrativo">
+            {children}
+          </ErrorBoundary>
         </main>
       </div>
     </div>

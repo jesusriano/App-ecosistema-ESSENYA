@@ -10,6 +10,7 @@ import { PortalAuthGuard } from './shared/components/auth/PortalAuthGuard';
 import { ThemeToggle } from './shared/components/ThemeToggle';
 
 import { ConfigValidator } from './shared/components/ConfigValidator';
+import { ErrorBoundary } from './shared/components/ErrorBoundary';
 
 // Lazy loading the three independent application modules
 const ClienteAppModule = React.lazy(() => import('./aplicaciones/cliente/App'));
@@ -109,7 +110,9 @@ export default function App() {
             <TherapistProvider>
               <EcosystemProvider>
                 <BrowserRouter>
-                  <MainAppContent />
+                  <ErrorBoundary fallbackTitle="Error al inicializar la plataforma ESSENYA">
+                    <MainAppContent />
+                  </ErrorBoundary>
                 </BrowserRouter>
               </EcosystemProvider>
             </TherapistProvider>

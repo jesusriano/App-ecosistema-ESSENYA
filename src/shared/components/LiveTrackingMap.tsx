@@ -335,7 +335,7 @@ const VisualRouteProgressTracker: React.FC<{
               indexClasses = 'bg-yellow-500 text-black';
               iconElement = <LocateFixed className="w-3.5 h-3.5 text-yellow-500 animate-pulse" />;
               titleClasses = 'text-white';
-            } else if (idx === 0 && bookingState === 'aceptado') {
+            } else if (idx === 0 && bookingState === 'aceptada') {
               // Verde por fuera únicamente (fondo transparente, borde verde)
               stepClasses = 'bg-transparent border-emerald-500 text-white shadow-md shadow-emerald-500/10 ring-1 ring-emerald-500/30';
               indexClasses = 'bg-emerald-500 text-black';
@@ -403,7 +403,7 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
   });
 
 
-  if (bookingState === 'aceptado') {
+  if (bookingState === 'aceptada') {
     return (
       <div className="w-full h-96 bg-[#141414] rounded-2xl border border-[#C9A55B]/30 overflow-hidden relative shadow-2xl flex flex-col items-center justify-center text-center p-8">
         <div className="w-16 h-16 rounded-full bg-[#1A1A1A] border border-[#C9A55B]/30 flex items-center justify-center mb-4">
@@ -611,16 +611,6 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
                 mapId="DEMO_MAP_ID"
                 internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
                 styles={darkGoldMapStyle}
-                options={{
-                  disableDefaultUI: true,
-                  zoomControl: false,
-                  streetViewControl: false,
-                  mapTypeControl: false,
-                  fullscreenControl: false,
-                  gestureHandling: "none",
-                  keyboardShortcuts: false,
-                  clickableIcons: false
-                }}
                 style={{ width: '100%', height: '100%' }}
               >
                 <RouteAndMarkers

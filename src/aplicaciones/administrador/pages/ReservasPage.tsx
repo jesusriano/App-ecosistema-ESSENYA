@@ -162,7 +162,7 @@ export const ReservasPage: React.FC = () => {
         <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
           <Filter className="w-3.5 h-3.5 text-[#C9A55B] shrink-0" />
           <span className="text-xs text-[var(--text-muted)] shrink-0">Estado:</span>
-          {['todos', 'pendiente', 'aceptada', 'rechazada', 'aceptado', 'en_camino', 'servicio_iniciado', 'servicio_finalizado', 'cancelado'].map((st) => (
+          {['todos', 'pendiente', 'aceptada', 'rechazada', 'aceptada', 'en_camino', 'servicio_iniciado', 'servicio_finalizado', 'cancelado'].map((st) => (
             <button
               key={st}
               onClick={() => setStatusFilter(st)}
@@ -281,7 +281,7 @@ export const ReservasPage: React.FC = () => {
                         </div>
                       ) : (
                         <div className="flex flex-wrap items-center gap-2 shrink-0">
-                          {(b.state === 'aceptada' || b.state === 'aceptado') && (
+                          {b.state === 'aceptada' && (
                             <LuxuryButton
                               variant="gold"
                               size="sm"

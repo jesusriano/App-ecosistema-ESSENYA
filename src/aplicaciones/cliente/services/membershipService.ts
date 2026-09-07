@@ -70,8 +70,9 @@ export const calculateMembershipTier = (completedMassages: number): TierInfo => 
   }
 };
 
-export const getCompletedAndPaidBookings = (bookings: any[], clientId: string) => {
-  return bookings.filter(b => b.clientId === clientId && b.state === 'servicio_finalizado' && (b.paymentStatus === 'pagado' || b.paid === true)).length;
+export const getCompletedAndPaidBookings = (bookings: any[], clientId?: string) => {
+  if (!bookings || !Array.isArray(bookings)) return [];
+  return bookings.filter(b => (!clientId || b.clientId === clientId) && b.state === 'servicio_finalizado' && (b.paymentStatus === 'pagado' || b.paid === true));
 };
 
 export interface VipCourtesyStatus {

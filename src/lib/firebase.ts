@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, getFirestore } from 'firebase/firestore';
 import appletConfig from '../../firebase-applet-config.json';
 
 // Single source of truth for Firebase Production Configuration
@@ -20,10 +20,19 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 // Initialize Auth
 export const auth = getAuth(app);
 
-// Initialize Firestore with specific database ID from config
-export const db = appletConfig.firestoreDatabaseId
-  ? getFirestore(app, appletConfig.firestoreDatabaseId)
-  : getFirestore(app);
+// Initialize Firestore with custom database ID and resilience settings
+const dbId = appletConfig.firestoreDatabaseId || undefined;
+let firestoreInstance;
+try {
+  firestoreInstance = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+    ignoreUndefinedProperties: true,
+  }, dbId);
+} catch {
+  firestoreInstance = dbId ? getFirestore(app, dbId) : getFirestore(app);
+}
+
+export const db = firestoreInstance;
 
 export default app;
 
