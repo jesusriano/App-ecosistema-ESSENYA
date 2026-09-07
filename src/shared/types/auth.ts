@@ -12,6 +12,7 @@ export interface TherapistDocument {
   fechaEmision: string;
   fileUrl: string; // PDF, JPG, PNG preview
   fileType: 'pdf' | 'jpg' | 'png';
+  storagePath?: string;
   estado: DocumentStatus;
   motivoRechazo?: string;
   fechaSubida: string;

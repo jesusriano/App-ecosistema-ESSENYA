@@ -370,20 +370,59 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     const trimmedEmail = correo.trim().toLowerCase();
-    const newId = data.id || `ther-${Date.now()}`;
+    // Auto generate strong temp password if not provided
+    const tempPass = data.tempPassword || `Essenya${Math.floor(1000 + Math.random() * 9000)}!`;
+    let finalId = data.id;
+
+    if (!finalId) {
+      // Provision Auth user in Firebase Auth via our secure backend endpoint
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json'
+        };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        console.log('[createTherapist] Provisioning Auth account via server API...');
+        const apiResponse = await fetch('/api/admin/create-therapist-auth-profile', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            email: trimmedEmail,
+            password: tempPass,
+            displayName: `${nombre} ${apellidos}`.trim()
+          })
+        });
+
+        if (!apiResponse.ok) {
+          const errData = await apiResponse.json().catch(() => ({ error: 'Error del servidor backend' }));
+          return { success: false, error: errData.error || `HTTP error ${apiResponse.status}` };
+        }
+
+        const apiResult = await apiResponse.json();
+        if (apiResult.success && apiResult.uid) {
+          finalId = apiResult.uid;
+        } else {
+          return { success: false, error: apiResult.error || 'No se recibió UID del servidor de autenticación.' };
+        }
+      } catch (err: any) {
+        console.error('[createTherapist] Auth provisioning error:', err);
+        return { success: false, error: `Error al crear la cuenta de autenticación: ${err.message || err}` };
+      }
+    }
+
     const initialStatus: AccountStatus = data.estado || 'activo';
 
     // Check duplicate: only error if there is another therapist with the same email and a DIFFERENT id
-    const existingOther = therapists.find(t => (t.correo || '').toLowerCase() === trimmedEmail && t.id !== newId);
+    const existingOther = therapists.find(t => (t.correo || '').toLowerCase() === trimmedEmail && t.id !== finalId);
     if (existingOther) {
       return { success: false, error: 'Ya existe una terapeuta registrada con este correo electrónico.' };
     }
 
-    // Auto generate strong temp password if not provided
-    const tempPass = data.tempPassword || `Essenya${Math.floor(1000 + Math.random() * 9000)}!`;
-
     const newTherapist: TherapistFullProfile = {
-      id: newId,
+      id: finalId,
       nombre: nombre.trim(),
       apellidos: apellidos.trim(),
       correo: trimmedEmail,
@@ -402,31 +441,8 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       disponibilidad: data.disponibilidad || 'Lunes a Sábado, 09:00 - 19:00',
       zonasCobertura: zonasCobertura.length ? zonasCobertura : ['Polanco'],
       estado: initialStatus,
-      mustChangePassword: initialStatus === 'activo',
-      documentos: [
-        {
-          id: `doc-${Date.now()}-ine`,
-          nombreDocumento: 'Identificación INE / Cédula',
-          tipo: 'ine',
-          institucion: 'INE México',
-          fechaEmision: '2022-01-01',
-          fileUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&q=80&w=600',
-          fileType: 'pdf',
-          estado: 'pendiente',
-          fechaSubida: new Date().toISOString()
-        },
-        {
-          id: `doc-${Date.now()}-curp`,
-          nombreDocumento: 'Constancia CURP Oficial',
-          tipo: 'curp',
-          institucion: 'RENAPO',
-          fechaEmision: '2023-01-01',
-          fileUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&q=80&w=600',
-          fileType: 'pdf',
-          estado: 'pendiente',
-          fechaSubida: new Date().toISOString()
-        }
-      ],
+      mustChangePassword: !data.id, // Only require password change if created by administrator
+      documentos: [], // Start empty for real uploads only
       puntuacion: 5.0,
       resenasCount: 0,
       serviciosCompletados: 0,
@@ -438,7 +454,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     // Save to Firestore
     try {
       const userPayload = {
-        id: newId,
+        id: finalId,
         nombre,
         apellidos,
         correo: trimmedEmail,
@@ -449,14 +465,14 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         correoVerificado: true,
         rol: 'terapeuta',
         fechaActualizacion: new Date().toISOString(),
-        mustChangePassword: initialStatus === 'activo'
+        mustChangePassword: !data.id
       };
-      await setDoc(doc(db, 'users', newId), cleanForFirestore(userPayload), { merge: true });
-      await setDoc(doc(db, 'terapeutas', newId), cleanForFirestore(newTherapist), { merge: true });
+      await setDoc(doc(db, 'users', finalId), cleanForFirestore(userPayload), { merge: true });
+      await setDoc(doc(db, 'terapeutas', finalId), cleanForFirestore(newTherapist), { merge: true });
       
       if (initialStatus === 'activo') {
         const publicPayload = {
-          id: newId,
+          id: finalId,
           name: `${nombre} ${apellidos}`.trim(),
           nombre: `${nombre} ${apellidos}`.trim(),
           photo: data.fotografia || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
@@ -480,19 +496,19 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
           updatedAt: new Date().toISOString()
         };
         try {
-          await setDoc(doc(db, 'terapeutas_publicos', newId), cleanForFirestore(publicPayload), { merge: true });
+          await setDoc(doc(db, 'terapeutas_publicos', finalId), cleanForFirestore(publicPayload), { merge: true });
         } catch {}
       }
 
       setTherapists(prev => {
-        const remaining = prev.filter(t => t.id !== newId && (t.correo || '').toLowerCase() !== trimmedEmail);
+        const remaining = prev.filter(t => t.id !== finalId && (t.correo || '').toLowerCase() !== trimmedEmail);
         return [newTherapist, ...remaining];
       });
-      logAudit(newId, `${nombre} ${apellidos}`, initialStatus === 'pendiente' ? 'Postulación de Terapeuta Registrada' : 'Creación de Cuenta por Administradora', `Estado Inicial: ${initialStatus.toUpperCase()}`);
+      logAudit(finalId, `${nombre} ${apellidos}`, initialStatus === 'pendiente' ? 'Postulación de Terapeuta Registrada' : 'Creación de Cuenta por Administradora', `Estado Inicial: ${initialStatus.toUpperCase()}`);
       
       return { success: true, tempPassword: tempPass };
     } catch (err: any) {
-      handleFirestoreError(err, OperationType.CREATE, `terapeutas/${newId}`, newTherapist);
+      handleFirestoreError(err, OperationType.CREATE, `terapeutas/${finalId}`, newTherapist);
       return { success: false, error: err?.message || 'Error al registrar la terapeuta en la base de datos.' };
     }
   };
@@ -575,7 +591,11 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     const statusPayload = {
       estado: status,
       motivoRechazoAccount: rejectionReason || null,
-      fechaActualizacion: new Date().toISOString()
+      fechaActualizacion: new Date().toISOString(),
+      ...(status === 'activo' ? {
+        fechaAprobacion: new Date().toISOString(),
+        aprobadoPor: auth.currentUser?.email || 'admin@essenya.mx'
+      } : {})
     };
 
     try {
@@ -583,7 +603,11 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       try {
         await updateDoc(doc(db, 'users', id), cleanForFirestore({
           estado: status,
-          fechaActualizacion: new Date().toISOString()
+          fechaActualizacion: new Date().toISOString(),
+          ...(status === 'activo' ? {
+            fechaAprobacion: new Date().toISOString(),
+            aprobadoPor: auth.currentUser?.email || 'admin@essenya.mx'
+          } : {})
         }));
       } catch {}
 
@@ -654,7 +678,17 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     try {
       // 1. Send official Firebase Authentication password reset email
       if (target.correo) {
-        await sendPasswordResetEmail(auth, target.correo.trim().toLowerCase());
+        const trimmed = target.correo.trim().toLowerCase();
+        const origin = window.location.origin;
+        try {
+          await sendPasswordResetEmail(auth, trimmed, {
+            url: `${origin}/login`,
+            handleCodeInApp: false
+          });
+        } catch (e) {
+          console.warn('Could not send admin-initiated therapist reset email with ActionCodeSettings, trying default reset:', e);
+          await sendPasswordResetEmail(auth, trimmed);
+        }
       }
 
       // 2. Mark mustChangePassword in Firestore

@@ -126,14 +126,8 @@ export const MUSIC_OPTIONS = [
   { id: 'Otra música', label: 'Otra música', description: 'Ambiente musical relajante contemporáneo o sin música' }
 ] as const;
 
-// Official Payment Methods (Apple Pay completely removed)
+// Official Payment Methods (Only bank transfer and cash allowed)
 export const PAYMENT_METHODS = [
-  {
-    id: 'tarjeta',
-    label: 'Tarjeta de Crédito / Débito',
-    badge: 'Pago Seguro SSL 256-bit',
-    description: 'Cargo seguro con tarjeta bancaria de crédito o débito.'
-  },
   {
     id: 'transferencia',
     label: 'Transferencia Interbancaria (SPEI)',

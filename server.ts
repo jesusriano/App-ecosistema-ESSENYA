@@ -182,6 +182,237 @@ async function startServer() {
     });
   });
 
+  // Secure Administrative Endpoint to create a therapist in Firebase Auth
+  app.post("/api/admin/create-therapist-auth-profile", requireAuthOrUserContext, async (req, res) => {
+    try {
+      const verifiedUser = (req as any).user;
+      if (!verifiedUser || (verifiedUser.role !== 'administrador' && verifiedUser.email !== 'essenya222@gmail.com')) {
+        return res.status(403).json({
+          success: false,
+          error: "No autorizado. Solo los administradores pueden crear terapeutas en el sistema."
+        });
+      }
+
+      const { email, password, displayName } = req.body;
+      if (!email || !password) {
+        return res.status(400).json({
+          success: false,
+          error: "El correo y la contraseña temporal son requeridos."
+        });
+      }
+
+      // Lazy load firebase-admin to keep module loading lightweight
+      const adminApp = await import("firebase-admin/app");
+      const adminAuth = await import("firebase-admin/auth");
+
+      const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+      let projectId = "essenya-ecosistema";
+
+      if (fs.existsSync(configPath)) {
+        try {
+          const parsed = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          if (parsed.projectId) projectId = parsed.projectId;
+        } catch (e) {
+          console.warn("Failed to parse firebase-applet-config.json for server dynamic imports:", e);
+        }
+      }
+
+      // Safeguard against double initialization
+      if (adminApp.getApps().length === 0) {
+        adminApp.initializeApp({
+          projectId: projectId,
+        });
+      }
+
+      const auth = adminAuth.getAuth();
+
+      console.log(`[ADMIN-CREATE-THERAPIST] Creating Auth user: ${email}`);
+
+      const userRecord = await auth.createUser({
+        email: email.trim().toLowerCase(),
+        password: password,
+        displayName: displayName || "",
+        emailVerified: true
+      });
+
+      console.log(`[ADMIN-CREATE-THERAPIST] Auth user created successfully with UID: ${userRecord.uid}`);
+
+      return res.json({
+        success: true,
+        uid: userRecord.uid
+      });
+
+    } catch (err: any) {
+      console.error("[ADMIN-CREATE-THERAPIST-ERROR]", err);
+      return res.status(500).json({
+        success: false,
+        error: "Fallo al registrar la terapeuta en Firebase Authentication.",
+        details: err?.message || String(err)
+      });
+    }
+  });
+
+  // Administrative Cleanup Endpoint (Superadmin only)
+  app.post("/api/admin/clean-demo-data", requireAuthOrUserContext, async (req, res) => {
+    try {
+      const verifiedUser = (req as any).user;
+      if (!verifiedUser || verifiedUser.email !== 'essenya222@gmail.com') {
+        return res.status(403).json({
+          success: false,
+          error: "No autorizado. Solo el superadministrador principal (essenya222@gmail.com) puede realizar esta acción."
+        });
+      }
+
+      console.log(`[ADMIN-CLEANUP] Requested by: ${verifiedUser.email}`);
+
+      // Lazy load firebase-admin to keep module loading lightweight
+      const adminApp = await import("firebase-admin/app");
+      const adminFirestore = await import("firebase-admin/firestore");
+      const adminAuth = await import("firebase-admin/auth");
+
+      const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+      let projectId = "essenya-ecosistema";
+      let databaseId = "ai-studio-essenya-4bebd9eb-3f06-4b4e-a5fc-4349bc9b5cc8";
+
+      if (fs.existsSync(configPath)) {
+        try {
+          const parsed = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          if (parsed.projectId) projectId = parsed.projectId;
+          if (parsed.firestoreDatabaseId) databaseId = parsed.firestoreDatabaseId;
+        } catch (e) {
+          console.warn("Failed to parse firebase-applet-config.json for server dynamic imports:", e);
+        }
+      }
+
+      // Safeguard against double initialization
+      if (adminApp.getApps().length === 0) {
+        adminApp.initializeApp({
+          projectId: projectId,
+        });
+      }
+
+      const db = adminFirestore.getFirestore(databaseId);
+      const auth = adminAuth.getAuth();
+
+      const PRESERVED_EMAIL = 'essenya222@gmail.com';
+      const usersToDelete: string[] = [];
+      const emailsToDelete: string[] = [];
+      let preservedUserUid = "";
+
+      // List and filter Firebase Auth users
+      let nextPageToken: string | undefined = undefined;
+      do {
+        const listUsersResult = await auth.listUsers(1000, nextPageToken);
+        for (const userRecord of listUsersResult.users) {
+          const email = userRecord.email?.toLowerCase() || '';
+          if (email === PRESERVED_EMAIL) {
+            preservedUserUid = userRecord.uid;
+          } else {
+            usersToDelete.push(userRecord.uid);
+            emailsToDelete.push(email || "(no email)");
+          }
+        }
+        nextPageToken = listUsersResult.pageToken;
+      } while (nextPageToken);
+
+      // Delete Auth Users
+      let deletedAuthUsersCount = 0;
+      if (usersToDelete.length > 0) {
+        const deleteResult = await auth.deleteUsers(usersToDelete);
+        deletedAuthUsersCount = deleteResult.successCount;
+      }
+
+      // Delete entirely cleared collections
+      const collectionsToClear = [
+        'clientes',
+        'terapeutas',
+        'terapeutas_publicos',
+        'reservas',
+        'invoices',
+        'alertas_panico',
+        'audit_logs'
+      ];
+
+      const deletedDocsSummary: Record<string, number> = {};
+
+      for (const colName of collectionsToClear) {
+        const colRef = db.collection(colName);
+        const snapshot = await colRef.get();
+        if (!snapshot.empty) {
+          const batch = db.batch();
+          snapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+          });
+          await batch.commit();
+          deletedDocsSummary[colName] = snapshot.size;
+        } else {
+          deletedDocsSummary[colName] = 0;
+        }
+      }
+
+      // Clean 'users' collection while preserving the master owner
+      const usersCol = db.collection('users');
+      const usersSnapshot = await usersCol.get();
+      let deletedUsersProfileCount = 0;
+      if (!usersSnapshot.empty) {
+        const usersBatch = db.batch();
+        usersSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          const email = (data.correo || data.email || '').toLowerCase().trim();
+          if (email !== PRESERVED_EMAIL && doc.id !== preservedUserUid) {
+            usersBatch.delete(doc.ref);
+            deletedUsersProfileCount++;
+          }
+        });
+        if (deletedUsersProfileCount > 0) {
+          await usersBatch.commit();
+        }
+      }
+      deletedDocsSummary['users'] = deletedUsersProfileCount;
+
+      // Clean 'administradores' collection while preserving the master owner
+      const adminsCol = db.collection('administradores');
+      const adminsSnapshot = await adminsCol.get();
+      let deletedAdminsProfileCount = 0;
+      if (!adminsSnapshot.empty) {
+        const adminsBatch = db.batch();
+        adminsSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          const email = (data.correo || data.email || '').toLowerCase().trim();
+          if (email !== PRESERVED_EMAIL && doc.id !== preservedUserUid) {
+            adminsBatch.delete(doc.ref);
+            deletedAdminsProfileCount++;
+          }
+        });
+        if (deletedAdminsProfileCount > 0) {
+          await adminsBatch.commit();
+        }
+      }
+      deletedDocsSummary['administradores'] = deletedAdminsProfileCount;
+
+      res.json({
+        success: true,
+        message: "Ecosistema ESSENYA limpiado exitosamente para inicio de pruebas reales.",
+        details: {
+          deletedAuthUsers: deletedAuthUsersCount,
+          deletedDocuments: deletedDocsSummary,
+          preservedAdmin: {
+            email: PRESERVED_EMAIL,
+            uid: preservedUserUid || "preservado"
+          }
+        }
+      });
+
+    } catch (err: any) {
+      console.error("[ADMIN-CLEANUP-ERROR]", err);
+      res.status(500).json({
+        success: false,
+        error: "Fallo durante la limpieza administrativa.",
+        details: err?.message || String(err)
+      });
+    }
+  });
+
   // AI Spa Concierge Endpoint
   app.post("/api/gemini/concierge", requireAuthOrUserContext, async (req, res) => {
     try {

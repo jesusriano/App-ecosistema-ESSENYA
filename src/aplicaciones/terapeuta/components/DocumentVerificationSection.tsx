@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { TherapistDocument, DocumentStatus } from '../../../shared/types/auth';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { storage } from '../../../lib/firebase';
 
 interface DocumentVerificationSectionProps {
   therapistId: string;
@@ -68,6 +70,9 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
   const [docFileUrl, setDocFileUrl] = useState('');
   const [docFileType, setDocFileType] = useState<'pdf' | 'jpg' | 'png'>('pdf');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Metrics
   const totalDocs = documentos.length;
@@ -108,6 +113,9 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
     setDocFechaEmision(new Date().toISOString().split('T')[0]);
     setDocFileUrl('');
     setDocFileType('pdf');
+    setSelectedFile(null);
+    setUploadProgress(null);
+    setUploadError(null);
     setShowUploadModal(true);
   };
 
@@ -119,6 +127,9 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
     setDocFechaEmision(doc.fechaEmision);
     setDocFileUrl('');
     setDocFileType(doc.fileType || 'pdf');
+    setSelectedFile(null);
+    setUploadProgress(null);
+    setUploadError(null);
     setShowUploadModal(true);
   };
 
@@ -141,10 +152,54 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
     }
 
     setDocFileType(ext);
+    setSelectedFile(file);
+    setUploadProgress(null);
+    setUploadError(null);
 
     // Generate local Object URL for instant viewing
     const objectUrl = URL.createObjectURL(file);
     setDocFileUrl(objectUrl);
+  };
+
+  const uploadFileToStorage = (file: File): Promise<{ url: string; path: string }> => {
+    return new Promise((resolve, reject) => {
+      const timestamp = Date.now();
+      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const storagePath = `terapeutas/${therapistId}/documentos/${timestamp}-${safeName}`;
+      const storageRef = ref(storage, storagePath);
+      const uploadTask = uploadBytesResumable(storageRef, file);
+
+      setUploadProgress(0);
+      setUploadError(null);
+
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+          setUploadProgress(progress);
+        },
+        (error) => {
+          console.error('Firebase Storage upload error:', error);
+          let errorMessage = 'Error al subir el archivo.';
+          if (error.code === 'storage/unauthorized') {
+            errorMessage = 'No tienes permisos para subir archivos en esta ruta (Storage Rules).';
+          } else if (error.code === 'storage/canceled') {
+            errorMessage = 'Carga cancelada.';
+          }
+          setUploadError(errorMessage);
+          reject(new Error(errorMessage));
+        },
+        async () => {
+          try {
+            const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+            setUploadProgress(100);
+            resolve({ url: downloadUrl, path: storagePath });
+          } catch (err: any) {
+            reject(err);
+          }
+        }
+      );
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -154,9 +209,26 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
       return;
     }
 
-    const finalUrl = docFileUrl || 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&q=80&w=800';
+    if (!selectedFile && !replacingDoc) {
+      showToast('error', 'Por favor selecciona un archivo para cargar.');
+      return;
+    }
 
     setIsSubmitting(true);
+    let finalUrl = docFileUrl;
+    let finalStoragePath = replacingDoc?.storagePath || '';
+
+    if (selectedFile) {
+      try {
+        const uploadResult = await uploadFileToStorage(selectedFile);
+        finalUrl = uploadResult.url;
+        finalStoragePath = uploadResult.path;
+      } catch (err: any) {
+        setIsSubmitting(false);
+        showToast('error', err.message || 'Error al subir el archivo a Firebase Storage.');
+        return;
+      }
+    }
 
     if (replacingDoc) {
       const res = await onReplaceDocument(replacingDoc.id, {
@@ -165,13 +237,16 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
         institucion: docInstitucion.trim(),
         fechaEmision: docFechaEmision,
         fileUrl: finalUrl,
-        fileType: docFileType
+        fileType: docFileType,
+        storagePath: finalStoragePath
       });
       setIsSubmitting(false);
 
       if (res.success) {
         setShowUploadModal(false);
         setReplacingDoc(null);
+        setSelectedFile(null);
+        setUploadProgress(null);
         showToast('success', 'Documento reenviado. Se ha colocado en "Pendiente de revisión" para el administrador.');
       } else {
         showToast('error', res.error || 'Error al actualizar el documento.');
@@ -183,12 +258,15 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
         institucion: docInstitucion.trim(),
         fechaEmision: docFechaEmision,
         fileUrl: finalUrl,
-        fileType: docFileType
+        fileType: docFileType,
+        storagePath: finalStoragePath
       });
       setIsSubmitting(false);
 
       if (res.success) {
         setShowUploadModal(false);
+        setSelectedFile(null);
+        setUploadProgress(null);
         showToast('success', 'Documento cargado correctamente. Estado: "Pendiente de revisión".');
       } else {
         showToast('error', res.error || 'Error al cargar el documento.');
@@ -577,6 +655,27 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
               {docFileUrl && (
                 <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold text-center">
                   ✓ Archivo seleccionado ({docFileType.toUpperCase()})
+                </p>
+              )}
+
+              {uploadProgress !== null && (
+                <div className="space-y-1.5 p-2 bg-[#FAF8F5] dark:bg-[#1A1A1A] rounded-xl border border-[#E5DFD3] dark:border-[#2D2D2D]">
+                  <div className="flex justify-between items-center text-[10px] font-bold text-[#6B655F] dark:text-[#888888]">
+                    <span>Subiendo archivo a Storage...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-[#C9A55B] h-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {uploadError && (
+                <p className="text-[11px] text-red-500 font-bold text-center bg-red-500/10 p-2 rounded-xl border border-red-500/20">
+                  ✕ {uploadError}
                 </p>
               )}
 

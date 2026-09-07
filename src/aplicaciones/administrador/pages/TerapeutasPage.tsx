@@ -12,10 +12,17 @@ import { ErrorBoundary } from '../../../shared/components/ErrorBoundary';
 
 const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80';
 
-const formatSafeDate = (val?: string | null) => {
-  if (!val) return 'No disponible';
-  const d = new Date(val);
-  return isNaN(d.getTime()) ? 'No disponible' : d.toLocaleDateString();
+const formatSafeDate = (dateVal?: any, fallback: string = 'No registrado') => {
+  if (!dateVal) return fallback;
+  try {
+    const d = typeof dateVal === 'object' && typeof dateVal?.toDate === 'function' ? dateVal.toDate() : new Date(dateVal);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString();
+    }
+  } catch {
+    // ignore
+  }
+  return fallback;
 };
 
 const AVAILABLE_SPECIALTIES = [
@@ -62,8 +69,13 @@ export const TerapeutasPage: React.FC = () => {
   const [rejectingTherapistId, setRejectingTherapistId] = useState<string | null>(null);
   const [accountRejectReason, setAccountRejectReason] = useState('');
 
+  // Defensive validation for therapists list from Firestore
+  const safeTherapistsList = Array.isArray(therapists) 
+    ? therapists.filter((t): t is TherapistFullProfile => Boolean(t && typeof t === 'object'))
+    : [];
+
   // Count pending therapists
-  const pendingTherapistsCount = therapists.filter(t => t && t.estado === 'pendiente').length;
+  const pendingTherapistsCount = safeTherapistsList.filter(t => t && t.estado === 'pendiente').length;
 
   // Modals state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -88,19 +100,6 @@ export const TerapeutasPage: React.FC = () => {
 
   // Feedback Toast
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-
-  const formatSafeDate = (dateVal?: any) => {
-    if (!dateVal) return 'Reciente';
-    try {
-      const d = typeof dateVal === 'object' && dateVal?.toDate ? dateVal.toDate() : new Date(dateVal);
-      if (!isNaN(d.getTime())) {
-        return d.toLocaleDateString();
-      }
-    } catch {
-      // ignore
-    }
-    return 'Reciente';
-  };
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const showToast = (type: 'success' | 'error', message: string) => {
@@ -108,23 +107,25 @@ export const TerapeutasPage: React.FC = () => {
     setTimeout(() => setFeedback(null), 4000);
   };
 
-  // Filter therapists safely and sanitize
-  const filteredTherapists = therapists
-    .filter(Boolean)
+  // Filter therapists safely and sanitize with default values
+  const filteredTherapists = safeTherapistsList
     .map(sanitizeTherapist)
+    .filter((t): t is TherapistFullProfile => Boolean(t && typeof t === 'object'))
     .filter(t => {
       const term = (searchTerm || '').toLowerCase().trim();
       const fullName = `${t.nombre || ''} ${t.apellidos || ''}`.toLowerCase();
       const email = (t.correo || '').toLowerCase();
       const curp = (t.curp || '').toLowerCase();
       const specs = Array.isArray(t.especialidades) ? t.especialidades : [];
+      const zones = Array.isArray(t.zonasCobertura) ? t.zonasCobertura : [];
 
       const matchesSearch = 
         !term ||
         fullName.includes(term) ||
         email.includes(term) ||
         curp.includes(term) ||
-        specs.some(s => (s || '').toLowerCase().includes(term));
+        specs.some(s => String(s || '').toLowerCase().includes(term)) ||
+        zones.some(z => String(z || '').toLowerCase().includes(term));
 
       const matchesStatus = filterStatus === 'todos' || t.estado === filterStatus;
 
@@ -133,18 +134,20 @@ export const TerapeutasPage: React.FC = () => {
 
   // Toggle helpers for creation form
   const toggleSpecialty = (spec: string) => {
-    if (newEspecialidades.includes(spec)) {
-      setNewEspecialidades(newEspecialidades.filter(s => s !== spec));
+    const currentSpecs = Array.isArray(newEspecialidades) ? newEspecialidades : [];
+    if (currentSpecs.includes(spec)) {
+      setNewEspecialidades(currentSpecs.filter(s => s !== spec));
     } else {
-      setNewEspecialidades([...newEspecialidades, spec]);
+      setNewEspecialidades([...currentSpecs, spec]);
     }
   };
 
   const toggleZone = (zone: string) => {
-    if (newZonas.includes(zone)) {
-      setNewZonas(newZonas.filter(z => z !== zone));
+    const currentZones = Array.isArray(newZonas) ? newZonas : [];
+    if (currentZones.includes(zone)) {
+      setNewZonas(currentZones.filter(z => z !== zone));
     } else {
-      setNewZonas([...newZonas, zone]);
+      setNewZonas([...currentZones, zone]);
     }
   };
 
@@ -154,12 +157,12 @@ export const TerapeutasPage: React.FC = () => {
     setIsSubmitting(true);
 
     const res = await createTherapist({
-      nombre: newNombre,
-      apellidos: newApellidos,
-      correo: newCorreo,
-      telefono: newTelefono,
-      especialidades: newEspecialidades,
-      zonasCobertura: newZonas,
+      nombre: newNombre.trim() || 'Terapeuta',
+      apellidos: newApellidos.trim(),
+      correo: newCorreo.trim(),
+      telefono: newTelefono.trim(),
+      especialidades: Array.isArray(newEspecialidades) ? newEspecialidades : [],
+      zonasCobertura: Array.isArray(newZonas) ? newZonas : [],
       tempPassword: newTempPass
     });
 
@@ -168,8 +171,8 @@ export const TerapeutasPage: React.FC = () => {
     if (res.success && res.tempPassword) {
       setShowCreateModal(false);
       setShowTempPassResult({
-        name: `${newNombre} ${newApellidos}`,
-        email: newCorreo,
+        name: `${newNombre || 'Terapeuta'} ${newApellidos || ''}`.trim(),
+        email: newCorreo || 'No registrado',
         pass: res.tempPassword
       });
       // Reset form
@@ -185,6 +188,7 @@ export const TerapeutasPage: React.FC = () => {
 
   // Handle Status Toggle
   const handleStatusChange = async (id: string, currentStatus: string) => {
+    if (!id) return;
     const newStatus = currentStatus === 'activo' ? 'bloqueado' : 'activo';
     const actionLabel = newStatus === 'activo' ? 'activada' : 'suspendida';
 
@@ -198,11 +202,12 @@ export const TerapeutasPage: React.FC = () => {
 
   // Handle Password Reset
   const handleResetPass = async (t: TherapistFullProfile) => {
+    if (!t || !t.id) return;
     const res = await resetTherapistPassword(t.id);
     if (res.success && res.tempPassword) {
       setShowTempPassResult({
-        name: `${t.nombre} ${t.apellidos}`,
-        email: t.correo,
+        name: `${t.nombre || 'Terapeuta'} ${t.apellidos || ''}`.trim(),
+        email: t.correo || 'No registrado',
         pass: res.tempPassword
       });
     } else {
@@ -212,7 +217,7 @@ export const TerapeutasPage: React.FC = () => {
 
   // Handle Delete
   const handleDeleteAccount = async () => {
-    if (!showDeleteConfirm) return;
+    if (!showDeleteConfirm || !showDeleteConfirm.id) return;
     const res = await deleteTherapist(showDeleteConfirm.id);
     setShowDeleteConfirm(null);
     if (res.success) {
@@ -224,18 +229,21 @@ export const TerapeutasPage: React.FC = () => {
 
   // Handle Document Review
   const handleApproveDoc = async (therapistId: string, docId: string) => {
+    if (!therapistId || !docId) return;
     const res = await reviewDocument(therapistId, docId, 'aprobado');
     if (res.success) {
       showToast('success', 'Documento aprobado y certificado.');
       if (showDocModal) {
         // Refresh local modal data
-        const updated = therapists.find(t => t.id === therapistId);
+        const safeList = Array.isArray(therapists) ? therapists.filter(Boolean) : [];
+        const updated = safeList.find(t => t && t.id === therapistId);
         if (updated) setShowDocModal(sanitizeTherapist(updated));
       }
     }
   };
 
   const handleRejectDoc = async (therapistId: string, docId: string) => {
+    if (!therapistId || !docId) return;
     if (!rejectReason.trim()) {
       showToast('error', 'Debes especificar el motivo de rechazo.');
       return;
@@ -246,19 +254,23 @@ export const TerapeutasPage: React.FC = () => {
     if (res.success) {
       showToast('success', 'Documento rechazado con observación enviada.');
       if (showDocModal) {
-        const updated = therapists.find(t => t.id === therapistId);
+        const safeList = Array.isArray(therapists) ? therapists.filter(Boolean) : [];
+        const updated = safeList.find(t => t && t.id === therapistId);
         if (updated) setShowDocModal(sanitizeTherapist(updated));
       }
     }
   };
 
-  // Metrics
-  const totalCount = therapists.filter(Boolean).length;
-  const activeCount = therapists.filter(t => t && t.estado === 'activo').length;
-  const pendingDocsCount = therapists.reduce((acc, t) => {
-    const docs = Array.isArray(t?.documentos) ? t.documentos : [];
+  // Metrics with safe defaults
+  const totalCount = safeTherapistsList.length;
+  const activeCount = safeTherapistsList.filter(t => t && t.estado === 'activo').length;
+  const pendingDocsCount = safeTherapistsList.reduce((acc, t) => {
+    if (!t) return acc;
+    const docs = Array.isArray(t.documentos) ? t.documentos.filter(Boolean) : [];
     return acc + docs.filter(d => d && (d.estado === 'pendiente' || !d.estado)).length;
   }, 0);
+  const blockedCount = safeTherapistsList.filter(t => t && t.estado === 'bloqueado').length;
+  const rejectedCount = safeTherapistsList.filter(t => t && t.estado === 'rechazado').length;
 
   return (
     <div className="space-y-6">
@@ -336,7 +348,7 @@ export const TerapeutasPage: React.FC = () => {
         <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-1">
           <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">Acceso Restringido</p>
           <p className="text-2xl font-mono font-bold text-red-500 dark:text-red-400">
-            {therapists.filter(t => t.estado === 'bloqueado').length}
+            {blockedCount}
           </p>
         </div>
       </div>
@@ -354,7 +366,7 @@ export const TerapeutasPage: React.FC = () => {
                   : 'bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
               }`}
             >
-              Todas ({therapists.length})
+              Todas ({totalCount})
             </button>
 
             <button
@@ -392,7 +404,7 @@ export const TerapeutasPage: React.FC = () => {
                   : 'bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
               }`}
             >
-              Rechazadas ({therapists.filter(t => t.estado === 'rechazado').length})
+              Rechazadas ({rejectedCount})
             </button>
 
             <button
@@ -423,7 +435,7 @@ export const TerapeutasPage: React.FC = () => {
       {/* Therapists Cards Grid */}
       <ErrorBoundary fallbackTitle="Error al visualizar el listado de terapeutas">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {loading && therapists.length === 0 ? (
+          {loading && safeTherapistsList.length === 0 ? (
             <div className="col-span-full py-16 text-center space-y-3">
               <RefreshCw className="w-8 h-8 text-[#C9A55B] animate-spin mx-auto" />
               <p className="text-xs text-[var(--text-muted)]">Cargando expedientes de terapeutas...</p>
@@ -446,15 +458,19 @@ export const TerapeutasPage: React.FC = () => {
             </div>
           ) : (
             filteredTherapists.map((rawT, index) => {
+              if (!rawT || typeof rawT !== 'object') return null;
               const t = sanitizeTherapist(rawT);
-              const docs = Array.isArray(t.documentos) ? t.documentos : [];
+              if (!t || typeof t !== 'object') return null;
+
+              const docs = Array.isArray(t.documentos) ? t.documentos.filter(Boolean) : [];
               const pendingDocs = docs.filter(d => d && (d.estado === 'pendiente' || !d.estado)).length;
               const isBlocked = t.estado === 'bloqueado';
-              const specs = Array.isArray(t.especialidades) ? t.especialidades : [];
+              const specs = Array.isArray(t.especialidades) ? t.especialidades.filter(Boolean) : [];
+              const zones = Array.isArray(t.zonasCobertura) ? t.zonasCobertura.filter(Boolean) : [];
 
               return (
                 <motion.div 
-                  key={t.id || index} 
+                  key={t.id || `therapist-${index}`} 
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, delay: index * 0.04 }}
@@ -481,7 +497,7 @@ export const TerapeutasPage: React.FC = () => {
                           <span>{t.nombre || 'Terapeuta'} {t.apellidos || ''}</span>
                         </h3>
                         <span className="text-[10px] text-[var(--text-muted)] font-mono block">
-                          {t.correo || 'Sin correo registrado'}
+                          {t.correo || 'No registrado'}
                         </span>
                       </div>
                     </div>
@@ -496,7 +512,7 @@ export const TerapeutasPage: React.FC = () => {
                         ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
                         : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30'
                     }`}>
-                      {t.estado === 'pendiente' ? 'Pendiente Aprobación' : t.estado}
+                      {t.estado === 'pendiente' ? 'Pendiente Aprobación' : (t.estado || 'No registrado')}
                     </span>
                   </div>
 
@@ -508,9 +524,9 @@ export const TerapeutasPage: React.FC = () => {
                         <span>Expediente de Acreditación Requerido</span>
                       </p>
                       <div className="text-[11px] text-[var(--text-primary)] space-y-1 font-mono">
-                        <p><strong>CURP:</strong> {t.curp || 'No especificado'}</p>
-                        <p><strong>INE / Folio:</strong> {t.ineNumber || 'No especificado'}</p>
-                        <p><strong>CLABE:</strong> {t.cuentaBancariaCLABE || 'No especificada'}</p>
+                        <p><strong>CURP:</strong> {t.curp || 'No registrado'}</p>
+                        <p><strong>INE / Folio:</strong> {t.ineNumber || 'No registrado'}</p>
+                        <p><strong>CLABE:</strong> {t.cuentaBancariaCLABE || 'No registrado'}</p>
                       </div>
                     </div>
                   )}
@@ -521,12 +537,12 @@ export const TerapeutasPage: React.FC = () => {
                       <p className="text-[10px] text-[var(--text-muted)]">Calificación</p>
                       <p className="text-[var(--text-primary)] font-bold flex items-center gap-1 mt-0.5">
                         <Star className="w-3.5 h-3.5 text-[#C9A55B] fill-[#C9A55B]" />
-                        <span>{t.puntuacion || 5.0} ({t.resenasCount || 0})</span>
+                        <span>{typeof t.puntuacion === 'number' ? t.puntuacion : 5.0} ({typeof t.resenasCount === 'number' ? t.resenasCount : 0})</span>
                       </p>
                     </div>
                     <div>
                       <p className="text-[10px] text-[var(--text-muted)]">Servicios Completes</p>
-                      <p className="text-[var(--text-primary)] font-bold mt-0.5">{t.serviciosCompletados || 0}</p>
+                      <p className="text-[var(--text-primary)] font-bold mt-0.5">{typeof t.serviciosCompletados === 'number' ? t.serviciosCompletados : 0}</p>
                     </div>
                   </div>
 
@@ -534,15 +550,21 @@ export const TerapeutasPage: React.FC = () => {
                   <div className="space-y-1">
                     <p className="text-[10px] text-[var(--text-muted)] uppercase font-bold tracking-wider">Especialidades:</p>
                     <div className="flex flex-wrap gap-1">
-                      {specs.slice(0, 3).map((spec, i) => (
-                        <span key={i} className="bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] px-2 py-0.5 rounded-md text-[10px]">
-                          {spec}
-                        </span>
-                      ))}
-                      {specs.length > 3 && (
-                        <span className="text-[10px] text-[#C9A55B] font-bold px-1">
-                          +{specs.length - 3} más
-                        </span>
+                      {Array.isArray(specs) && specs.length > 0 ? (
+                        <>
+                          {specs.slice(0, 3).map((spec, i) => (
+                            <span key={i} className="bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] px-2 py-0.5 rounded-md text-[10px]">
+                              {spec || 'No registrado'}
+                            </span>
+                          ))}
+                          {specs.length > 3 && (
+                            <span className="text-[10px] text-[#C9A55B] font-bold px-1">
+                              +{specs.length - 3} más
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-[10px] text-[var(--text-muted)] italic">No registrado</span>
                       )}
                     </div>
                   </div>
@@ -949,30 +971,38 @@ export const TerapeutasPage: React.FC = () => {
 
                     <div className="grid grid-cols-2 gap-2 text-xs font-mono bg-[var(--bg-card)] p-3 rounded-xl border border-[var(--border-color)]">
                       <p><strong className="text-[var(--text-muted)]">Fecha Registro:</strong> <span className="text-[var(--text-primary)]">{formatSafeDate(modalData.fechaAlta)}</span></p>
-                      <p><strong className="text-[var(--text-muted)]">Experiencia:</strong> <span className="text-[var(--text-primary)]">{modalData.experienciaAnos || 3} años</span></p>
-                      <p><strong className="text-[var(--text-muted)]">CURP:</strong> <span className="text-[var(--text-primary)]">{modalData.curp || 'No proporcionado'}</span></p>
-                      <p><strong className="text-[var(--text-muted)]">Folio INE:</strong> <span className="text-[var(--text-primary)]">{modalData.ineNumber || 'No proporcionado'}</span></p>
-                      <p><strong className="text-[var(--text-muted)]">CLABE Banco:</strong> <span className="text-[var(--text-primary)]">{modalData.cuentaBancariaCLABE || 'No proporcionada'}</span></p>
-                      <p><strong className="text-[var(--text-muted)]">Contacto Emergencia:</strong> <span className="text-[var(--text-primary)]">{modalData.contactoEmergencia?.nombre ? `${modalData.contactoEmergencia.nombre} (${modalData.contactoEmergencia.telefono || 'Sin tel.'})` : 'No registrado'}</span></p>
+                      <p><strong className="text-[var(--text-muted)]">Experiencia:</strong> <span className="text-[var(--text-primary)]">{modalData.experienciaAnos ? `${modalData.experienciaAnos} años` : 'No registrado'}</span></p>
+                      <p><strong className="text-[var(--text-muted)]">CURP:</strong> <span className="text-[var(--text-primary)]">{modalData.curp || 'No registrado'}</span></p>
+                      <p><strong className="text-[var(--text-muted)]">Folio INE:</strong> <span className="text-[var(--text-primary)]">{modalData.ineNumber || 'No registrado'}</span></p>
+                      <p><strong className="text-[var(--text-muted)]">CLABE Banco:</strong> <span className="text-[var(--text-primary)]">{modalData.cuentaBancariaCLABE || 'No registrado'}</span></p>
+                      <p><strong className="text-[var(--text-muted)]">Contacto Emergencia:</strong> <span className="text-[var(--text-primary)]">{modalData.contactoEmergencia && typeof modalData.contactoEmergencia === 'object' && modalData.contactoEmergencia.nombre ? `${modalData.contactoEmergencia.nombre} (${modalData.contactoEmergencia.telefono || 'Sin teléfono'})` : 'No registrado'}</span></p>
                     </div>
 
                     <div className="space-y-1.5 text-xs">
                       <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">Especialidades Declaradas:</p>
                       <div className="flex flex-wrap gap-1">
-                        {specs.map((s, idx) => (
-                          <span key={idx} className="bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-primary)] px-2 py-0.5 rounded text-[10px]">
-                            {s}
-                          </span>
-                        ))}
+                        {Array.isArray(specs) && specs.length > 0 ? (
+                          specs.map((s, idx) => (
+                            <span key={idx} className="bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-primary)] px-2 py-0.5 rounded text-[10px]">
+                              {s || 'No registrado'}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[11px] text-[var(--text-muted)] italic">No registrado</span>
+                        )}
                       </div>
 
                       <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider pt-1">Zonas de Cobertura:</p>
                       <div className="flex flex-wrap gap-1">
-                        {zones.map((z, idx) => (
-                          <span key={idx} className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-300 px-2 py-0.5 rounded text-[10px]">
-                            {z}
-                          </span>
-                        ))}
+                        {Array.isArray(zones) && zones.length > 0 ? (
+                          zones.map((z, idx) => (
+                            <span key={idx} className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-300 px-2 py-0.5 rounded text-[10px]">
+                              {z || 'No registrado'}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[11px] text-[var(--text-muted)] italic">No registrado</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -981,25 +1011,25 @@ export const TerapeutasPage: React.FC = () => {
                   <div className="space-y-3">
                     <h4 className="text-xs font-serif font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-1.5">
                       <FileText className="w-4 h-4 text-[#C9A55B]" />
-                      <span>Documentos de Certificación Adjuntos ({docs.length})</span>
+                      <span>Documentos de Certificación Adjuntos ({Array.isArray(docs) ? docs.length : 0})</span>
                     </h4>
 
-                    {docs.length === 0 ? (
+                    {!Array.isArray(docs) || docs.length === 0 ? (
                       <div className="text-center py-6 space-y-2 border border-dashed border-[var(--border-color)] rounded-2xl p-4">
                         <FileText className="w-6 h-6 text-[var(--text-muted)] mx-auto" />
                         <p className="text-xs text-[var(--text-muted)]">La terapeuta aún no ha adjuntado documentos digitales.</p>
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {docs.map(doc => {
-                          if (!doc) return null;
+                        {docs.map((doc, docIdx) => {
+                          if (!doc || typeof doc !== 'object') return null;
                           return (
-                            <div key={doc.id || Math.random()} className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-2xl p-4 space-y-3">
+                            <div key={doc.id || `doc-${docIdx}`} className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-2xl p-4 space-y-3">
                               <div className="flex justify-between items-start">
                                 <div>
                                   <h4 className="font-serif font-bold text-sm text-[var(--text-primary)]">{doc.nombreDocumento || 'Documento sin título'}</h4>
                                   <p className="text-[11px] text-[var(--text-muted)]">
-                                    Institución: <span className="text-[var(--text-primary)]">{doc.institucion || 'No especificada'}</span> • Emisión: {doc.fechaEmision || 'N/D'}
+                                    Institución: <span className="text-[var(--text-primary)]">{doc.institucion || 'No registrado'}</span> • Emisión: {doc.fechaEmision || 'No registrado'}
                                   </p>
                                 </div>
 
@@ -1204,7 +1234,7 @@ export const TerapeutasPage: React.FC = () => {
             <div className="space-y-1">
               <h3 className="text-lg font-serif font-bold text-[var(--text-primary)]">¿Eliminar Terapeuta?</h3>
               <p className="text-xs text-[var(--text-muted)]">
-                Estás a punto de borrar la cuenta de <strong className="text-[var(--text-primary)]">{showDeleteConfirm.nombre} {showDeleteConfirm.apellidos}</strong>. Esta acción no se puede deshacer.
+                Estás a punto de borrar la cuenta de <strong className="text-[var(--text-primary)]">{showDeleteConfirm.nombre || 'Terapeuta'} {showDeleteConfirm.apellidos || ''}</strong>. Esta acción no se puede deshacer.
               </p>
             </div>
 
@@ -1250,25 +1280,28 @@ export const TerapeutasPage: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-              {auditLogs.length === 0 ? (
+              {!Array.isArray(auditLogs) || auditLogs.length === 0 ? (
                 <p className="text-xs text-[var(--text-muted)] text-center py-8">No hay registros de auditoría aún.</p>
               ) : (
-                auditLogs.map(log => (
-                  <div key={log.id} className="bg-[var(--bg-subcard)] border border-[var(--border-color)] p-3.5 rounded-2xl text-xs space-y-1">
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-[#C9A55B]">{log.action}</span>
-                      <span className="text-[10px] text-[var(--text-muted)] font-mono">{formatSafeDate(log.timestamp)}</span>
-                    </div>
-                    <p className="text-[var(--text-primary)]">
-                      Terapeuta: <strong className="text-[var(--text-primary)]">{log.therapistName}</strong> • Ejecutado por: {log.performedBy}
-                    </p>
-                    {log.details && (
-                      <p className="text-[11px] text-[var(--text-muted)] font-mono bg-[var(--bg-card)] p-2 rounded-xl mt-1 border border-[var(--border-color)]">
-                        {log.details}
+                auditLogs.map((log, lIdx) => {
+                  if (!log) return null;
+                  return (
+                    <div key={log.id || `log-${lIdx}`} className="bg-[var(--bg-subcard)] border border-[var(--border-color)] p-3.5 rounded-2xl text-xs space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-[#C9A55B]">{log.action || 'Acción'}</span>
+                        <span className="text-[10px] text-[var(--text-muted)] font-mono">{formatSafeDate(log.timestamp)}</span>
+                      </div>
+                      <p className="text-[var(--text-primary)]">
+                        Terapeuta: <strong className="text-[var(--text-primary)]">{log.therapistName || 'No registrado'}</strong> • Ejecutado por: {log.performedBy || 'Sistema'}
                       </p>
-                    )}
-                  </div>
-                ))
+                      {log.details && (
+                        <p className="text-[11px] text-[var(--text-muted)] font-mono bg-[var(--bg-card)] p-2 rounded-xl mt-1 border border-[var(--border-color)]">
+                          {log.details}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>

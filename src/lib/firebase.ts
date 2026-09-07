@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { initializeFirestore, getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import appletConfig from '../../firebase-applet-config.json';
 
 // Single source of truth for Firebase Production Configuration
@@ -33,6 +34,7 @@ try {
 }
 
 export const db = firestoreInstance;
+export const storage = getStorage(app);
 
 export default app;
 

@@ -632,7 +632,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     try {
-      await sendPasswordResetEmail(auth, trimmed);
+      const origin = window.location.origin;
+      try {
+        await sendPasswordResetEmail(auth, trimmed, {
+          url: `${origin}/login`,
+          handleCodeInApp: false
+        });
+      } catch (e) {
+        console.warn('Could not send reset email with ActionCodeSettings, trying default reset:', e);
+        await sendPasswordResetEmail(auth, trimmed);
+      }
       return { 
         success: true, 
         message: `Hemos enviado las instrucciones para restablecer tu contraseña a ${trimmed}. Revisa tu bandeja de entrada o spam.` 
