@@ -656,6 +656,14 @@ export const TerapeutasPage: React.FC = () => {
                               <Eye className="w-3.5 h-3.5 text-[#C9A55B]" />
                               <span>Revisar Documentos & Certificados</span>
                             </button>
+
+                            <button
+                              onClick={() => setShowDeleteConfirm(t)}
+                              className="w-full py-1.5 bg-[var(--bg-subcard)] hover:bg-red-500/20 border border-[var(--border-color)] hover:border-red-500/40 text-red-500 dark:text-red-400 font-semibold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer text-[11px]"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />
+                              <span>Eliminar Solicitud</span>
+                            </button>
                           </div>
                         )}
                       </div>
