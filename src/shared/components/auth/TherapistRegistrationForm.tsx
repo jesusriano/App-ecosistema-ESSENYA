@@ -111,53 +111,48 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
 
     setIsSubmitting(true);
 
-    // 1. Register in Auth
-    const authRes = await register('terapeuta', {
-      nombre,
-      apellidos,
-      correo,
-      telefono,
-      contrasena: password
-    });
+    try {
+      const response = await fetch('/api/therapist/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          nombre,
+          apellidos,
+          correo,
+          password,
+          telefono,
+          fotografia,
+          fechaNacimiento,
+          direccion,
+          curp,
+          ineNumber,
+          certificacionesInfo,
+          cuentaBancariaCLABE,
+          contactoEmergencia: {
+            nombre: contactoEmergenciaNombre,
+            parentesco: contactoEmergenciaParentesco,
+            telefono: contactoEmergenciaTelefono
+          },
+          especialidades,
+          experienciaAnos,
+          disponibilidad,
+          zonasCobertura
+        })
+      });
 
-    if (!authRes.success && authRes.error !== 'Cuenta demo existente.') {
-      // Ignore if user already exists in local demo
-      console.warn('Auth register note:', authRes.error);
-    }
+      const data = await response.json();
+      setIsSubmitting(false);
 
-    // 2. Create Therapist Profile with status 'pendiente'
-    const therapistId = authRes.uid || firebaseUser?.uid;
-    const profileRes = await createTherapist({
-      id: therapistId,
-      nombre,
-      apellidos,
-      correo,
-      telefono,
-      fotografia,
-      fechaNacimiento,
-      direccion,
-      curp,
-      ineNumber,
-      certificacionesInfo,
-      cuentaBancariaCLABE,
-      contactoEmergencia: {
-        nombre: contactoEmergenciaNombre,
-        parentesco: contactoEmergenciaParentesco,
-        telefono: contactoEmergenciaTelefono
-      },
-      especialidades,
-      experienciaAnos,
-      disponibilidad,
-      zonasCobertura,
-      estado: 'pendiente'
-    });
-
-    setIsSubmitting(false);
-
-    if (profileRes.success) {
-      onSuccess();
-    } else {
-      setErrorMessage(profileRes.error || 'Error al enviar la solicitud de registro.');
+      if (response.ok && data.success) {
+        onSuccess();
+      } else {
+        setErrorMessage(data.error || 'Error al enviar la solicitud de registro.');
+      }
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setErrorMessage('Error de red al procesar la postulación: ' + (err.message || ''));
     }
   };
 

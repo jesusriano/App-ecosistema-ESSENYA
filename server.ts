@@ -343,6 +343,159 @@ async function startServer() {
     }
   });
 
+  // Public / Self-service endpoint for therapist postulation (registers in Auth and saves in Firestore with identical UID)
+  app.post("/api/therapist/register", async (req, res) => {
+    try {
+      const {
+        nombre,
+        apellidos,
+        correo,
+        password,
+        telefono,
+        fotografia,
+        fechaNacimiento,
+        direccion,
+        curp,
+        ineNumber,
+        certificacionesInfo,
+        cuentaBancariaCLABE,
+        contactoEmergencia,
+        especialidades,
+        experienciaAnos,
+        disponibilidad,
+        zonasCobertura
+      } = req.body;
+
+      if (!correo || !password || !nombre || !apellidos) {
+        return res.status(400).json({
+          success: false,
+          error: "Los campos correo, contraseña, nombre y apellidos son obligatorios."
+        });
+      }
+
+      const trimmedEmail = correo.trim().toLowerCase();
+
+      // Initialize Firebase Admin SDK
+      const adminApp = await import("firebase-admin/app");
+      const adminAuth = await import("firebase-admin/auth");
+
+      const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+      let projectId = "essenya-ecosistema";
+
+      if (fs.existsSync(configPath)) {
+        try {
+          const parsed = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          if (parsed.projectId) projectId = parsed.projectId;
+        } catch (e) {
+          console.warn("Failed to parse config:", e);
+        }
+      }
+
+      if (adminApp.getApps().length === 0) {
+        adminApp.initializeApp({
+          projectId: projectId,
+        });
+      }
+
+      const auth = adminAuth.getAuth();
+
+      // 1. Create user in Firebase Authentication
+      console.log(`[THERAPIST-REGISTER] Creating Auth user for: ${trimmedEmail}`);
+      let userRecord;
+      try {
+        userRecord = await auth.createUser({
+          email: trimmedEmail,
+          password: password,
+          displayName: `${nombre} ${apellidos}`.trim(),
+          emailVerified: false
+        });
+      } catch (authErr: any) {
+        if (authErr.code === 'auth/email-already-exists') {
+          return res.status(400).json({
+            success: false,
+            error: "Ya existe una cuenta registrada con este correo electrónico en Firebase Authentication."
+          });
+        }
+        throw authErr;
+      }
+
+      const uid = userRecord.uid;
+      console.log(`[THERAPIST-REGISTER] Auth user created successfully with UID: ${uid}`);
+
+      // 2. Save data in Firestore with the same UID
+      const adminFirestore = await import("firebase-admin/firestore");
+      const dbAdmin = adminFirestore.getFirestore();
+
+      const now = new Date().toISOString();
+
+      const userPayload = {
+        id: uid,
+        uid: uid,
+        nombre: nombre.trim(),
+        apellidos: apellidos.trim(),
+        correo: trimmedEmail,
+        telefono: telefono ? telefono.trim() : '',
+        estado: 'pendiente',
+        rol: 'terapeuta',
+        correoVerificado: false,
+        fechaRegistro: now,
+        ultimoAcceso: 'Nunca',
+        fechaActualizacion: now,
+        mustChangePassword: false
+      };
+
+      const therapistPayload = {
+        id: uid,
+        userId: uid,
+        nombre: nombre.trim(),
+        apellidos: apellidos.trim(),
+        correo: trimmedEmail,
+        telefono: telefono ? telefono.trim() : '',
+        fotografia: fotografia || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
+        fechaNacimiento: fechaNacimiento || '',
+        direccion: direccion || '',
+        curp: curp || '',
+        ineNumber: ineNumber || '',
+        certificacionesInfo: certificacionesInfo || '',
+        cuentaBancariaCLABE: cuentaBancariaCLABE || '',
+        contactoEmergencia: contactoEmergencia || { nombre: '', parentesco: '', telefono: '' },
+        especialidades: Array.isArray(especialidades) && especialidades.length ? especialidades : ['Masaje Holístico'],
+        experienciaAnos: experienciaAnos || 3,
+        idiomas: ['Español'],
+        disponibilidad: disponibilidad || 'Lunes a Sábado, 09:00 - 19:00',
+        zonasCobertura: Array.isArray(zonasCobertura) && zonasCobertura.length ? zonasCobertura : ['Polanco'],
+        estado: 'pendiente',
+        documentos: [],
+        puntuacion: 5.0,
+        resenasCount: 0,
+        serviciosCompletados: 0,
+        fechaAlta: now,
+        ultimoAcceso: 'Nunca',
+        fechaActualizacion: now,
+        mustChangePassword: false
+      };
+
+      await dbAdmin.collection('users').doc(uid).set(userPayload);
+      await dbAdmin.collection('terapeutas').doc(uid).set(therapistPayload);
+
+      console.log(`[THERAPIST-REGISTER] Firestore documents successfully written for UID: ${uid}`);
+
+      return res.json({
+        success: true,
+        uid: uid,
+        message: 'Postulación registrada exitosamente en Firebase Authentication y Firestore.'
+      });
+
+    } catch (err: any) {
+      console.error("[THERAPIST-REGISTER-ERROR]", err);
+      return res.status(500).json({
+        success: false,
+        error: "Fallo al registrar la postulación de la terapeuta.",
+        details: err?.message || String(err)
+      });
+    }
+  });
+
   // Administrative Cleanup Endpoint (Superadmin only)
   app.post("/api/admin/clean-demo-data", async (req, res) => {
     try {

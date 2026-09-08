@@ -628,7 +628,11 @@ export const TerapeutasPage: React.FC = () => {
                               <button
                                 onClick={async () => {
                                   const res = await changeTherapistStatus(t.id, 'activo', 'Aprobada por Administradora.');
-                                  if (res.success) showToast('success', '¡Acreditación Aprobada! Terapeuta activada.');
+                                  if (res.success) {
+                                    showToast('success', '¡Acreditación Aprobada! Terapeuta activada.');
+                                  } else {
+                                    showToast('error', res.error || 'Error al aprobar la solicitud.');
+                                  }
                                 }}
                                 className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer shadow-md shadow-emerald-900/30"
                               >
