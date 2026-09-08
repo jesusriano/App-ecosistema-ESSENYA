@@ -812,7 +812,8 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
             handleCodeInApp: false
           });
         } catch (e: any) {
-          if (e.code === 'auth/user-not-found') {
+          const errStr = (e?.code || '') + ' ' + (e?.message || '');
+          if (errStr.includes('auth/user-not-found')) {
             return {
               success: false,
               error: 'Error: El correo electrónico de esta terapeuta no está registrado en Firebase Authentication. Crea la cuenta o verifícala primero.'
@@ -822,7 +823,8 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
           try {
             await sendPasswordResetEmail(auth, trimmed);
           } catch (e2: any) {
-            if (e2.code === 'auth/user-not-found') {
+            const errStr2 = (e2?.code || '') + ' ' + (e2?.message || '');
+            if (errStr2.includes('auth/user-not-found')) {
               return {
                 success: false,
                 error: 'Error: El correo electrónico de esta terapeuta no está registrado en Firebase Authentication. No se puede restablecer la contraseña.'
