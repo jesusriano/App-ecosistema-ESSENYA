@@ -19,6 +19,10 @@ export interface TherapistDocument {
   fechaRevision?: string;
   revisadoPor?: string;
   esRequerido?: boolean;
+  nombreArchivo?: string;
+  mimeType?: string;
+  fechaCarga?: string;
+  estadoRevision?: string;
 }
 
 export interface EmergencyContact {
@@ -46,6 +50,7 @@ export interface TherapistFullProfile {
   contactoEmergencia?: EmergencyContact;
   motivoRechazoAccount?: string;
   biografia?: string;
+  fotoPerfilStoragePath?: string;
   
   // Professional
   especialidades: string[];

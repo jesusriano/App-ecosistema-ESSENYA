@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { doc, setDoc, updateDoc, collection, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, collection, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { db, auth } from '../../lib/firebase';
 import { TherapistFullProfile, TherapistDocument, DocumentStatus, AccountStatus } from '../types/auth';
@@ -577,8 +577,134 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Admin Operation: Change Status (Activo, Inactivo, Bloqueado, Pendiente, Rechazado)
   const changeTherapistStatus = async (id: string, status: AccountStatus, reason?: string): Promise<{ success: boolean; error?: string }> => {
-    const target = therapists.find(t => t.id === id);
+    let target = therapists.find(t => t.id === id);
     if (!target) return { success: false, error: 'Terapeuta no encontrada.' };
+
+    let realUid = id;
+
+    // Check Firebase Auth account if approving
+    if (status === 'activo') {
+      let authExists = false;
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json'
+        };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const checkResponse = await fetch('/api/admin/verify-therapist-auth', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            email: target.correo,
+            uid: id
+          })
+        });
+
+        if (checkResponse.ok) {
+          const checkResult = await checkResponse.json();
+          if (checkResult.success && checkResult.exists) {
+            authExists = true;
+            realUid = checkResult.uid;
+          }
+        }
+      } catch (err) {
+        console.warn('Error checking therapist auth existence:', err);
+      }
+
+      if (!authExists) {
+        // If not found, and it is a self-registered therapist (who has documents uploaded), return clear error
+        const isSelfRegistered = !target.mustChangePassword && target.documentos && target.documentos.length > 0;
+        if (isSelfRegistered) {
+          return { 
+            success: false, 
+            error: 'Error administrativo: No se encontró la cuenta de Firebase Authentication para esta terapeuta auto-registrada. No se puede proceder con la aprobación.' 
+          };
+        }
+
+        // Admin-created: provision now
+        try {
+          const token = await auth.currentUser?.getIdToken();
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json'
+          };
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+          }
+
+          const tempPass = `Essenya${Math.floor(1000 + Math.random() * 9000)}!`;
+          const createResponse = await fetch('/api/admin/create-therapist-auth-profile', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              email: target.correo,
+              password: tempPass,
+              displayName: `${target.nombre} ${target.apellidos || ''}`.trim()
+            })
+          });
+
+          if (!createResponse.ok) {
+            const errData = await createResponse.json().catch(() => ({ error: 'Error del servidor backend' }));
+            return { success: false, error: `No se pudo aprovisionar la cuenta de autenticación en Firebase Auth: ${errData.error}` };
+          }
+
+          const createResult = await createResponse.json();
+          if (createResult.success && createResult.uid) {
+            realUid = createResult.uid;
+          } else {
+            return { success: false, error: 'No se pudo crear la cuenta de autenticación en Firebase Auth.' };
+          }
+        } catch (err: any) {
+          return { success: false, error: `Error de red al crear cuenta de autenticación: ${err.message}` };
+        }
+      }
+
+      // If the UID changed (e.g. was a temporary generated local ID, and now we have a real Auth UID), migrate Firestore docs!
+      if (realUid !== id) {
+        try {
+          const oldUserSnap = await getDoc(doc(db, 'users', id));
+          const oldTherapistSnap = await getDoc(doc(db, 'terapeutas', id));
+
+          const userData = oldUserSnap.exists() ? oldUserSnap.data() : null;
+          const therapistData = oldTherapistSnap.exists() ? oldTherapistSnap.data() : null;
+
+          if (userData) {
+            await setDoc(doc(db, 'users', realUid), {
+              ...userData,
+              id: realUid,
+              uid: realUid
+            });
+          }
+          if (therapistData) {
+            await setDoc(doc(db, 'terapeutas', realUid), {
+              ...therapistData,
+              id: realUid,
+              userId: realUid
+            });
+          }
+
+          // Delete old docs
+          await deleteDoc(doc(db, 'users', id));
+          await deleteDoc(doc(db, 'terapeutas', id));
+
+          id = realUid;
+          // Update the list of therapists context state immediately
+          setTherapists(prev => prev.map(t => {
+            if (t.id === target.id) {
+              return { ...t, id: realUid };
+            }
+            return t;
+          }));
+          
+          // Re-fetch target
+          target = { ...target, id: realUid };
+        } catch (migrationErr: any) {
+          console.error('Error migrating Firestore documents to new real UID:', migrationErr);
+        }
+      }
+    }
 
     const rejectionReason = status === 'rechazado' ? (reason || 'No cumple con los requisitos de acreditación.') : undefined;
 
@@ -685,9 +811,25 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
             url: `${origin}/login`,
             handleCodeInApp: false
           });
-        } catch (e) {
+        } catch (e: any) {
+          if (e.code === 'auth/user-not-found') {
+            return {
+              success: false,
+              error: 'Error: El correo electrónico de esta terapeuta no está registrado en Firebase Authentication. Crea la cuenta o verifícala primero.'
+            };
+          }
           console.warn('Could not send admin-initiated therapist reset email with ActionCodeSettings, trying default reset:', e);
-          await sendPasswordResetEmail(auth, trimmed);
+          try {
+            await sendPasswordResetEmail(auth, trimmed);
+          } catch (e2: any) {
+            if (e2.code === 'auth/user-not-found') {
+              return {
+                success: false,
+                error: 'Error: El correo electrónico de esta terapeuta no está registrado en Firebase Authentication. No se puede restablecer la contraseña.'
+              };
+            }
+            throw e2;
+          }
         }
       }
 
@@ -810,11 +952,19 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     const target = therapists.find(t => t.id === therapistId);
     if (!target) return { success: false, error: 'Terapeuta no encontrada.' };
 
+    const inferredMime = docData.fileType === 'pdf' ? 'application/pdf' : (docData.fileType === 'png' ? 'image/png' : 'image/jpeg');
+    const timestamp = Date.now();
+    const cleanFileName = docData.nombreDocumento.replace(/[^a-zA-Z0-9.-]/g, '_') + '.' + docData.fileType;
+
     const newDoc: TherapistDocument = {
       ...docData,
-      id: `doc-${Date.now()}`,
+      id: `doc-${timestamp}`,
       estado: 'pendiente',
-      fechaSubida: new Date().toISOString()
+      fechaSubida: new Date().toISOString(),
+      nombreArchivo: cleanFileName,
+      mimeType: inferredMime,
+      fechaCarga: new Date().toISOString(),
+      estadoRevision: 'pendiente'
     };
 
     const updatedDocs = [...target.documentos, newDoc];
@@ -853,6 +1003,9 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     const target = therapists.find(t => t.id === therapistId);
     if (!target) return { success: false, error: 'Terapeuta no encontrada.' };
 
+    const inferredMime = docData.fileType === 'pdf' ? 'application/pdf' : (docData.fileType === 'png' ? 'image/png' : 'image/jpeg');
+    const cleanFileName = (docData.nombreDocumento || 'documento').replace(/[^a-zA-Z0-9.-]/g, '_') + '.' + (docData.fileType || 'pdf');
+
     const updatedDocs = target.documentos.map(d => {
       if (d.id === documentId) {
         return {
@@ -862,7 +1015,11 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
           motivoRechazo: undefined,
           fechaSubida: new Date().toISOString(),
           fechaRevision: undefined,
-          revisadoPor: undefined
+          revisadoPor: undefined,
+          nombreArchivo: cleanFileName,
+          mimeType: inferredMime,
+          fechaCarga: new Date().toISOString(),
+          estadoRevision: 'pendiente'
         };
       }
       return d;
@@ -941,6 +1098,31 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     try {
       await updateDoc(doc(db, 'terapeutas', therapistId), cleanForFirestore(updatePayload));
+
+      // Sync photograph or basic fields with users and terapeutas_publicos collections
+      if (updates.fotografia !== undefined) {
+        try {
+          await updateDoc(doc(db, 'users', therapistId), {
+            fotografia: updates.fotografia,
+            fechaActualizacion: new Date().toISOString()
+          });
+        } catch (err) {
+          console.warn('Error syncing photograph with users collection:', err);
+        }
+
+        try {
+          const publicDocRef = doc(db, 'terapeutas_publicos', therapistId);
+          const publicDocSnap = await getDoc(publicDocRef);
+          if (publicDocSnap.exists()) {
+            await updateDoc(publicDocRef, {
+              fotografia: updates.fotografia,
+              updatedAt: new Date().toISOString()
+            });
+          }
+        } catch (err) {
+          console.warn('Error syncing photograph with terapeutas_publicos:', err);
+        }
+      }
 
       setTherapists(prev => prev.map(t => {
         if (t.id === therapistId) {

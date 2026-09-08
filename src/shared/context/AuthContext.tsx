@@ -338,18 +338,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             fechaAlta: new Date().toISOString()
           };
           await setDoc(doc(db, 'terapeutas', uid), therapistData);
-          await setDoc(doc(db, 'terapeutas_publicos', uid), {
-            id: uid,
-            nombre: therapistData.nombre,
-            apellidos: therapistData.apellidos,
-            especialidades: therapistData.especialidades,
-            zonasCobertura: therapistData.zonasCobertura,
-            puntuacion: therapistData.puntuacion,
-            resenasCount: therapistData.resenasCount,
-            serviciosCompletados: therapistData.serviciosCompletados,
-            estado: therapistData.estado,
-            fotografia: ''
-          });
         }
       } catch (dbErr: any) {
         const errorInfo = handleFirestoreError(

@@ -9,6 +9,8 @@ import { useTherapistContext } from '../../../shared/context/TherapistContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { TherapistDocument, TherapistFullProfile } from '../../../shared/types/auth';
 import { DocumentVerificationSection } from '../components/DocumentVerificationSection';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { storage } from '../../../lib/firebase';
 
 const AVAILABLE_SPECIALTIES = [
   'Masaje Tejido Profundo',
@@ -148,12 +150,12 @@ export const PerfilPage: React.FC = () => {
   };
 
   // Handle Therapist Photo File Upload (From device or camera)
-  const handleTherapistPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTherapistPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 8 * 1024 * 1024) {
-      showToast('error', 'La imagen supera el límite de 8MB.');
+    if (file.size > 15 * 1024 * 1024) {
+      showToast('error', 'La imagen supera el límite de 15MB.');
       return;
     }
 
@@ -162,24 +164,46 @@ export const PerfilPage: React.FC = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const dataUrl = event.target?.result as string;
-      if (dataUrl) {
-        setFotografia(dataUrl);
-        // Persist immediately in context & local storage
-        localStorage.setItem('essenya_therapist_photo', dataUrl);
-        const res = await updateSelfProfile(activeTherapist.id, {
-          fotografia: dataUrl
-        });
-        if (res.success) {
-          showToast('success', 'Fotografía de perfil profesional actualizada exitosamente.');
-        } else {
-          showToast('error', res.error || 'Error al guardar la fotografía.');
-        }
+    // Determine extension
+    let ext = 'jpg';
+    if (file.type === 'image/png') ext = 'png';
+    else if (file.type === 'image/webp') ext = 'webp';
+
+    const storagePath = `terapeutas/${activeTherapist.id}/perfil/foto-perfil.${ext}`;
+    const storageRef = ref(storage, storagePath);
+    
+    showToast('success', 'Subiendo fotografía de perfil a Firebase Storage...');
+
+    try {
+      const uploadTask = uploadBytesResumable(storageRef, file);
+      
+      // Wait for upload task to finish
+      await new Promise<void>((resolve, reject) => {
+        uploadTask.on(
+          'state_changed',
+          null,
+          (error) => reject(error),
+          () => resolve()
+        );
+      });
+
+      const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+      setFotografia(downloadUrl);
+      
+      const res = await updateSelfProfile(activeTherapist.id, {
+        fotografia: downloadUrl,
+        fotoPerfilStoragePath: storagePath
+      });
+
+      if (res.success) {
+        showToast('success', 'Fotografía de perfil profesional actualizada exitosamente en Firebase Storage.');
+      } else {
+        showToast('error', res.error || 'Error al guardar la fotografía.');
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (error: any) {
+      console.error('Error uploading photo:', error);
+      showToast('error', 'Error al cargar el archivo de imagen a Firebase Storage: ' + (error.message || ''));
+    }
   };
 
   return (

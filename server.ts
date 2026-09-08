@@ -252,6 +252,97 @@ async function startServer() {
     }
   });
 
+  // Secure Administrative Endpoint to verify if a therapist exists in Firebase Auth
+  app.post("/api/admin/verify-therapist-auth", requireAuthOrUserContext, async (req, res) => {
+    try {
+      const verifiedUser = (req as any).user;
+      if (!verifiedUser || (verifiedUser.role !== 'administrador' && verifiedUser.email !== 'essenya222@gmail.com')) {
+        return res.status(403).json({
+          success: false,
+          error: "No autorizado. Solo administradores pueden verificar cuentas."
+        });
+      }
+
+      const { email, uid } = req.body;
+      if (!email && !uid) {
+        return res.status(400).json({
+          success: false,
+          error: "Debe proveer correo o uid."
+        });
+      }
+
+      const adminApp = await import("firebase-admin/app");
+      const adminAuth = await import("firebase-admin/auth");
+
+      const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+      let projectId = "essenya-ecosistema";
+
+      if (fs.existsSync(configPath)) {
+        try {
+          const parsed = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          if (parsed.projectId) projectId = parsed.projectId;
+        } catch (e) {
+          console.warn("Failed to parse config for dynamic dynamic imports:", e);
+        }
+      }
+
+      if (adminApp.getApps().length === 0) {
+        adminApp.initializeApp({
+          projectId: projectId,
+        });
+      }
+
+      const auth = adminAuth.getAuth();
+      let userRecord: any = null;
+
+      try {
+        if (uid) {
+          try {
+            userRecord = await auth.getUser(uid);
+          } catch (uidErr: any) {
+            if (uidErr.code !== 'auth/user-not-found' && email) {
+              userRecord = await auth.getUserByEmail(email.trim().toLowerCase());
+            } else if (uidErr.code !== 'auth/user-not-found') {
+              throw uidErr;
+            }
+          }
+        } else if (email) {
+          userRecord = await auth.getUserByEmail(email.trim().toLowerCase());
+        }
+      } catch (authErr: any) {
+        if (authErr.code === 'auth/user-not-found') {
+          return res.json({
+            success: true,
+            exists: false
+          });
+        }
+        throw authErr;
+      }
+
+      if (userRecord) {
+        return res.json({
+          success: true,
+          exists: true,
+          uid: userRecord.uid,
+          email: userRecord.email
+        });
+      } else {
+        return res.json({
+          success: true,
+          exists: false
+        });
+      }
+
+    } catch (err: any) {
+      console.error("[ADMIN-VERIFY-THERAPIST-ERROR]", err);
+      return res.status(500).json({
+        success: false,
+        error: "Fallo al verificar el usuario en Firebase Authentication.",
+        details: err?.message || String(err)
+      });
+    }
+  });
+
   // Administrative Cleanup Endpoint (Superadmin only)
   app.post("/api/admin/clean-demo-data", async (req, res) => {
     try {
