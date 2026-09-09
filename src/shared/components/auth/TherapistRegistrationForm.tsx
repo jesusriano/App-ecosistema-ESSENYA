@@ -161,39 +161,13 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
       documentos: uploadedDocuments || []
     };
 
-    // 1. Intentar registrar a través del backend si está disponible
+    // Registro directo y seguro vía Firebase Client SDK
     try {
-      const response = await fetch('/api/therapist/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(registrationPayload)
-      });
-
-      const contentType = response.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const data = await response.json();
-        if (response.ok && data.success) {
-          setIsSubmitting(false);
-          onSuccess();
-          return;
-        } else if (!response.ok && data.error && !data.error.includes('interno') && !data.error.includes('500')) {
-          setIsSubmitting(false);
-          setErrorMessage(data.error);
-          return;
-        }
-      }
-    } catch {
-      // Si el backend no responde con JSON (por ejemplo en hosting estático o error de servidor)
-      // se procede de manera transparente al registro directo con el SDK de Firebase.
-    }
-
-    // 2. Respaldo directo e infalible vía Firebase Auth + Firestore
-    try {
+      // 1. Crear usuario en Firebase Authentication
       const userCredential = await createUserWithEmailAndPassword(auth, registrationPayload.correo, password);
       const uid = userCredential.user.uid;
 
+      // 2. Asignar nombre en perfil de Firebase Auth
       try {
         await updateProfile(userCredential.user, {
           displayName: `${registrationPayload.nombre} ${registrationPayload.apellidos}`
@@ -202,7 +176,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
         // Non-blocking
       }
 
-      // Registro maestro en users
+      // 3. Guardar perfil maestro de usuario en colección 'users'
       const userRef = doc(db, 'users', uid);
       await setDoc(userRef, {
         uid,
@@ -221,7 +195,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
         createdAt: new Date().toISOString()
       }, { merge: true });
 
-      // Registro profesional en terapeutas
+      // 4. Guardar expediente profesional completo en colección 'terapeutas'
       const therapistRef = doc(db, 'terapeutas', uid);
       await setDoc(therapistRef, {
         id: uid,
@@ -255,6 +229,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
         solicitudRegistroFecha: new Date().toISOString()
       }, { merge: true });
 
+      // 5. Cerrar la sesión activa para que el usuario regrese a la pantalla de login con aviso de revisión
       try {
         await signOut(auth);
       } catch {
