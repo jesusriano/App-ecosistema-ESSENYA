@@ -162,7 +162,7 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
   };
 
   const uploadFileToStorage = (file: File): Promise<{ url: string; path: string }> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const timestamp = Date.now();
       const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const storagePath = `terapeutas/${therapistId}/documentos/${timestamp}-${safeName}`;
@@ -181,11 +181,15 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
             setUploadProgress(progress);
           },
           (error) => {
-            console.warn('Firebase Storage upload warning (falling back to local secure URL):', error);
-            // Fallback to local object URL or Data URL so user is never blocked
-            const fallbackUrl = URL.createObjectURL(file);
-            setUploadProgress(100);
-            resolve({ url: fallbackUrl, path: storagePath });
+            console.error('Firebase Storage upload error:', error);
+            let errorMessage = 'Error al subir el archivo.';
+            if (error.code === 'storage/unauthorized') {
+              errorMessage = 'No tienes permisos para subir archivos en esta ruta (Storage Rules).';
+            } else if (error.code === 'storage/canceled') {
+              errorMessage = 'Carga cancelada.';
+            }
+            setUploadError(errorMessage);
+            reject(new Error(errorMessage));
           },
           async () => {
             try {
@@ -193,17 +197,14 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
               setUploadProgress(100);
               resolve({ url: downloadUrl, path: storagePath });
             } catch (err: any) {
-              const fallbackUrl = URL.createObjectURL(file);
-              setUploadProgress(100);
-              resolve({ url: fallbackUrl, path: storagePath });
+              setUploadError('No se pudo obtener la URL de descarga.');
+              reject(err);
             }
           }
         );
       } catch (err: any) {
-        console.warn('Storage init fallback:', err);
-        const fallbackUrl = URL.createObjectURL(file);
-        setUploadProgress(100);
-        resolve({ url: fallbackUrl, path: storagePath });
+        setUploadError('Fallo inicializando la subida en Storage.');
+        reject(err);
       }
     });
   };

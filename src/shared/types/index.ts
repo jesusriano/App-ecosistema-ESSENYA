@@ -187,6 +187,7 @@ export interface SystemAuditLog {
   userName: string;
   action: string;
   details: string;
+  actorId?: string;
 }
 
 export interface PanicAlert {

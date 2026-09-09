@@ -53,7 +53,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
   const [password, setPassword] = useState('');
   const [fechaNacimiento, setFechaNacimiento] = useState('');
   const [direccion, setDireccion] = useState('');
-  const [fotografia, setFotografia] = useState('https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80');
+  const [fotografia, setFotografia] = useState('');
 
   // Official Identifications
   const [curp, setCurp] = useState('');
@@ -74,6 +74,8 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
 
   // Terms Acceptance
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [uploadedDocuments, setUploadedDocuments] = useState<Array<{ id: string; tipo: string; nombre: string; url: string; estado: string }>>([]);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   // UI state
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -138,7 +140,8 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
           especialidades,
           experienciaAnos,
           disponibilidad,
-          zonasCobertura
+          zonasCobertura,
+          documentos: uploadedDocuments
         })
       });
 
@@ -488,13 +491,65 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
               </div>
             </div>
 
-            {/* Simulated Documents Upload Badge */}
-            <div className="bg-[#FAF8F5] dark:bg-[#0D0D0D] p-3 rounded-2xl border border-dashed border-[#C9A55B]/40 space-y-2 text-center">
-              <Upload className="w-5 h-5 text-[#C9A55B] mx-auto" />
-              <p className="text-xs font-bold text-[#1C1917] dark:text-white">Expediente de Documentos Oficiales</p>
-              <p className="text-[10px] text-[#888888]">
-                Se asociarán automáticamente copias cotejadas de INE, CURP, Comprobante de Domicilio y Certificaciones para auditoría de administración.
+            {/* Documents Upload Section */}
+            <div className="space-y-3 bg-[#FAF8F5] dark:bg-[#0D0D0D] p-3.5 rounded-2xl border border-dashed border-[#C9A55B]/50">
+              <div className="flex items-center space-x-2">
+                <Upload className="w-4 h-4 text-[#C9A55B]" />
+                <p className="text-xs font-bold text-[#1C1917] dark:text-white">Carga de Documentos Oficiales (INE / Certificados) *</p>
+              </div>
+              <p className="text-[10px] text-[#6B655F] dark:text-[#AAAAAA]">
+                Sube tu identificación oficial (INE por ambos lados) y diplomas o constancias de masoterapia (PDF, JPG o PNG hasta 15MB).
               </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-[#6B655F] dark:text-[#AAAAAA]">Identificación Oficial (INE / Pasaporte)</label>
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                          setUploadedDocuments(prev => [...prev.filter(d => d.tipo !== 'INE'), { id: 'ine_' + Date.now(), tipo: 'INE', nombre: file.name, url: reader.result as string, estado: 'pendiente' }]);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="w-full text-[11px] text-[#6B655F] file:mr-2 file:py-1 file:px-2 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-[#C9A55B]/10 file:text-[#C9A55B] hover:file:bg-[#C9A55B]/20 cursor-pointer"
+                  />
+                  {uploadedDocuments.some(d => d.tipo === 'INE') && (
+                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                      ✓ INE cargado correctamente
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-[#6B655F] dark:text-[#AAAAAA]">Certificado o Diploma de Masoterapia</label>
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                          setUploadedDocuments(prev => [...prev.filter(d => d.tipo !== 'Certificado'), { id: 'cert_' + Date.now(), tipo: 'Certificado', nombre: file.name, url: reader.result as string, estado: 'pendiente' }]);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="w-full text-[11px] text-[#6B655F] file:mr-2 file:py-1 file:px-2 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-[#C9A55B]/10 file:text-[#C9A55B] hover:file:bg-[#C9A55B]/20 cursor-pointer"
+                  />
+                  {uploadedDocuments.some(d => d.tipo === 'Certificado') && (
+                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                      ✓ Certificado cargado correctamente
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Terms Checkbox */}
@@ -508,9 +563,73 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
                 className="mt-0.5 w-4 h-4 rounded border-[#E5DFD3] text-[#C9A55B] focus:ring-[#C9A55B] accent-[#C9A55B]"
               />
               <label htmlFor="acceptTerms" className="text-xs text-[#6B655F] dark:text-[#AAAAAA] leading-tight select-none">
-                Acepto los <strong className="text-[#1C1917] dark:text-white">Términos de Servicio VIP y Código de Ética ESSENYA</strong>. Reconozco que mi solicitud quedará en estado <strong className="text-[#C9A55B]">Pendiente de Aprobación</strong> hasta ser dictaminada por la administración.
+                Acepto los{' '}
+                <button
+                  type="button"
+                  onClick={() => setShowTermsModal(true)}
+                  className="text-[#C9A55B] font-bold underline hover:text-[#b08e48] cursor-pointer inline"
+                >
+                  Términos de Servicio VIP y Código de Ética de Sennia
+                </button>
+                . Reconozco que mi solicitud quedará en estado <strong className="text-[#C9A55B]">Pendiente de Aprobación</strong> hasta ser dictaminada por la administración.
               </label>
             </div>
+
+            {/* Terms Modal Popup */}
+            {showTermsModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+                <div className="bg-white dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#333333] rounded-3xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6 space-y-4 shadow-2xl">
+                  <div className="flex justify-between items-center border-b border-[#E5DFD3] dark:border-[#2A2A2A] pb-3">
+                    <h3 className="text-base font-serif font-bold text-[#1C1917] dark:text-white flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-[#C9A55B]" />
+                      Términos de Servicio VIP y Código de Ética - Sennia
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setShowTermsModal(false)}
+                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg font-bold px-2 py-1"
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div className="space-y-3 text-xs text-[#6B655F] dark:text-[#AAAAAA] leading-relaxed">
+                    <h4 className="font-bold text-[#1C1917] dark:text-white uppercase tracking-wider">1. Estándares de Excelencia y Profesionalismo VIP</h4>
+                    <p>
+                      Como masoterapeuta de la red exclusiva Sennia, te comprometes a brindar servicios de la más alta calidad terapéutica, manteniendo una presentación impecable, puntualidad estricta y trato respetuoso en todo momento en los domicilios asignados.
+                    </p>
+
+                    <h4 className="font-bold text-[#1C1917] dark:text-white uppercase tracking-wider">2. Código de Ética y Confidencialidad</h4>
+                    <p>
+                      La privacidad de los clientes es inviolable. Toda información médica, personal o relacionada con los servicios prestados tiene carácter estrictamente confidencial. Quedan prohibidas conductas que comprometan la seguridad o la integridad de ambas partes.
+                    </p>
+
+                    <h4 className="font-bold text-[#1C1917] dark:text-white uppercase tracking-wider">3. Cumplimiento Operativo</h4>
+                    <p>
+                      Las citas agendadas a través de la plataforma Sennia deben cumplirse puntualmente. Las cancelaciones o reprogramaciones deben notificarse con al menos 4 horas de anticipación a través del canal oficial.
+                    </p>
+
+                    <h4 className="font-bold text-[#1C1917] dark:text-white uppercase tracking-wider">4. Veracidad de Documentos</h4>
+                    <p>
+                      Los documentos, certificados e identificaciones oficiales subidos en este expediente son auténticos y verídicos bajo protesta de decir verdad.
+                    </p>
+                  </div>
+
+                  <div className="pt-3 border-t border-[#E5DFD3] dark:border-[#2A2A2A] text-right">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAcceptedTerms(true);
+                        setShowTermsModal(false);
+                      }}
+                      className="px-5 py-2 bg-[#C9A55B] hover:bg-[#b08e48] text-black font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
+                    >
+                      He leído y acepto los Términos
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-between items-center pt-3 border-t border-[#E5DFD3] dark:border-[#262626]">
               <button

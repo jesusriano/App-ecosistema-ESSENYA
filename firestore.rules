@@ -72,16 +72,8 @@ service cloud.firestore {
     
     match /audit_logs/{logId} {
       allow read: if isAdmin();
-      // Requirement 8: Audit Logs cannot be spoofed.
-      allow create: if isSignedIn() && (
-        isAdmin() || 
-        (!isAdmin() && 
-          request.resource.data.actorId == request.auth.uid && // Must match actual UID
-          !(request.resource.data.userRole in ['Administrador', 'Sistema / App', 'Sistema']) &&
-          !(request.resource.data.role in ['Administrador', 'Sistema / App', 'Sistema'])
-        )
-      );
-      allow update, delete: if false; // Immutable audit trail
+      // Require backend logging for all administrative logs
+      allow write: if false; 
     }
 
     // ==========================================
@@ -158,7 +150,7 @@ service cloud.firestore {
             // Core identity and role immutability
             'id', 'userId', 'uid', 'rol', 'role',
             'bloqueos', 'permisos', 'puntuacionAdministrativa', 
-            'serviciosCompletados', 'documentos', 'verificado', 
+            'serviciosCompletados', 'verificado', 
             'motivoRechazoAccount', 'puntuacion'
           ])
         )
@@ -190,10 +182,21 @@ service cloud.firestore {
         // CLIENT RULES
         (
           resource.data.clientId == request.auth.uid && 
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating', 'reviewComment', 'reviewedAt', 'state', 'cancellationReason', 'updatedAt']) &&
           (
-            request.resource.data.state == resource.data.state || 
-            (resource.data.state == 'pendiente' && request.resource.data.state == 'cancelado')
+            // Cancellation allowed only if pending
+            (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'cancellationReason', 'updatedAt']) && 
+              resource.data.state == 'pendiente' && 
+              request.resource.data.state == 'cancelado'
+            ) 
+            ||
+            // Rating allowed only if finished and not previously rated
+            (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating', 'reviewComment', 'reviewedAt', 'updatedAt']) && 
+              resource.data.state == 'servicio_finalizado' && 
+              !('rating' in resource.data) &&
+              request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+            )
           )
         ) || 
         
@@ -212,6 +215,15 @@ service cloud.firestore {
           request.resource.data.state == 'aceptada' && 
           request.resource.data.therapistId == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'therapistId', 'therapistName', 'therapistPhone', 'therapistPhoto', 'updatedAt'])
+        ) ||
+        
+        // UNASSIGNED THERAPIST REJECT RULES
+        (
+          isActiveTherapist() && 
+          resource.data.state == 'pendiente' && 
+          request.resource.data.state == 'pendiente' && 
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rejectedBy', 'updatedAt']) &&
+          (request.auth.uid in request.resource.data.rejectedBy)
         )
       );
       

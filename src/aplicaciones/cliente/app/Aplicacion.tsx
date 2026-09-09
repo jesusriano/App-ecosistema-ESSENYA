@@ -363,7 +363,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
         : paymentMethodType === 'transferencia'
         ? 'Transferencia Interbancaria (SPEI)'
         : 'Tarjeta de Crédito / Débito',
-      paymentStatus: totalPrice === 0 ? 'pagado' : paymentMethodType === 'efectivo' ? 'pendiente' : 'pagado',
+      paymentStatus: totalPrice === 0 ? 'pagado' : 'pendiente',
       painPoints: preferences.painPoints || '',
       arrivalInstructions: preferences.arrivalInstructions || '',
       createdAt: new Date().toISOString(),

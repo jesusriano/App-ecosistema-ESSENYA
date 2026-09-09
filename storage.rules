@@ -2,20 +2,35 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     
-    // Therapist documents secure directory
-    match /terapeutas/{therapistUid}/documentos/{allPaths=**} {
-      // Therapists can read/write their own documents; administrators can access everything
-      allow read, write: if request.auth != null && (
+    // Therapist private documents secure directory
+    match /terapeutas/{therapistUid}/documentos/{fileName} {
+      allow read: if request.auth != null && (
         request.auth.uid == therapistUid 
-        || request.auth.token.role == 'administrador' 
+        || request.auth.token.role == 'administrador'
         || request.auth.token.email == 'essenya222@gmail.com' 
-        || request.auth.token.admin == true
+      );
+      
+      allow write: if request.auth != null && (
+        request.auth.uid == therapistUid 
+        || request.auth.token.role == 'administrador'
+        || request.auth.token.email == 'essenya222@gmail.com' 
+      ) && (
+        // Max 5MB
+        request.resource.size < 5 * 1024 * 1024 &&
+        // Only images and PDFs
+        request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf'
       );
     }
+    
+    // Client profile pictures or other assets
+    match /clientes/{clientUid}/{allPaths=**} {
+      allow read: if request.auth != null; 
+      allow write: if request.auth != null && request.auth.uid == clientUid && request.resource.size < 5 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+    }
 
-    // Default fallback rules for other folders during active development
+    // Default deny for anything not explicitly matched
     match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
-import { collection, onSnapshot, doc, getDoc, setDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc, setDoc, updateDoc, deleteDoc, query, where, runTransaction, arrayUnion } from 'firebase/firestore';
 import { db, auth } from '../../lib/firebase';
 import { useAuth } from './AuthContext';
 import { handleFirestoreError, OperationType, cleanForFirestore } from '../utils/firestoreDebug';
@@ -102,7 +102,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       return {
         id: authTherapist.id || authTherapist.uid || firebaseUser?.uid || 'ther-1',
         name: `${authTherapist.nombre} ${authTherapist.apellidos || ''}`.trim() || 'Terapeuta Certificada',
-        photo: authTherapist.fotografia || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
+        photo: authTherapist.fotografia || '',
         phone: authTherapist.telefono || '525512345678',
         email: authTherapist.correo || 'terapeuta@essenya.mx',
         rating: 5.0,
@@ -414,19 +414,25 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Add Audit Log to State & Firestore
   const addLog = async (userRole: string, userName: string, action: string, details: string) => {
-    const newLog: SystemAuditLog = {
-      id: `log-${Date.now()}`,
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      userRole,
-      userName,
-      action,
-      details,
-    };
-    setAuditLogs(prev => [newLog, ...prev]);
+    // Only attempt to log if we have a token
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) return;
+
     try {
-      await setDoc(doc(db, 'audit_logs', newLog.id), cleanForFirestore(newLog));
+      const response = await fetch('/api/admin/audit-log', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ userRole, userName, action, details })
+      });
+      const data = await response.json();
+      if (data.success && data.log) {
+        setAuditLogs(prev => [data.log as SystemAuditLog, ...prev]);
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `audit_logs/${newLog.id}`, newLog);
+      console.error("Failed to add audit log via API", err);
     }
   };
 
@@ -490,17 +496,30 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Therapist Booking Acceptance & Rejection Handlers
   const handleAcceptBooking = async (bookingId: string, acceptingTherapist: Partial<Therapist>) => {
-    const updatedTherapistId = acceptingTherapist?.id || authTherapist?.id || authTherapist?.uid || firebaseUser?.uid || 'ther-1';
-    const updatedTherapistName = acceptingTherapist?.name || (authTherapist ? `${authTherapist.nombre} ${authTherapist.apellidos || ''}`.trim() : 'Dra. Elena Rostova');
-    const updatedTherapistPhoto = acceptingTherapist?.photo || authTherapist?.fotografia || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400';
-    const updatedTherapistPhone = acceptingTherapist?.phone || authTherapist?.telefono || '525512345678';
+    const updatedTherapistId = acceptingTherapist?.id || authTherapist?.id || authTherapist?.uid || firebaseUser?.uid;
+    if (!updatedTherapistId) throw new Error("No se pudo identificar la terapeuta autenticada.");
+    
+    const updatedTherapistName = acceptingTherapist?.name || (authTherapist ? `${authTherapist.nombre} ${authTherapist.apellidos || ''}`.trim() : 'Terapeuta');
+    const updatedTherapistPhoto = acceptingTherapist?.photo || authTherapist?.fotografia || '';
+    const updatedTherapistPhone = acceptingTherapist?.phone || authTherapist?.telefono || '';
     const nowIso = new Date().toISOString();
 
-    setBookings(prev => prev.map(b => {
-      if (b.id === bookingId) {
-        return {
-          ...b,
-          state: 'aceptada' as BookingState,
+    const bookingRef = doc(db, 'reservas', bookingId);
+    
+    try {
+      await runTransaction(db, async (transaction) => {
+        const bookingDoc = await transaction.get(bookingRef);
+        if (!bookingDoc.exists()) {
+          throw new Error("La reserva no existe.");
+        }
+        
+        const bookingData = bookingDoc.data();
+        if (bookingData.state !== 'pendiente') {
+          throw new Error("Esta reserva ya fue aceptada por otra terapeuta o ya no está disponible.");
+        }
+
+        const updatePayload = {
+          state: 'aceptada',
           therapistId: updatedTherapistId,
           therapistName: updatedTherapistName,
           therapistPhoto: updatedTherapistPhoto,
@@ -508,64 +527,74 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
           acceptedAt: nowIso,
           updatedAt: nowIso,
         };
-      }
-      return b;
-    }));
 
-    const updatePayload = {
-      state: 'aceptada',
-      therapistId: updatedTherapistId,
-      therapistName: updatedTherapistName,
-      therapistPhoto: updatedTherapistPhoto,
-      therapistPhone: updatedTherapistPhone,
-      updatedAt: nowIso,
-    };
+        transaction.update(bookingRef, cleanForFirestore(updatePayload));
+      });
+      
+      // Update local state ONLY on success
+      setBookings(prev => prev.map(b => {
+        if (b.id === bookingId) {
+          return {
+            ...b,
+            state: 'aceptada',
+            therapistId: updatedTherapistId,
+            therapistName: updatedTherapistName,
+            therapistPhoto: updatedTherapistPhoto,
+            therapistPhone: updatedTherapistPhone,
+            acceptedAt: nowIso,
+            updatedAt: nowIso,
+          };
+        }
+        return b;
+      }));
 
-    try {
-      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
+      const bk = bookings.find(b => b.id === bookingId);
+      addLog(
+        'Terapeuta',
+        updatedTherapistName,
+        'Aceptación de Reserva',
+        `Terapeuta ${updatedTherapistName} aceptó la reserva ${bk?.code || bookingId}.`
+      );
+    } catch (err: any) {
+      console.error("Error accepting booking:", err);
+      throw err; // Propagate error so UI can show it, NO optimistic fallback
     }
-
-    const bk = bookings.find(b => b.id === bookingId);
-    addLog(
-      'Terapeuta Certificada',
-      updatedTherapistName,
-      'Aceptación de Masaje',
-      `Terapeuta ${updatedTherapistName} aceptó el servicio para la cita ${bk?.code || bookingId} (${bk?.serviceName || 'Masaje'}).`
-    );
   };
 
   const handleRejectBooking = async (bookingId: string, reason?: string) => {
-    setBookings(prev => prev.map(b => {
-      if (b.id === bookingId) {
-        return {
-          ...b,
-          state: 'pendiente' as BookingState,
-          cancellationReason: reason || 'Terapeuta declinó solicitud, buscando otra profesional...',
-        };
-      }
-      return b;
-    }));
+    const therapistId = authTherapist?.id || authTherapist?.uid || firebaseUser?.uid;
+    if (!therapistId) return;
 
-    const updatePayload = {
-      state: 'pendiente',
-      cancellationReason: reason || 'Terapeuta declinó solicitud, buscando otra profesional...',
-    };
-
+    const bookingRef = doc(db, 'reservas', bookingId);
+    
     try {
-      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
-    }
+      await updateDoc(bookingRef, {
+        rejectedBy: arrayUnion(therapistId),
+        updatedAt: new Date().toISOString()
+      });
+      
+      // Local state update: we don't change the booking state, just add to local rejectedBy if we track it
+      setBookings(prev => prev.map(b => {
+        if (b.id === bookingId) {
+          const rejectedBy = b.rejectedBy ? [...b.rejectedBy] : [];
+          if (!rejectedBy.includes(therapistId)) {
+             rejectedBy.push(therapistId);
+          }
+          return { ...b, rejectedBy };
+        }
+        return b;
+      }));
 
-    const bk = bookings.find(b => b.id === bookingId);
-    addLog(
-      'Terapeuta / Dispatch',
-      'Central ESSENYA',
-      'Solicitud Declinada',
-      `Reserva ${bk?.code || bookingId} declinada. Buscando nueva terapeuta disponible en la zona.`
-    );
+      addLog(
+        'Terapeuta',
+        authTherapist?.nombre || 'Terapeuta',
+        'Reserva Declinada',
+        `Terapeuta declinó la reserva ${bookingId}.`
+      );
+    } catch (err) {
+      console.error("Error rejecting booking:", err);
+      throw err;
+    }
   };
 
   const handleAdminAcceptBooking = async (bookingId: string) => {
@@ -707,7 +736,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
           newTher = {
             id: dSnap.id,
             name: dData.name || dData.nombre || 'Terapeuta Certificada',
-            photo: dData.photo || dData.fotografia || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
+            photo: dData.photo || dData.fotografia || '',
             phone: dData.phone || dData.telefono || '525512345678',
             email: dData.email || dData.correo || 'terapeuta@essenya.mx',
             rating: dData.rating || 5.0,

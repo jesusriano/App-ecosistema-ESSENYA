@@ -4,6 +4,6 @@
 
 export const CLIENT_ASSETS = {
   vipBadgeLogo: '/assets/vip-badge.svg',
-  defaultAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+  defaultAvatar: '',
   heroBanner: 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&q=80&w=1200',
 };
