@@ -32,62 +32,85 @@ app.use(express.json({ limit: "2mb" })); // Prevent large payloads (like base64)
 // Initialize Firebase Admin globally
 const configPath = path.join(process.cwd(), "firebase-applet-config.json");
 let projectId = "essenya-ecosistema";
+let firestoreDatabaseId: string | undefined = undefined;
+
 if (fs.existsSync(configPath)) {
   try {
     const parsed = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     if (parsed.projectId) projectId = parsed.projectId;
+    if (parsed.firestoreDatabaseId) firestoreDatabaseId = parsed.firestoreDatabaseId;
   } catch (e) {
     console.warn("Failed to parse firebase config:", e);
   }
 }
+
 if (adminApp.getApps().length === 0) {
   adminApp.initializeApp({ projectId });
 }
 
-// Serverless-compatible Rate Limiting
-const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const MAX_REQUESTS = 50;
+function getAdminFirestore() {
+  return firestoreDatabaseId
+    ? adminFirestore.getFirestore(firestoreDatabaseId)
+    : adminFirestore.getFirestore();
+}
 
-async function rateLimiter(req: Request, res: Response, next: NextFunction): Promise<void | any> {
+// In-memory robust rate limiter (fast, zero network overhead, resilient)
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const MAX_REQUESTS = 60;
+
+interface RateLimitRecord {
+  count: number;
+  resetTime: number;
+}
+
+const memoryRateLimits = new Map<string, RateLimitRecord>();
+
+// Periodic cleanup of expired entries (every 5 minutes)
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of memoryRateLimits.entries()) {
+    if (now > record.resetTime) {
+      memoryRateLimits.delete(key);
+    }
+  }
+}, 5 * 60 * 1000).unref();
+
+function rateLimiter(req: Request, res: Response, next: NextFunction): void {
   let identifier = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown_ip";
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {
     try {
       const token = authHeader.split(" ")[1];
-      const decodedToken = await adminAuth.getAuth().verifyIdToken(token);
-      identifier = decodedToken.uid;
-    } catch (e) {
-      // Ignore token errors here, let requireAuth handle them later
+      const parts = token.split(".");
+      if (parts.length === 3) {
+        const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
+        if (payload.user_id || payload.sub) {
+          identifier = payload.user_id || payload.sub;
+        }
+      }
+    } catch {
+      // Fallback to IP address
     }
   }
 
   const now = Date.now();
-  
-  // Using Firestore for persistence (serverless-compatible)
-  try {
-    const db = adminFirestore.getFirestore();
-    const rateRef = db.collection("rate_limits").doc(identifier.replace(/[/\\?%*:|"<>]/g, '-'));
-    const doc = await rateRef.get();
-    
-    if (!doc.exists || now > doc.data()!.resetTime) {
-      await rateRef.set({ count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-      return next();
-    }
-    
-    const data = doc.data()!;
-    if (data.count >= MAX_REQUESTS) {
-      const retryAfter = Math.ceil((data.resetTime - now) / 1000);
-      res.setHeader("Retry-After", retryAfter);
-      return res.status(429).json({ success: false, error: `Límite alcanzado. Espera ${retryAfter}s.` });
-    }
-    
-    await rateRef.update({ count: adminFirestore.FieldValue.increment(1) });
-    next();
-  } catch (e: any) {
-    // Fallback to memory if Firestore fails to avoid total blockage
-    console.warn("Rate limit DB error, passing through:", e.message);
-    next();
+  const cleanKey = identifier.replace(/[/\\?%*:|"<>]/g, "-");
+  const record = memoryRateLimits.get(cleanKey);
+
+  if (!record || now > record.resetTime) {
+    memoryRateLimits.set(cleanKey, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return next();
   }
+
+  if (record.count >= MAX_REQUESTS) {
+    const retryAfter = Math.ceil((record.resetTime - now) / 1000);
+    res.setHeader("Retry-After", retryAfter);
+    res.status(429).json({ success: false, error: `Límite alcanzado. Espera ${retryAfter}s.` });
+    return;
+  }
+
+  record.count += 1;
+  next();
 }
 
 app.use(rateLimiter);
@@ -121,7 +144,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction): Pr
     }
     
     try {
-      const db = adminFirestore.getFirestore();
+      const db = getAdminFirestore();
       const adminDoc = await db.collection("administradores").doc(uid).get();
       if (adminDoc.exists) {
         (req as any).user.role = "administrador";
@@ -216,7 +239,7 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
     }
 
     const auth = adminAuth.getAuth();
-    const db = adminFirestore.getFirestore();
+    const db = getAdminFirestore();
 
     // 2. Creación en Firebase Authentication
     let userRecord;
@@ -338,7 +361,7 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
 // Admin endpoints
 app.post("/api/admin/clean-demo-data", requireSuperAdmin, async (req, res) => {
   try {
-    const db = adminFirestore.getFirestore();
+    const db = getAdminFirestore();
     const batch = db.batch();
     const logs = await db.collection("audit_logs").limit(10).get();
     logs.docs.forEach(doc => batch.delete(doc.ref));
@@ -354,7 +377,7 @@ app.post("/api/admin/audit-log", requireAdmin, async (req, res) => {
     const { action, details } = req.body;
     if (!action || !details) return res.status(400).json({ success: false, error: "Datos incompletos" });
     
-    const db = adminFirestore.getFirestore();
+    const db = getAdminFirestore();
     await db.collection("audit_logs").add({
       actorId: (req as any).user.uid,
       actorEmail: (req as any).user.email,
@@ -390,7 +413,7 @@ app.post("/api/admin/create-therapist-auth-profile", requireAdmin, async (req, r
     }
     
     const uid = userRecord.uid;
-    const db = adminFirestore.getFirestore();
+    const db = getAdminFirestore();
     
     try {
       const batch = db.batch();
