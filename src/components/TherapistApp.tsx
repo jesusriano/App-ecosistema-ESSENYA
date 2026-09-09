@@ -523,7 +523,14 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
 
         {/* TAB: SCHEDULE */}
         {activeTab === 'schedule' && (
-          <div className="space-y-6 max-w-4xl mx-auto">
+          <motion.div
+            key="tab-schedule-content"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.25 }}
+            className="space-y-6 max-w-4xl mx-auto"
+          >
             <div className="flex justify-between items-center">
               <h3 className="text-2xl font-serif font-bold text-white">Agenda y Citas Programadas</h3>
               <span className="text-xs text-[#C9A55B] bg-[#C9A55B]/15 px-3 py-1 rounded-full border border-[#C9A55B]/30 font-semibold">
@@ -531,47 +538,96 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
               </span>
             </div>
 
-            <div className="space-y-4">
-              {bookings.map((bk) => (
-                <div key={bk.id} className="bg-[#141414] p-5 rounded-2xl border border-[#C9A55B]/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs text-[#C9A55B] font-mono font-bold">{bk.time} hrs</span>
-                      <span className="text-xs text-[#888888]">• {bk.date}</span>
-                      <span className="font-mono text-[10px] text-[#C9A55B]/80">#{bk.code || bk.id}</span>
-                    </div>
-                    <h4 className="text-base font-bold text-white">{bk.serviceName} ({bk.durationMinutes} min)</h4>
-                    <p className="text-xs text-[#AAAAAA]">{bk.clientName} • {bk.clientAddress} ({bk.cityZone})</p>
-                    <p className="text-xs text-[#C9A55B] font-semibold">${(bk.total ?? bk.price ?? 0).toLocaleString()} MXN</p>
-                  </div>
-
-                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                    {bk.state === 'pendiente' ? (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleAccept(bk)}
-                          className="bg-[#C9A55B] text-black font-extrabold text-xs px-3.5 py-1.5 rounded-lg hover:bg-[#E6CA65] transition-all cursor-pointer flex items-center gap-1"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Aceptar</span>
-                        </button>
-                        <button
-                          onClick={() => handleDecline(bk)}
-                          className="bg-[#222222] text-[#AAAAAA] hover:text-red-400 text-xs px-2.5 py-1.5 rounded-lg border border-[#333333] transition-all cursor-pointer"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+            <motion.div layout className="space-y-4">
+              <AnimatePresence mode="popLayout">
+                {bookings.map((bk) => (
+                  <motion.div
+                    key={bk.id}
+                    layout
+                    initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                    transition={{
+                      layout: { type: "spring", stiffness: 350, damping: 30 },
+                      opacity: { duration: 0.25 },
+                      scale: { duration: 0.2 }
+                    }}
+                    className="bg-[#141414] p-5 rounded-2xl border border-[#C9A55B]/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:border-[#C9A55B]/40 transition-colors shadow-lg"
+                  >
+                    <motion.div layout="position" className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs text-[#C9A55B] font-mono font-bold">{bk.time} hrs</span>
+                        <span className="text-xs text-[#888888]">• {bk.date}</span>
+                        <span className="font-mono text-[10px] text-[#C9A55B]/80">#{bk.code || bk.id}</span>
                       </div>
-                    ) : (
-                      <span className="text-xs font-bold bg-[#C9A55B]/15 text-[#C9A55B] px-3 py-1 rounded-full border border-[#C9A55B]/30 uppercase">
-                        {bk.state.replace('_', ' ')}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+                      <h4 className="text-base font-bold text-white">{bk.serviceName} ({bk.durationMinutes} min)</h4>
+                      <p className="text-xs text-[#AAAAAA]">{bk.clientName} • {bk.clientAddress} ({bk.cityZone})</p>
+                      <p className="text-xs text-[#C9A55B] font-semibold">${(bk.total ?? bk.price ?? 0).toLocaleString()} MXN</p>
+                    </motion.div>
+
+                    <motion.div layout="position" className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                      <AnimatePresence mode="wait">
+                        {bk.state === 'pendiente' ? (
+                          <motion.div
+                            key={`actions-${bk.id}`}
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            transition={{ duration: 0.2 }}
+                            className="flex items-center gap-2"
+                          >
+                            <button
+                              onClick={() => handleAccept(bk)}
+                              className="bg-[#C9A55B] text-black font-extrabold text-xs px-3.5 py-1.5 rounded-lg hover:bg-[#E6CA65] transition-all cursor-pointer flex items-center gap-1 shadow-sm active:scale-95"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Aceptar</span>
+                            </button>
+                            <button
+                              onClick={() => handleDecline(bk)}
+                              className="bg-[#222222] text-[#AAAAAA] hover:text-red-400 text-xs px-2.5 py-1.5 rounded-lg border border-[#333333] transition-all cursor-pointer hover:border-red-500/30 active:scale-95"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </motion.div>
+                        ) : (
+                          <motion.span
+                            key={`badge-${bk.id}-${bk.state}`}
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            transition={{ duration: 0.2 }}
+                            className={`text-xs font-bold px-3 py-1 rounded-full border uppercase ${
+                              bk.state === 'servicio_finalizado'
+                                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                : bk.state === 'servicio_iniciado'
+                                ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                                : bk.state === 'en_camino' || bk.state === 'llegue'
+                                ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                : 'bg-[#C9A55B]/15 text-[#C9A55B] border-[#C9A55B]/30'
+                            }`}
+                          >
+                            {bk.state.replace('_', ' ')}
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+
+              {bookings.length === 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-[#141414] p-8 rounded-2xl border border-[#333333] text-center space-y-2 text-[#888888]"
+                >
+                  <Calendar className="w-8 h-8 text-[#C9A55B]/40 mx-auto" />
+                  <p className="text-sm font-medium">No tienes citas programadas en este momento.</p>
+                </motion.div>
+              )}
+            </motion.div>
+          </motion.div>
         )}
 
         {/* TAB: EARNINGS */}

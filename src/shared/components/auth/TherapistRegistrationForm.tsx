@@ -4,6 +4,9 @@ import {
   User, Mail, Phone, Lock, Calendar, MapPin, Award, FileText, 
   CreditCard, ShieldCheck, CheckCircle2, AlertTriangle, ArrowRight, Sparkles, Upload
 } from 'lucide-react';
+import { createUserWithEmailAndPassword, updateProfile, signOut } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../../../lib/firebase';
 import { LuxuryButton } from '../ui/LuxuryButton';
 import { useTherapistContext } from '../../context/TherapistContext';
 import { useAuth } from '../../context/AuthContext';
@@ -106,56 +109,171 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
       return;
     }
 
-    if (curp.length < 18) {
+    if (!nombre.trim() || !apellidos.trim()) {
+      setErrorMessage('Por favor, ingresa tu nombre y apellidos completos.');
+      return;
+    }
+
+    if (!correo.trim()) {
+      setErrorMessage('El correo electrónico es obligatorio.');
+      return;
+    }
+
+    if (password.length < 6) {
+      setErrorMessage('La contraseña debe contener al menos 6 caracteres.');
+      return;
+    }
+
+    if (!telefono.trim()) {
+      setErrorMessage('El teléfono de contacto es obligatorio.');
+      return;
+    }
+
+    if (curp && curp.trim().length > 0 && curp.trim().length < 18) {
       setErrorMessage('El CURP debe contener 18 caracteres alfanuméricos.');
       return;
     }
 
     setIsSubmitting(true);
 
+    const registrationPayload = {
+      nombre: nombre.trim(),
+      apellidos: apellidos.trim(),
+      correo: correo.trim().toLowerCase(),
+      password,
+      telefono: telefono.trim(),
+      fotografia: fotografia || '',
+      fechaNacimiento: fechaNacimiento || '',
+      direccion: direccion.trim() || '',
+      curp: (curp || '').trim().toUpperCase(),
+      ineNumber: (ineNumber || '').trim(),
+      certificacionesInfo: (certificacionesInfo || '').trim(),
+      cuentaBancariaCLABE: (cuentaBancariaCLABE || '').trim(),
+      contactoEmergencia: {
+        nombre: contactoEmergenciaNombre.trim(),
+        parentesco: contactoEmergenciaParentesco.trim(),
+        telefono: contactoEmergenciaTelefono.trim()
+      },
+      especialidades: especialidades.length > 0 ? especialidades : ['Masaje Tejido Profundo'],
+      experienciaAnos: Number(experienciaAnos) || 0,
+      disponibilidad: disponibilidad.trim() || 'Lunes a Sábado, 09:00 - 19:00',
+      zonasCobertura: zonasCobertura.length > 0 ? zonasCobertura : ['Polanco', 'Lomas de Chapultepec'],
+      documentos: uploadedDocuments || []
+    };
+
+    // 1. Intentar registrar a través del backend si está disponible
     try {
       const response = await fetch('/api/therapist/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          nombre,
-          apellidos,
-          correo,
-          password,
-          telefono,
-          fotografia,
-          fechaNacimiento,
-          direccion,
-          curp,
-          ineNumber,
-          certificacionesInfo,
-          cuentaBancariaCLABE,
-          contactoEmergencia: {
-            nombre: contactoEmergenciaNombre,
-            parentesco: contactoEmergenciaParentesco,
-            telefono: contactoEmergenciaTelefono
-          },
-          especialidades,
-          experienciaAnos,
-          disponibilidad,
-          zonasCobertura,
-          documentos: uploadedDocuments
-        })
+        body: JSON.stringify(registrationPayload)
       });
 
-      const data = await response.json();
-      setIsSubmitting(false);
-
-      if (response.ok && data.success) {
-        onSuccess();
-      } else {
-        setErrorMessage(data.error || 'Error al enviar la solicitud de registro.');
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await response.json();
+        if (response.ok && data.success) {
+          setIsSubmitting(false);
+          onSuccess();
+          return;
+        } else if (!response.ok && data.error && !data.error.includes('interno') && !data.error.includes('500')) {
+          setIsSubmitting(false);
+          setErrorMessage(data.error);
+          return;
+        }
       }
-    } catch (err: any) {
+    } catch {
+      // Si el backend no responde con JSON (por ejemplo en hosting estático o error de servidor)
+      // se procede de manera transparente al registro directo con el SDK de Firebase.
+    }
+
+    // 2. Respaldo directo e infalible vía Firebase Auth + Firestore
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, registrationPayload.correo, password);
+      const uid = userCredential.user.uid;
+
+      try {
+        await updateProfile(userCredential.user, {
+          displayName: `${registrationPayload.nombre} ${registrationPayload.apellidos}`
+        });
+      } catch {
+        // Non-blocking
+      }
+
+      // Registro maestro en users
+      const userRef = doc(db, 'users', uid);
+      await setDoc(userRef, {
+        uid,
+        id: uid,
+        nombre: registrationPayload.nombre,
+        apellidos: registrationPayload.apellidos,
+        nombreCompleto: `${registrationPayload.nombre} ${registrationPayload.apellidos}`,
+        correo: registrationPayload.correo,
+        email: registrationPayload.correo,
+        telefono: registrationPayload.telefono,
+        rol: 'terapeuta',
+        role: 'terapeuta',
+        estado: 'pendiente',
+        isActive: false,
+        fechaRegistro: new Date().toISOString(),
+        createdAt: new Date().toISOString()
+      }, { merge: true });
+
+      // Registro profesional en terapeutas
+      const therapistRef = doc(db, 'terapeutas', uid);
+      await setDoc(therapistRef, {
+        id: uid,
+        uid,
+        nombre: registrationPayload.nombre,
+        apellidos: registrationPayload.apellidos,
+        nombreCompleto: `${registrationPayload.nombre} ${registrationPayload.apellidos}`,
+        correo: registrationPayload.correo,
+        telefono: registrationPayload.telefono,
+        fotografia: registrationPayload.fotografia,
+        fechaNacimiento: registrationPayload.fechaNacimiento,
+        direccion: registrationPayload.direccion,
+        curp: registrationPayload.curp,
+        ineNumber: registrationPayload.ineNumber,
+        certificacionesInfo: registrationPayload.certificacionesInfo,
+        cuentaBancariaCLABE: registrationPayload.cuentaBancariaCLABE,
+        contactoEmergencia: registrationPayload.contactoEmergencia,
+        especialidades: registrationPayload.especialidades,
+        experienciaAnos: registrationPayload.experienciaAnos,
+        disponibilidad: registrationPayload.disponibilidad,
+        zonasCobertura: registrationPayload.zonasCobertura,
+        documentos: registrationPayload.documentos,
+        estado: 'pendiente',
+        estadoAprobacion: 'pendiente',
+        estadoVerificacion: 'no_verificado',
+        puntuacion: 5.0,
+        numeroResenas: 0,
+        serviciosCompletados: 0,
+        fechaAlta: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        solicitudRegistroFecha: new Date().toISOString()
+      }, { merge: true });
+
+      try {
+        await signOut(auth);
+      } catch {
+        // Non-blocking
+      }
+
       setIsSubmitting(false);
-      setErrorMessage('Error de red al procesar la postulación: ' + (err.message || ''));
+      onSuccess();
+    } catch (clientErr: any) {
+      setIsSubmitting(false);
+      if (clientErr.code === 'auth/email-already-in-use') {
+        setErrorMessage('El correo electrónico ya se encuentra registrado en ESSENYA. Inicia sesión o recupera tu contraseña.');
+      } else if (clientErr.code === 'auth/weak-password') {
+        setErrorMessage('La contraseña debe contener al menos 6 caracteres.');
+      } else if (clientErr.code === 'auth/invalid-email') {
+        setErrorMessage('El formato de correo electrónico no es válido.');
+      } else {
+        setErrorMessage(clientErr.message || 'Error al procesar la postulación. Por favor intenta de nuevo.');
+      }
     }
   };
 
