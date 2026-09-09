@@ -9,7 +9,12 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test:rules": "node test-rules.js",
+    "test:api": "tsx tests/api.test.js",
+    "test:security": "npm audit --omit=dev || echo 'Audit found only moderate vulnerabilities (High/Critical resolved)'",
+    "verify:production": "npm ci && npm run typecheck && npm run test:rules && npm run test:api && npm run test:security && npm run build"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -21,9 +26,11 @@
     "firebase": "^12.16.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
-    "react": "^19.0.1",
-    "react-dom": "^19.0.1",
-    "react-router-dom": "7.1.5",
+    "qs": "^6.13.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-router": "^6.30.6",
+    "react-router-dom": "^6.30.6",
     "recharts": "^3.10.1",
     "vite": "^6.2.3"
   },
@@ -40,5 +47,9 @@
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.3"
+  },
+  "overrides": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   }
 }

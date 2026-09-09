@@ -95,8 +95,7 @@ service cloud.firestore {
     // 3. CLIENT PROFILES
     // ==========================================
     match /clientes/{clienteId} {
-      // Therapists can read to see their client's info when assigned.
-      allow read: if isSignedIn() && (isOwner(clienteId) || isAdmin() || isTherapist());
+      allow read: if isSignedIn() && (isOwner(clienteId) || isAdmin());
       allow create: if isSignedIn() && (isOwner(clienteId) || isAdmin());
       allow update: if isSignedIn() && (isOwner(clienteId) || isAdmin());
       allow delete: if isAdmin();
@@ -109,7 +108,15 @@ service cloud.firestore {
     // PUBLIC PROFILE (Requirement 3: strict separation)
     match /terapeutas_publicos/{terapeutaId} {
       allow read: if true; // Public for visitors
-      allow write: if isAdmin() || isOwner(terapeutaId); // Updated by sync logic
+      allow write: if isAdmin() || (
+        isOwner(terapeutaId) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'uid', 'id', 'rol', 'role', 'estado', 'status', 'aprobacion', 'verificacion', 
+          'puntuacion', 'numeroResenas', 'serviciosCompletados', 'identidadOficial', 
+          'notasAdministrativas', 'camposFinancieros', 'bloqueos', 'permisos', 
+          'fechaAprobacion', 'autorAprobacion'
+        ]))
+      );
     }
     
     // PRIVATE DOSSIER (Requirement 2 & 3)
@@ -165,7 +172,7 @@ service cloud.firestore {
       allow read: if isSignedIn() && (
         isAdmin() || 
         resource.data.clientId == request.auth.uid || 
-        resource.data.therapistId == request.auth.uid ||
+        (isActiveTherapist() && resource.data.therapistId == request.auth.uid) ||
         // Requirement 1: Only ACTIVE therapists can see pending bookings queue
         (isActiveTherapist() && resource.data.state == 'pendiente')
       );

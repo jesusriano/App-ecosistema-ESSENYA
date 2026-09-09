@@ -22,5 +22,7 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "include": ["src", "api", "server.ts", "test-rules.js"],
+  "exclude": ["node_modules", "dist", "essenya-*.tar.gz"]
 }

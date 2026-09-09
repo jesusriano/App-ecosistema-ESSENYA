@@ -141,6 +141,7 @@ export interface Booking {
   cancellationReason?: string;
   motivoRechazo?: string;
   paymentProofUrl?: string;
+  rejectedBy?: string[];
 }
 
 export interface CoverageZone {

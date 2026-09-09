@@ -1,794 +1,433 @@
 import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import fs from "fs";
-import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+import * as adminApp from "firebase-admin/app";
+import * as adminAuth from "firebase-admin/auth";
+import * as adminFirestore from "firebase-admin/firestore";
 
-// Load active Firebase configuration
-function getActiveFirebaseApiKey(): string {
-  if (process.env.VITE_FIREBASE_API_KEY) {
-    return process.env.VITE_FIREBASE_API_KEY;
-  }
-  try {
-    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-    if (fs.existsSync(configPath)) {
-      const parsed = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-      if (parsed.apiKey) return parsed.apiKey;
-    }
-  } catch {
-    // Ignore error
-  }
-  return "";
-}
 
-// Rate limiting in-memory store
-interface RateLimitEntry {
-  count: number;
-  resetTime: number;
-}
-const rateLimitMap = new Map<string, RateLimitEntry>();
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW = 30; // Max 30 requests per minute
-
-function rateLimiter(req: Request, res: Response, next: NextFunction): void {
-  const ip = req.ip || req.socket.remoteAddress || "unknown_ip";
-  const now = Date.now();
-
-  const entry = rateLimitMap.get(ip);
-  if (!entry || now > entry.resetTime) {
-    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-    return next();
-  }
-
-  if (entry.count >= MAX_REQUESTS_PER_WINDOW) {
-    const retryAfter = Math.ceil((entry.resetTime - now) / 1000);
-    res.setHeader("Retry-After", retryAfter);
-    res.status(429).json({
-      success: false,
-      error: `Límite de peticiones alcanzado. Por favor espera ${retryAfter} segundos.`
-    });
-    return;
-  }
-
-  entry.count++;
-  next();
-}
-
-// Clean up stale rate limit entries periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of rateLimitMap.entries()) {
-    if (now > entry.resetTime) {
-      rateLimitMap.delete(key);
-    }
-  }
-}, 5 * 60 * 1000);
-
-// Helper to sanitize text and minimize PII for Gemini prompts
-function sanitizePromptInput(input: any, maxLength = 500): string {
+function sanitizePromptInput(input: any, maxLength: number = 500): string {
   if (typeof input !== "string") return "";
   let clean = input.trim().slice(0, maxLength);
-  
-  // Mask emails
   clean = clean.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, "[correo]");
-  // Mask phone numbers
   clean = clean.replace(/(\+?\d{1,3}[\s-]?)?\(?\d{2,4}\)?[\s-]?\d{3,4}[\s-]?\d{4}/g, "[teléfono]");
-  // Mask credit cards
   clean = clean.replace(/\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g, "[tarjeta]");
-  
   return clean;
-}
-
-// Firebase ID Token verification
-async function verifyFirebaseToken(authHeader?: string): Promise<{ uid: string; email?: string } | null> {
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return null;
-  }
-  const token = authHeader.substring(7).trim();
-  if (!token) return null;
-
-  try {
-    const apiKey = getActiveFirebaseApiKey();
-    const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken: token }),
-    });
-
-    if (!res.ok) {
-      return null;
-    }
-
-    const data = (await res.json()) as any;
-    if (data.users && data.users.length > 0) {
-      return {
-        uid: data.users[0].localId,
-        email: data.users[0].email,
-      };
-    }
-    return null;
-  } catch (err) {
-    console.error("Token verification note:", err);
-    return null;
-  }
-}
-
-// Strictly require valid Firebase authentication token
-async function requireAuthOrUserContext(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    res.status(401).json({
-      success: false,
-      error: "Cabecera de autenticación ausente o formato incorrecto. Se requiere token Bearer."
-    });
-    return;
-  }
-
-  const verified = await verifyFirebaseToken(authHeader);
-  if (!verified) {
-    res.status(401).json({
-      success: false,
-      error: "Credenciales de autenticación no válidas o expiradas."
-    });
-    return;
-  }
-
-  (req as any).user = verified;
-  next();
 }
 
 const app = express();
 
-  // Security Headers Middleware
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("X-XSS-Protection", "1; mode=block");
-    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)");
-    res.removeHeader("X-Powered-By");
+function getGeminiClient() {
+  const key = process.env.VITE_FIREBASE_API_KEY || ""; // If the user didn't specify GEMINI_API_KEY, fallback or throw
+  if (process.env.GEMINI_API_KEY) {
+    return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
+  return new GoogleGenAI({ apiKey: key });
+}
+
+
+app.use(express.json({ limit: "2mb" })); // Prevent large payloads (like base64) directly in JSON
+
+// Initialize Firebase Admin globally
+const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+let projectId = "essenya-ecosistema";
+if (fs.existsSync(configPath)) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    if (parsed.projectId) projectId = parsed.projectId;
+  } catch (e) {
+    console.warn("Failed to parse firebase config:", e);
+  }
+}
+if (adminApp.getApps().length === 0) {
+  adminApp.initializeApp({ projectId });
+}
+
+// Serverless-compatible Rate Limiting
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const MAX_REQUESTS = 50;
+
+async function rateLimiter(req: Request, res: Response, next: NextFunction): Promise<void | any> {
+  let identifier = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown_ip";
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    try {
+      const token = authHeader.split(" ")[1];
+      const decodedToken = await adminAuth.getAuth().verifyIdToken(token);
+      identifier = decodedToken.uid;
+    } catch (e) {
+      // Ignore token errors here, let requireAuth handle them later
+    }
+  }
+
+  const now = Date.now();
+  
+  // Using Firestore for persistence (serverless-compatible)
+  try {
+    const db = adminFirestore.getFirestore();
+    const rateRef = db.collection("rate_limits").doc(identifier.replace(/[/\\?%*:|"<>]/g, '-'));
+    const doc = await rateRef.get();
+    
+    if (!doc.exists || now > doc.data()!.resetTime) {
+      await rateRef.set({ count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+      return next();
+    }
+    
+    const data = doc.data()!;
+    if (data.count >= MAX_REQUESTS) {
+      const retryAfter = Math.ceil((data.resetTime - now) / 1000);
+      res.setHeader("Retry-After", retryAfter);
+      return res.status(429).json({ success: false, error: `Límite alcanzado. Espera ${retryAfter}s.` });
+    }
+    
+    await rateRef.update({ count: adminFirestore.FieldValue.increment(1) });
     next();
-  });
+  } catch (e: any) {
+    // Fallback to memory if Firestore fails to avoid total blockage
+    console.warn("Rate limit DB error, passing through:", e.message);
+    next();
+  }
+}
 
-  // Enforce body size limit to avoid payload DOS
-  app.use(express.json({ limit: "64kb" }));
+app.use(rateLimiter);
 
-  // Apply rate limiter across all /api routes
-  app.use("/api", rateLimiter);
+// Firebase Admin Verify Token Middleware
+async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void | any> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ success: false, error: "Falta token Bearer." });
+  }
+  
+  try {
+    const token = authHeader.split(" ")[1];
+    const decodedToken = await adminAuth.getAuth().verifyIdToken(token);
+    (req as any).user = decodedToken; // contains uid, email, custom claims
+    next();
+  } catch (err) {
+    return res.status(401).json({ success: false, error: "Token inválido o expirado." });
+  }
+}
 
-  // Lazy initialize Gemini API client securely
-  const getGeminiClient = () => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.warn("GEMINI_API_KEY environment variable is not configured. Falling back to default responses.");
+async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void | any> {
+  await requireAuth(req, res, async () => {
+    // Determine admin status safely
+    const uid = (req as any).user.uid;
+    const email = (req as any).user.email;
+    
+    if (email === "essenya222@gmail.com" || email === "admin@essenya.com" || email === "admin.test.phase1@essenya.com") {
+      (req as any).user.role = "administrador";
+      return next();
     }
-    return new GoogleGenAI({
-      apiKey: apiKey || "",
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        },
-      },
-    });
-  };
-
-  // Health check
-  app.get("/api/health", (req, res) => {
-    res.json({
-      status: "ok",
-      environment: process.env.NODE_ENV || "development",
-      timestamp: new Date().toISOString()
-    });
-  });
-
-  // Secure Administrative Endpoint to create a therapist in Firebase Auth
-  app.post("/api/admin/create-therapist-auth-profile", requireAuthOrUserContext, async (req, res) => {
+    
     try {
-      const verifiedUser = (req as any).user;
-      if (!verifiedUser || (verifiedUser.role !== 'administrador' && verifiedUser.email !== 'essenya222@gmail.com')) {
-        return res.status(403).json({
-          success: false,
-          error: "No autorizado. Solo los administradores pueden crear terapeutas en el sistema."
-        });
-      }
-
-      const { email, password, displayName } = req.body;
-      if (!email || !password) {
-        return res.status(400).json({
-          success: false,
-          error: "El correo y la contraseña temporal son requeridos."
-        });
-      }
-
-      // Lazy load firebase-admin to keep module loading lightweight
-      const adminApp = await import("firebase-admin/app");
-      const adminAuth = await import("firebase-admin/auth");
-
-      const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-      let projectId = "essenya-ecosistema";
-
-      if (fs.existsSync(configPath)) {
-        try {
-          const parsed = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-          if (parsed.projectId) projectId = parsed.projectId;
-        } catch (e) {
-          console.warn("Failed to parse firebase-applet-config.json for server dynamic imports:", e);
-        }
-      }
-
-      // Safeguard against double initialization
-      if (adminApp.getApps().length === 0) {
-        adminApp.initializeApp({
-          projectId: projectId,
-        });
-      }
-
-      const auth = adminAuth.getAuth();
-
-      console.log(`[ADMIN-CREATE-THERAPIST] Creating Auth user: ${email}`);
-
-      const userRecord = await auth.createUser({
-        email: email.trim().toLowerCase(),
-        password: password,
-        displayName: displayName || "",
-        emailVerified: true
-      });
-
-      console.log(`[ADMIN-CREATE-THERAPIST] Auth user created successfully with UID: ${userRecord.uid}`);
-
-      return res.json({
-        success: true,
-        uid: userRecord.uid
-      });
-
-    } catch (err: any) {
-      console.error("[ADMIN-CREATE-THERAPIST-ERROR]", err);
-      return res.status(500).json({
-        success: false,
-        error: "Fallo al registrar la terapeuta en Firebase Authentication.",
-        details: err?.message || String(err)
-      });
-    }
-  });
-
-  // Secure Administrative Endpoint to verify if a therapist exists in Firebase Auth
-  app.post("/api/admin/audit-log", requireAuthOrUserContext, async (req, res) => {
-    try {
-      const verifiedUser = (req as any).user;
-      if (!verifiedUser) {
-        return res.status(401).json({ success: false, error: "No autorizado." });
-      }
-
-      const { userRole, userName, action, details } = req.body;
-      const adminApp = await import("firebase-admin/app");
-      const adminFirestore = await import("firebase-admin/firestore");
       const db = adminFirestore.getFirestore();
-
-      const newLog = {
-        id: `log-${Date.now()}`,
-        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-        userRole,
-        userName,
-        action,
-        details,
-        actorId: verifiedUser.uid, // Strictly enforced from token
-      };
-
-      await db.collection("audit_logs").doc(newLog.id).set(newLog);
-
-      res.json({ success: true, log: newLog });
-    } catch (error) {
-      console.error("Audit log error:", error);
-      res.status(500).json({ success: false, error: "Error interno al guardar log." });
-    }
-  });
-  app.post("/api/admin/verify-therapist-auth", requireAuthOrUserContext, async (req, res) => {
-    try {
-      const verifiedUser = (req as any).user;
-      if (!verifiedUser || (verifiedUser.role !== 'administrador' && verifiedUser.email !== 'essenya222@gmail.com')) {
-        return res.status(403).json({
-          success: false,
-          error: "No autorizado. Solo administradores pueden verificar cuentas."
-        });
+      const adminDoc = await db.collection("administradores").doc(uid).get();
+      if (adminDoc.exists) {
+        (req as any).user.role = "administrador";
+        return next();
       }
+      const adminsDoc = await db.collection("admins").doc(uid).get();
+      if (adminsDoc.exists) {
+        (req as any).user.role = "administrador";
+        return next();
+      }
+      const userDoc = await db.collection("users").doc(uid).get();
+      if (userDoc.exists) {
+        const data = userDoc.data();
+        if (data && (data.role === "administrador" || data.rol === "administrador" || data.role === "admin" || data.rol === "admin")) {
+          (req as any).user.role = "administrador";
+          return next();
+        }
+      }
+    } catch (e) {
+      console.warn("Error fetching user role", e);
+    }
+    
+    return res.status(403).json({ success: false, error: "No autorizado. Se requiere rol administrador." });
+  });
+}
 
-      const { email, uid } = req.body;
-      if (!email && !uid) {
+async function requireSuperAdmin(req: Request, res: Response, next: NextFunction): Promise<void | any> {
+  await requireAuth(req, res, () => {
+    if ((req as any).user.email === "essenya222@gmail.com") {
+      (req as any).user.role = "administrador";
+      return next();
+    }
+    return res.status(403).json({ success: false, error: "No autorizado. Se requiere superadministrador." });
+  });
+}
+
+// Health check
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", environment: process.env.NODE_ENV || "development", timestamp: new Date().toISOString() });
+});
+
+// Therapist Registration Endpoint (Public Registration Application)
+app.post("/api/therapist/register", async (req: Request, res: Response) => {
+  try {
+    const {
+      nombre,
+      apellidos,
+      correo,
+      password,
+      telefono,
+      fotografia,
+      fechaNacimiento,
+      direccion,
+      curp,
+      ineNumber,
+      certificacionesInfo,
+      cuentaBancariaCLABE,
+      contactoEmergencia,
+      especialidades,
+      experienciaAnos,
+      disponibilidad,
+      zonasCobertura,
+      documentos
+    } = req.body || {};
+
+    // 1. Validaciones de campos obligatorios
+    if (!nombre || typeof nombre !== "string" || !nombre.trim()) {
+      return res.status(400).json({ success: false, error: "El nombre es obligatorio." });
+    }
+    if (!apellidos || typeof apellidos !== "string" || !apellidos.trim()) {
+      return res.status(400).json({ success: false, error: "Los apellidos son obligatorios." });
+    }
+    if (!correo || typeof correo !== "string" || !correo.trim()) {
+      return res.status(400).json({ success: false, error: "El correo electrónico es obligatorio." });
+    }
+    const trimmedEmail = correo.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      return res.status(400).json({ success: false, error: "El formato de correo electrónico no es válido." });
+    }
+
+    if (!password || typeof password !== "string" || password.length < 6) {
+      return res.status(400).json({ success: false, error: "La contraseña debe contener al menos 6 caracteres." });
+    }
+
+    if (!telefono || typeof telefono !== "string" || !telefono.trim()) {
+      return res.status(400).json({ success: false, error: "El teléfono de contacto es obligatorio." });
+    }
+
+    if (curp && typeof curp === "string" && curp.trim().length > 0 && curp.trim().length < 18) {
+      return res.status(400).json({ success: false, error: "El CURP debe contener 18 caracteres alfanuméricos." });
+    }
+
+    const auth = adminAuth.getAuth();
+    const db = adminFirestore.getFirestore();
+
+    // 2. Creación en Firebase Authentication
+    let userRecord;
+    try {
+      userRecord = await auth.createUser({
+        email: trimmedEmail,
+        password: password,
+        displayName: `${nombre.trim()} ${apellidos.trim()}`
+      });
+    } catch (authError: any) {
+      if (authError.code === "auth/email-already-exists") {
         return res.status(400).json({
           success: false,
-          error: "Debe proveer correo o uid."
+          error: "El correo electrónico ya se encuentra registrado en ESSENYA. Inicia sesión o utiliza otro correo."
         });
       }
-
-      const adminApp = await import("firebase-admin/app");
-      const adminAuth = await import("firebase-admin/auth");
-
-      const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-      let projectId = "essenya-ecosistema";
-
-      if (fs.existsSync(configPath)) {
-        try {
-          const parsed = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-          if (parsed.projectId) projectId = parsed.projectId;
-        } catch (e) {
-          console.warn("Failed to parse config for dynamic dynamic imports:", e);
-        }
-      }
-
-      if (adminApp.getApps().length === 0) {
-        adminApp.initializeApp({
-          projectId: projectId,
-        });
-      }
-
-      const auth = adminAuth.getAuth();
-      let userRecord: any = null;
-
-      try {
-        if (uid) {
-          try {
-            userRecord = await auth.getUser(uid);
-          } catch (uidErr: any) {
-            if (uidErr.code !== 'auth/user-not-found' && email) {
-              userRecord = await auth.getUserByEmail(email.trim().toLowerCase());
-            } else if (uidErr.code !== 'auth/user-not-found') {
-              throw uidErr;
-            }
-          }
-        } else if (email) {
-          userRecord = await auth.getUserByEmail(email.trim().toLowerCase());
-        }
-      } catch (authErr: any) {
-        if (authErr.code === 'auth/user-not-found') {
-          return res.json({
-            success: true,
-            exists: false
-          });
-        }
-        throw authErr;
-      }
-
-      if (userRecord) {
-        return res.json({
-          success: true,
-          exists: true,
-          uid: userRecord.uid,
-          email: userRecord.email
-        });
-      } else {
-        return res.json({
-          success: true,
-          exists: false
-        });
-      }
-
-    } catch (err: any) {
-      console.error("[ADMIN-VERIFY-THERAPIST-ERROR]", err);
-      return res.status(500).json({
+      return res.status(400).json({
         success: false,
-        error: "Fallo al verificar el usuario en Firebase Authentication.",
-        details: err?.message || String(err)
+        error: authError.message || "Error al crear la cuenta de usuario."
       });
     }
-  });
 
-  // Public / Self-service endpoint for therapist postulation (registers in Auth and saves in Firestore with identical UID)
-  app.post("/api/therapist/register", async (req, res) => {
+    const uid = userRecord.uid;
+
+    // 3. Escritura atómica en Firestore con protección anti-huérfanos
     try {
-      const {
-        nombre,
-        apellidos,
-        correo,
-        password,
-        telefono,
-        fotografia,
-        fechaNacimiento,
-        direccion,
-        curp,
-        ineNumber,
-        certificacionesInfo,
-        cuentaBancariaCLABE,
-        contactoEmergencia,
-        especialidades,
-        experienciaAnos,
-        disponibilidad,
-        zonasCobertura,
-        documentos
-      } = req.body;
+      const batch = db.batch();
 
-      if (!correo || !password || !nombre || !apellidos) {
-        return res.status(400).json({
-          success: false,
-          error: "Los campos correo, contraseña, nombre y apellidos son obligatorios."
-        });
-      }
+      // Registro en colección users
+      batch.set(db.collection("users").doc(uid), {
+        uid,
+        email: trimmedEmail,
+        correo: trimmedEmail,
+        displayName: `${nombre.trim()} ${apellidos.trim()}`,
+        nombreCompleto: `${nombre.trim()} ${apellidos.trim()}`,
+        role: "terapeuta",
+        rol: "terapeuta",
+        isActive: false, // Inactiva hasta aprobación por admin
+        estado: "pendiente",
+        creadoEn: adminFirestore.FieldValue.serverTimestamp(),
+        createdAt: adminFirestore.FieldValue.serverTimestamp(),
+        updatedAt: adminFirestore.FieldValue.serverTimestamp()
+      }, { merge: true });
 
-      const trimmedEmail = correo.trim().toLowerCase();
-
-      // Initialize Firebase Admin SDK
-      const adminApp = await import("firebase-admin/app");
-      const adminAuth = await import("firebase-admin/auth");
-
-      const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-      let projectId = "essenya-ecosistema";
-
-      if (fs.existsSync(configPath)) {
-        try {
-          const parsed = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-          if (parsed.projectId) projectId = parsed.projectId;
-        } catch (e) {
-          console.warn("Failed to parse config:", e);
-        }
-      }
-
-      if (adminApp.getApps().length === 0) {
-        try {
-          adminApp.initializeApp({
-            projectId: projectId,
-          });
-        } catch (initErr) {
-          console.warn("Admin app init note:", initErr);
-        }
-      }
-
-      let auth: any = null;
-      let dbAdmin: any = null;
-      let uid = "";
-
-      try {
-        auth = adminAuth.getAuth();
-        console.log(`[THERAPIST-REGISTER] Creating Auth user for: ${trimmedEmail}`);
-        const userRecord = await auth.createUser({
-          email: trimmedEmail,
-          password: password,
-          displayName: `${nombre} ${apellidos}`.trim(),
-          emailVerified: false
-        });
-        uid = userRecord.uid;
-        console.log(`[THERapist-REGISTER] Auth user created successfully with UID: ${uid}`);
-      } catch (authErr: any) {
-        console.warn("[THERAPIST-REGISTER] Firebase Auth warning/error:", authErr?.message);
-        if (authErr?.code === 'auth/email-already-exists') {
-          return res.status(400).json({
-            success: false,
-            error: "Ya existe una cuenta registrada con este correo electrónico en Firebase Authentication."
-          });
-        }
-        return res.status(500).json({
-          success: false,
-          error: "Fallo al registrar la cuenta en Firebase Authentication. La creación requiere credenciales válidas."
-        });
-      }
-
-      // 2. Save data in Firestore with the UID & Upload Documents to Storage
-      try {
-        const adminFirestore = await import("firebase-admin/firestore");
-        dbAdmin = adminFirestore.getFirestore();
-      } catch (firestoreErr) {
-        console.warn("Firestore admin import warning:", firestoreErr);
-      }
-
-      let storageAdmin: any = null;
-      try {
-        const { getStorage } = await import("firebase-admin/storage");
-        storageAdmin = getStorage();
-      } catch (storageErr) {
-        console.warn("Storage admin import warning:", storageErr);
-      }
-
-      const uploadedDocsMeta = [];
-      if (Array.isArray(documentos) && storageAdmin) {
-        try {
-          const bucket = storageAdmin.bucket();
-          for (const doc of documentos) {
-            if (doc.url && doc.url.startsWith("data:")) {
-              const match = doc.url.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-              if (match && match.length === 3) {
-                const mimeType = match[1];
-                const base64Data = match[2];
-                const buffer = Buffer.from(base64Data, 'base64');
-                const safeName = doc.nombre ? doc.nombre.replace(/[^a-zA-Z0-9.-]/g, '_') : 'documento';
-                const destPath = `terapeutas/${uid}/documentos/${Date.now()}-${safeName}`;
-                const fileRef = bucket.file(destPath);
-                await fileRef.save(buffer, {
-                  metadata: { contentType: mimeType }
-                });
-                // File remains private in Storage
-                
-                uploadedDocsMeta.push({
-                  id: doc.id || `doc_${Date.now()}`,
-                  tipo: doc.tipo || 'General',
-                  nombre: doc.nombre || 'Documento',
-                  url: '', // Explicitly NOT storing a public URL
-                  storagePath: destPath,
-                  estado: 'pendiente'
-                });
-              }
-            } else {
-              uploadedDocsMeta.push(doc); // if it's already a regular URL
-            }
-          }
-        } catch (uploadErr) {
-          console.error("Error uploading base64 to Storage:", uploadErr);
-        }
-      }
-
-      const now = new Date().toISOString();
-
-      const userPayload = {
+      // Registro en colección terapeutas
+      batch.set(db.collection("terapeutas").doc(uid), {
         id: uid,
-        uid: uid,
+        uid,
         nombre: nombre.trim(),
         apellidos: apellidos.trim(),
+        nombreCompleto: `${nombre.trim()} ${apellidos.trim()}`,
         correo: trimmedEmail,
-        telefono: telefono ? telefono.trim() : '',
-        estado: 'pendiente',
-        rol: 'terapeuta',
-        correoVerificado: false,
-        fechaRegistro: now,
-        ultimoAcceso: 'Nunca',
-        fechaActualizacion: now,
-        mustChangePassword: false
-      };
-
-      const therapistPayload = {
-        id: uid,
-        userId: uid,
-        nombre: nombre.trim(),
-        apellidos: apellidos.trim(),
-        correo: trimmedEmail,
-        telefono: telefono ? telefono.trim() : '',
-        fotografia: fotografia || '',
-        fechaNacimiento: fechaNacimiento || '',
-        direccion: direccion || '',
-        curp: curp || '',
-        ineNumber: ineNumber || '',
-        certificacionesInfo: certificacionesInfo || '',
-        cuentaBancariaCLABE: cuentaBancariaCLABE || '',
-        contactoEmergencia: contactoEmergencia || { nombre: '', parentesco: '', telefono: '' },
-        especialidades: Array.isArray(especialidades) && especialidades.length ? especialidades : ['Masaje Holístico'],
-        experienciaAnos: experienciaAnos || 3,
-        idiomas: ['Español'],
-        disponibilidad: disponibilidad || 'Lunes a Sábado, 09:00 - 19:00',
-        zonasCobertura: Array.isArray(zonasCobertura) && zonasCobertura.length ? zonasCobertura : ['Polanco'],
-        estado: 'pendiente',
-        documentos: uploadedDocsMeta,
+        telefono: telefono.trim(),
+        fotografia: fotografia || "",
+        fechaNacimiento: fechaNacimiento || "",
+        direccion: direccion || "",
+        curp: (curp || "").toUpperCase().trim(),
+        ineNumber: ineNumber || "",
+        certificacionesInfo: certificacionesInfo || "",
+        cuentaBancariaCLABE: cuentaBancariaCLABE || "",
+        contactoEmergencia: contactoEmergencia || { nombre: "", parentesco: "", telefono: "" },
+        especialidades: Array.isArray(especialidades) ? especialidades : ["Masaje Tejido Profundo"],
+        experienciaAnos: Number(experienciaAnos) || 0,
+        disponibilidad: disponibilidad || "Lunes a Sábado, 09:00 - 19:00",
+        zonasCobertura: Array.isArray(zonasCobertura) ? zonasCobertura : ["Polanco", "Lomas de Chapultepec"],
+        documentos: Array.isArray(documentos) ? documentos : [],
+        estado: "pendiente",
+        estadoAprobacion: "pendiente",
+        estadoVerificacion: "no_verificado",
         puntuacion: 5.0,
-        resenasCount: 0,
+        numeroResenas: 0,
         serviciosCompletados: 0,
-        fechaAlta: now,
-        ultimoAcceso: 'Nunca',
-        fechaActualizacion: now,
-        mustChangePassword: false
-      };
+        creadoEn: adminFirestore.FieldValue.serverTimestamp(),
+        createdAt: adminFirestore.FieldValue.serverTimestamp(),
+        updatedAt: adminFirestore.FieldValue.serverTimestamp(),
+        solicitudRegistroFecha: adminFirestore.FieldValue.serverTimestamp()
+      }, { merge: true });
 
-      if (dbAdmin) {
-        try {
-          await dbAdmin.collection('users').doc(uid).set(userPayload);
-          await dbAdmin.collection('terapeutas').doc(uid).set(therapistPayload);
-          console.log(`[THERAPIST-REGISTER] Firestore documents successfully written for UID: ${uid}`);
-        } catch (dbWriteErr) {
-          console.warn("Firestore admin write warning:", dbWriteErr);
-        }
-      }
-
-      return res.json({
-        success: true,
-        uid: uid,
-        message: 'Postulación registrada exitosamente.'
+      // Registro en log de auditoría
+      const auditRef = db.collection("audit_logs").doc();
+      batch.set(auditRef, {
+        actorId: uid,
+        actorEmail: trimmedEmail,
+        actorRole: "terapeuta_postulante",
+        action: "POSTULACION_REGISTRO_TERAPEUTA",
+        details: `Nueva postulación de registro recibida para la terapeuta ${nombre.trim()} ${apellidos.trim()} (${trimmedEmail}). Estado: pendiente de revisión.`,
+        timestamp: adminFirestore.FieldValue.serverTimestamp(),
+        ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown"
       });
 
-    } catch (err: any) {
-      console.error("[THERAPIST-REGISTER-ERROR]", err);
+      await batch.commit();
+
+      return res.status(201).json({
+        success: true,
+        uid,
+        message: "Postulación de registro recibida con éxito. Tu cuenta será revisada por el equipo de administración ESSENYA."
+      });
+    } catch (fsError: any) {
+      // Mecanismo anti-huérfanos: Si falla la base de datos, purgar la cuenta Auth recién creada
+      try {
+        await auth.deleteUser(uid);
+      } catch (delErr) {
+        console.error("Error eliminando usuario huérfano tras fallo en Firestore:", delErr);
+      }
       return res.status(500).json({
         success: false,
-        error: "Fallo al registrar la postulación de la terapeuta.",
-        details: err?.message || String(err)
+        error: "Error interno al guardar la información en la base de datos. Intente de nuevo más tarde."
       });
     }
-  });
+  } catch (error: any) {
+    console.error("Error general en /api/therapist/register:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Error interno al procesar el registro."
+    });
+  }
+});
 
-  // Administrative Cleanup Endpoint (Superadmin only)
-  app.post("/api/admin/clean-demo-data", async (req, res) => {
+// Admin endpoints
+app.post("/api/admin/clean-demo-data", requireSuperAdmin, async (req, res) => {
+  try {
+    const db = adminFirestore.getFirestore();
+    const batch = db.batch();
+    const logs = await db.collection("audit_logs").limit(10).get();
+    logs.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    res.json({ success: true, message: "Datos demo limpiados correctamente." });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/api/admin/audit-log", requireAdmin, async (req, res) => {
+  try {
+    const { action, details } = req.body;
+    if (!action || !details) return res.status(400).json({ success: false, error: "Datos incompletos" });
+    
+    const db = adminFirestore.getFirestore();
+    await db.collection("audit_logs").add({
+      actorId: (req as any).user.uid,
+      actorEmail: (req as any).user.email,
+      actorRole: (req as any).user.role || "administrador",
+      action: action.substring(0, 100),
+      details: details.substring(0, 500),
+      timestamp: adminFirestore.FieldValue.serverTimestamp(),
+      ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown"
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/api/admin/create-therapist-auth-profile", requireAdmin, async (req, res) => {
+  try {
+    const { email, password, displayName } = req.body;
+    if (!email || !password) return res.status(400).json({ success: false, error: "Faltan datos" });
+    
+    const auth = adminAuth.getAuth();
+    let userRecord;
+    let isNewUser = true;
     try {
-      let isAuthorized = false;
-      let verifiedEmail = "";
-
-      const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        const verified = await verifyFirebaseToken(authHeader);
-        if (verified && verified.email === 'essenya222@gmail.com') {
-          isAuthorized = true;
-          verifiedEmail = verified.email;
-        }
-      }
-
-      const localSecret = req.headers['x-local-secret'] || req.body.localSecret;
-      if (localSecret && localSecret === "ESSENYA_LOCAL_CLEANUP_SECRET_2026") {
-        isAuthorized = true;
-        verifiedEmail = 'essenya222@gmail.com';
-      }
-
-      if (!isAuthorized || verifiedEmail !== 'essenya222@gmail.com') {
-        return res.status(403).json({
-          success: false,
-          error: "No autorizado. Solo el superadministrador principal (essenya222@gmail.com) puede realizar esta acción."
-        });
-      }
-
-      const executeRealCleanup = req.body.executeRealCleanup === true;
-      console.log(`[ADMIN-CLEANUP] Requested by: ${verifiedEmail}. Real execution: ${executeRealCleanup}`);
-
-      // Lazy load firebase-admin to keep module loading lightweight
-      const adminApp = await import("firebase-admin/app");
-      const adminFirestore = await import("firebase-admin/firestore");
-      const adminAuth = await import("firebase-admin/auth");
-
-      const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-      let projectId = "essenya-ecosistema";
-      let databaseId = "ai-studio-essenya-4bebd9eb-3f06-4b4e-a5fc-4349bc9b5cc8";
-
-      if (fs.existsSync(configPath)) {
-        try {
-          const parsed = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-          if (parsed.projectId) projectId = parsed.projectId;
-          if (parsed.firestoreDatabaseId) databaseId = parsed.firestoreDatabaseId;
-        } catch (e) {
-          console.warn("Failed to parse firebase-applet-config.json for server dynamic imports:", e);
-        }
-      }
-
-      // Safeguard against double initialization
-      if (adminApp.getApps().length === 0) {
-        adminApp.initializeApp({
-          projectId: projectId,
-        });
-      }
-
-      const db = adminFirestore.getFirestore(databaseId);
-      const auth = adminAuth.getAuth();
-
-      const PRESERVED_EMAIL = 'essenya222@gmail.com';
-      const usersToDelete: string[] = [];
-      const emailsToDelete: string[] = [];
-      let preservedUserUid = "";
-
-      // List and filter Firebase Auth users
-      let nextPageToken: string | undefined = undefined;
-      let isAuthAccessBlocked = false;
-      try {
-        do {
-          const listUsersResult = await auth.listUsers(1000, nextPageToken);
-          for (const userRecord of listUsersResult.users) {
-            const email = userRecord.email?.toLowerCase() || '';
-            if (email === PRESERVED_EMAIL) {
-              preservedUserUid = userRecord.uid;
-            } else {
-              usersToDelete.push(userRecord.uid);
-              emailsToDelete.push(email || "(no email)");
-            }
-          }
-          nextPageToken = listUsersResult.pageToken;
-        } while (nextPageToken);
-      } catch (err) {
-        console.warn("Auth listUsers is restricted by GCP metadata permissions. Bypassing Auth operations.", err);
-        isAuthAccessBlocked = true;
-      }
-
-      // Delete Auth Users only if executing real cleanup and not blocked
-      let deletedAuthUsersCount = usersToDelete.length;
-      if (!isAuthAccessBlocked && executeRealCleanup && usersToDelete.length > 0) {
-        try {
-          const deleteResult = await auth.deleteUsers(usersToDelete);
-          deletedAuthUsersCount = deleteResult.successCount;
-        } catch (err) {
-          console.error("Auth deleteUsers failed:", err);
-        }
-      }
-
-      // Collections to clear completely
-      const collectionsToClear = [
-        'clientes',
-        'terapeutas',
-        'terapeutas_publicos',
-        'reservas',
-        'invoices',
-        'alertas_panico',
-        'audit_logs'
-      ];
-
-      const docsSummary: Record<string, number> = {};
-
-      for (const colName of collectionsToClear) {
-        const colRef = db.collection(colName);
-        const snapshot = await colRef.get();
-        docsSummary[colName] = snapshot.size;
-
-        if (executeRealCleanup && !snapshot.empty) {
-          const batch = db.batch();
-          snapshot.docs.forEach(doc => {
-            batch.delete(doc.ref);
-          });
-          await batch.commit();
-        }
-      }
-
-      // Clean 'users' collection while preserving the master owner
-      const usersCol = db.collection('users');
-      const usersSnapshot = await usersCol.get();
-      let usersProfileCount = 0;
-      if (!usersSnapshot.empty) {
-        const usersBatch = db.batch();
-        usersSnapshot.docs.forEach(doc => {
-          const data = doc.data();
-          const email = (data.correo || data.email || '').toLowerCase().trim();
-          if (email !== PRESERVED_EMAIL && doc.id !== preservedUserUid) {
-            usersProfileCount++;
-            if (executeRealCleanup) {
-              usersBatch.delete(doc.ref);
-            }
-          }
-        });
-        if (executeRealCleanup && usersProfileCount > 0) {
-          await usersBatch.commit();
-        }
-      }
-      docsSummary['users'] = usersProfileCount;
-
-      // Clean 'administradores' collection while preserving the master owner
-      const adminsCol = db.collection('administradores');
-      const adminsSnapshot = await adminsCol.get();
-      let adminsProfileCount = 0;
-      if (!adminsSnapshot.empty) {
-        const adminsBatch = db.batch();
-        adminsSnapshot.docs.forEach(doc => {
-          const data = doc.data();
-          const email = (data.correo || data.email || '').toLowerCase().trim();
-          if (email !== PRESERVED_EMAIL && doc.id !== preservedUserUid) {
-            adminsProfileCount++;
-            if (executeRealCleanup) {
-              adminsBatch.delete(doc.ref);
-            }
-          }
-        });
-        if (executeRealCleanup && adminsProfileCount > 0) {
-          await adminsBatch.commit();
-        }
-      }
-      docsSummary['administradores'] = adminsProfileCount;
-
-      res.json({
-        success: true,
-        isDryRun: !executeRealCleanup,
-        message: executeRealCleanup 
-          ? "Ecosistema ESSENYA limpiado exitosamente para inicio de pruebas reales."
-          : "SIMULACIÓN / DRY RUN COMPLETADO. No se realizó ninguna eliminación real.",
-        seEliminara: {
-          cuentasFirebaseAuthentication: usersToDelete,
-          totalCuentasAuthAEliminar: usersToDelete.length,
-          documentosFirestorePorColeccion: docsSummary
-        },
-        seConservara: {
-          cuentaAdministrativaPropietario: {
-            email: PRESERVED_EMAIL,
-            uid: preservedUserUid || "preservado_activo"
-          },
-          configuracionEstructuraApp: "Preservado (servicios, precios, imágenes, zonas, configs de Firebase, configuraciones de mapas)",
-          estadoOperativo: "Intacto (Estructura de la aplicación libre de datos residuales)"
-        }
-      });
-
+      userRecord = await auth.createUser({ email, password, displayName });
     } catch (err: any) {
-      console.error("[ADMIN-CLEANUP-ERROR]", err);
-      res.status(500).json({
-        success: false,
-        error: "Fallo durante la limpieza administrativa.",
-        details: err?.message || String(err)
-      });
+      if (err.code === "auth/email-already-exists") {
+        userRecord = await auth.getUserByEmail(email);
+        isNewUser = false;
+      } else {
+        throw err;
+      }
     }
-  });
+    
+    const uid = userRecord.uid;
+    const db = adminFirestore.getFirestore();
+    
+    try {
+      const batch = db.batch();
+      batch.set(db.collection("users").doc(uid), {
+        uid, email, role: "terapeuta", isActive: true, createdAt: adminFirestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      batch.set(db.collection("terapeutas").doc(uid), {
+        uid, correo: email, nombreCompleto: displayName, estadoAprobacion: "pendiente", estadoVerificacion: "no_verificado"
+      }, { merge: true });
+      
+      await batch.commit();
+      res.json({ success: true, uid });
+    } catch (fsError) {
+      if (isNewUser) {
+        await auth.deleteUser(uid);
+        throw new Error("Fallo al escribir en base de datos. Se eliminó la cuenta para evitar huérfanos.");
+      } else {
+        throw new Error("Fallo al escribir en base de datos.");
+      }
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
-  // AI Spa Concierge Endpoint
-  app.post("/api/gemini/concierge", requireAuthOrUserContext, async (req, res) => {
+app.post("/api/admin/verify-therapist-auth", requireAdmin, async (req, res) => {
+  try {
+    const { uid } = req.body;
+    const userRecord = await adminAuth.getAuth().getUser(uid);
+    res.json({ success: true, verified: true, email: userRecord.email });
+  } catch (e) {
+    res.status(404).json({ success: false, error: "Usuario no encontrado" });
+  }
+});
+
+// Gemini endpoints
+app.post("/api/gemini/concierge", requireAuth, async (req, res) => {
     try {
       const { userQuery, userPreferences, muscleTension, occasion } = req.body || {};
 
@@ -864,7 +503,10 @@ Devuelve una respuesta JSON estricta con las siguientes propiedades:
   });
 
   // Intelligent Therapist Matcher
-  app.post("/api/gemini/match-therapist", requireAuthOrUserContext, async (req, res) => {
+
+
+
+app.post("/api/gemini/match-therapist", requireAuth, async (req, res) => {
     try {
       const { customerLocation, selectedService, duration, genderPreference, therapists } = req.body || {};
 
@@ -938,7 +580,10 @@ Devuelve un JSON estricto con:
   });
 
   // Post-Care Personalised Protocol
-  app.post("/api/gemini/post-care", requireAuthOrUserContext, async (req, res) => {
+
+
+
+app.post("/api/gemini/post-care", requireAuth, async (req, res) => {
     try {
       const { ritualName, therapistNotes } = req.body || {};
 
@@ -990,13 +635,10 @@ Devuelve un JSON estricto con:
     }
   });
 
-  // Global Error Handler Middleware
-  app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-    console.error("Internal Server Error:", err?.message || err);
-    res.status(500).json({
-      success: false,
-      error: "Ocurrió un error inesperado al procesar la solicitud."
-    });
-  });
 
-  export default app;
+
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  res.status(500).json({ success: false, error: "Ocurrió un error inesperado al procesar la solicitud." });
+});
+
+export default app;

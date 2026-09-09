@@ -193,11 +193,11 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
           },
           async () => {
             try {
-              const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+              const downloadUrl = storagePath;
               setUploadProgress(100);
               resolve({ url: downloadUrl, path: storagePath });
             } catch (err: any) {
-              setUploadError('No se pudo obtener la URL de descarga.');
+              setUploadError('No se pudo completar la subida.');
               reject(err);
             }
           }

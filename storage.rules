@@ -2,33 +2,44 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     
-    // Therapist private documents secure directory
+    function isImageOrPdf() {
+      return (request.resource.contentType.matches('image/jpeg') && request.resource.name.matches('.*\\.jpe?g$'))
+          || (request.resource.contentType.matches('image/png') && request.resource.name.matches('.*\\.png$'))
+          || (request.resource.contentType.matches('application/pdf') && request.resource.name.matches('.*\\.pdf$'));
+    }
+    
+    function isValidSize() {
+      return request.resource.size <= 15 * 1024 * 1024;
+    }
+
     match /terapeutas/{therapistUid}/documentos/{fileName} {
       allow read: if request.auth != null && (
         request.auth.uid == therapistUid 
         || request.auth.token.role == 'administrador'
-        || request.auth.token.email == 'essenya222@gmail.com' 
+        || request.auth.token.email == 'essenya222@gmail.com'
       );
       
       allow write: if request.auth != null && (
         request.auth.uid == therapistUid 
         || request.auth.token.role == 'administrador'
-        || request.auth.token.email == 'essenya222@gmail.com' 
-      ) && (
-        // Max 5MB
-        request.resource.size < 5 * 1024 * 1024 &&
-        // Only images and PDFs
-        request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf'
-      );
-    }
-    
-    // Client profile pictures or other assets
-    match /clientes/{clientUid}/{allPaths=**} {
-      allow read: if request.auth != null; 
-      allow write: if request.auth != null && request.auth.uid == clientUid && request.resource.size < 5 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+        || request.auth.token.email == 'essenya222@gmail.com'
+      ) && isValidSize() && isImageOrPdf();
     }
 
-    // Default deny for anything not explicitly matched
+    match /terapeutas_publicos/{therapistUid}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && (
+        request.auth.uid == therapistUid 
+        || request.auth.token.role == 'administrador'
+        || request.auth.token.email == 'essenya222@gmail.com'
+      ) && isValidSize() && isImageOrPdf();
+    }
+    
+    match /clientes/{clientUid}/{allPaths=**} {
+      allow read: if request.auth != null && (request.auth.uid == clientUid || request.auth.token.role == 'administrador'); 
+      allow write: if request.auth != null && request.auth.uid == clientUid && isValidSize() && isImageOrPdf();
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
