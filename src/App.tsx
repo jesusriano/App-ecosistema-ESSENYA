@@ -12,10 +12,10 @@ import { ThemeToggle } from './shared/components/ThemeToggle';
 import { ConfigValidator } from './shared/components/ConfigValidator';
 import { ErrorBoundary } from './shared/components/ErrorBoundary';
 
-// Lazy loading the three independent application modules
-const ClienteAppModule = React.lazy(() => import('./aplicaciones/cliente/App'));
-const TerapeutaAppModule = React.lazy(() => import('./aplicaciones/terapeuta/App'));
-const AdminAppModule = React.lazy(() => import('./aplicaciones/administrador/App'));
+// Direct static imports of the three application modules to prevent dynamic import fetch errors
+import ClienteAppModule from './aplicaciones/cliente/App';
+import TerapeutaAppModule from './aplicaciones/terapeuta/App';
+import AdminAppModule from './aplicaciones/administrador/App';
 
 const LoadingFallback: React.FC<{ moduleName: string }> = ({ moduleName }) => (
   <div className="flex items-center justify-center min-h-screen bg-[#FAF8F5] dark:bg-[#0D0D0D] p-8">
@@ -103,22 +103,22 @@ function MainAppContent() {
 
 export default function App() {
   return (
-    <ConfigValidator>
-      <ThemeProvider>
-        <ToastProvider>
-          <AuthProvider>
-            <TherapistProvider>
-              <EcosystemProvider>
-                <BrowserRouter>
-                  <ErrorBoundary fallbackTitle="Error al inicializar la plataforma ESSENYA">
+    <ErrorBoundary fallbackTitle="Error al inicializar la plataforma ESSENYA">
+      <ConfigValidator>
+        <ThemeProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <TherapistProvider>
+                <EcosystemProvider>
+                  <BrowserRouter>
                     <MainAppContent />
-                  </ErrorBoundary>
-                </BrowserRouter>
-              </EcosystemProvider>
-            </TherapistProvider>
-          </AuthProvider>
-        </ToastProvider>
-      </ThemeProvider>
-    </ConfigValidator>
+                  </BrowserRouter>
+                </EcosystemProvider>
+              </TherapistProvider>
+            </AuthProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </ConfigValidator>
+    </ErrorBoundary>
   );
 }

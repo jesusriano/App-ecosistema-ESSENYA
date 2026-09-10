@@ -56,7 +56,7 @@ function getAdminFirestore() {
 
 // In-memory robust rate limiter (fast, zero network overhead, resilient)
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const MAX_REQUESTS = 60;
+const MAX_REQUESTS = 300; // Generous limit for API operations, avoids false positives
 
 interface RateLimitRecord {
   count: number;
@@ -76,6 +76,16 @@ setInterval(() => {
 }, 5 * 60 * 1000).unref();
 
 function rateLimiter(req: Request, res: Response, next: NextFunction): void {
+  // CRITICAL: Only rate-limit backend API endpoints (/api/*), NEVER frontend assets, Vite modules, CSS, HTML
+  if (!req.path.startsWith("/api/")) {
+    return next();
+  }
+
+  // Health checks should never be rate limited
+  if (req.path === "/api/health") {
+    return next();
+  }
+
   let identifier = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown_ip";
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {

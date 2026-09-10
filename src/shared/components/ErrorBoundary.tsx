@@ -30,9 +30,11 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   private handleReset = () => {
-    this.setState({ hasError: false, error: null });
     if (this.props.onReset) {
+      this.setState({ hasError: false, error: null });
       this.props.onReset();
+    } else {
+      window.location.reload();
     }
   };
 
