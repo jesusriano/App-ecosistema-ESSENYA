@@ -2,51 +2,76 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     
-    function isAllowedFileType() {
-      return request.resource.contentType.matches('image/.*')
-          || request.resource.contentType.matches('application/pdf');
-    }
-    
-    function isValidSize() {
-      return request.resource.size <= 20 * 1024 * 1024; // Hasta 20MB
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // Documentos y expedientes privados de terapeutas
-    match /terapeutas/{therapistUid}/{allPaths=**} {
-      allow read: if request.auth != null && (
-        request.auth.uid == therapistUid 
-        || request.auth.token.role == 'administrador'
-        || request.auth.token.email == 'essenya222@gmail.com'
+    function isAdmin() {
+      return isSignedIn() && (
+        ('email' in request.auth.token && request.auth.token.email == 'essenya222@gmail.com') ||
+        ('admin' in request.auth.token && request.auth.token.admin == true) ||
+        ('role' in request.auth.token && request.auth.token.role == 'administrador') ||
+        ('rol' in request.auth.token && request.auth.token.rol == 'administrador')
       );
-      
-      allow write: if request.auth != null && (
-        request.auth.uid == therapistUid 
-        || request.auth.token.role == 'administrador'
-        || request.auth.token.email == 'essenya222@gmail.com'
-      ) && isValidSize() && isAllowedFileType();
     }
 
-    // Fotos de perfil públicas de terapeutas (visibles en el catálogo de clientes)
-    match /terapeutas_publicos/{therapistUid}/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null && (
-        request.auth.uid == therapistUid 
-        || request.auth.token.role == 'administrador'
-        || request.auth.token.email == 'essenya222@gmail.com'
-      ) && isValidSize() && isAllowedFileType();
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
     }
-    
-    // Archivos de clientes
-    match /clientes/{clientUid}/{allPaths=**} {
-      allow read: if request.auth != null && (
-        request.auth.uid == clientUid 
-        || request.auth.token.role == 'administrador'
-        || request.auth.token.email == 'essenya222@gmail.com'
-      ); 
-      allow write: if request.auth != null && (
-        request.auth.uid == clientUid
-        || request.auth.token.email == 'essenya222@gmail.com'
-      ) && isValidSize() && isAllowedFileType();
+
+    // Max 15MB: 15 * 1024 * 1024 = 15728640 bytes
+    function isAllowedSize() {
+      return request.resource.size > 0 && request.resource.size <= 15 * 1024 * 1024;
+    }
+
+    // Only allow JPG, PNG, PDF matching exact content type and extension
+    function isAllowedDocument(fileName) {
+      return isAllowedSize() && (
+        (request.resource.contentType == 'image/jpeg' && (fileName.matches('.*\\.(jpg|jpeg)$') || fileName.matches('.*\\.(JPG|JPEG)$'))) ||
+        (request.resource.contentType == 'image/png' && (fileName.matches('.*\\.png$') || fileName.matches('.*\\.PNG$'))) ||
+        (request.resource.contentType == 'application/pdf' && (fileName.matches('.*\\.pdf$') || fileName.matches('.*\\.PDF$')))
+      );
+    }
+
+    // Photos: only JPG and PNG (no PDF for catalog photos)
+    function isAllowedPhoto(fileName) {
+      return isAllowedSize() && (
+        (request.resource.contentType == 'image/jpeg' && (fileName.matches('.*\\.(jpg|jpeg)$') || fileName.matches('.*\\.(JPG|JPEG)$'))) ||
+        (request.resource.contentType == 'image/png' && (fileName.matches('.*\\.png$') || fileName.matches('.*\\.PNG$')))
+      );
+    }
+
+    // 1. Fotos públicas de catálogo en subcarpeta:
+    match /terapeutas/{uid}/fotos/{archivo} {
+      allow read: if true;
+      allow write: if (isOwner(uid) || isAdmin()) && isAllowedPhoto(archivo);
+    }
+
+    match /terapeutas_publicos/{uid}/{archivo} {
+      allow read: if true;
+      allow write: if (isOwner(uid) || isAdmin()) && isAllowedPhoto(archivo);
+    }
+
+    // 2. Archivos en la raíz de la terapeuta: terapeutas/{uid}/{archivo}
+    // Si comienza con foto_ (ej. foto_perfil.jpg), es de lectura pública.
+    // En caso contrario (documentos, identidades), es estrictamente privado.
+    match /terapeutas/{uid}/{archivo} {
+      allow read: if (archivo.matches('^foto_.*') || isOwner(uid) || isAdmin());
+      allow write: if archivo.matches('^foto_.*')
+        ? ((isOwner(uid) || isAdmin()) && isAllowedPhoto(archivo))
+        : ((isOwner(uid) || isAdmin()) && isAllowedDocument(archivo));
+    }
+
+    // 3. Documentos privados en subcarpeta: terapeutas/{uid}/documentos/{archivo}
+    match /terapeutas/{uid}/documentos/{archivo} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if (isOwner(uid) || isAdmin()) && isAllowedDocument(archivo);
+    }
+
+    // 3. Archivos de clientes: clientes/{uid}/{archivo}
+    match /clientes/{uid}/{archivo} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if (isOwner(uid) || isAdmin()) && isAllowedDocument(archivo);
     }
 
     // Todo lo demás denegado por defecto
