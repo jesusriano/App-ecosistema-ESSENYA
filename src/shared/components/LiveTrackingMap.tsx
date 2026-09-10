@@ -386,6 +386,60 @@ const VisualRouteProgressTracker: React.FC<{
   );
 };
 
+export const LiveTrackingMapSkeleton: React.FC = () => {
+  return (
+    <div className="w-full bg-[#121212] rounded-2xl border border-[#C9A55B]/20 p-5 space-y-5 animate-pulse shadow-2xl relative overflow-hidden">
+      {/* Golden Shimmer effect */}
+      <div className="absolute inset-0 shimmer-gold pointer-events-none" />
+      
+      {/* Telemetry Header Placeholder */}
+      <div className="flex flex-wrap justify-between items-center gap-3 border-b border-[#282828] pb-4">
+        <div className="flex items-center space-x-3">
+          <div className="w-9 h-9 rounded-xl bg-[#222222] border border-[#333333] flex items-center justify-center">
+            <div className="w-4 h-4 rounded-full bg-[#C9A55B]/30" />
+          </div>
+          <div className="space-y-2">
+            <div className="h-4.5 w-44 bg-[#222222] rounded-md" />
+            <div className="h-3 w-64 bg-[#1a1a1a] rounded-md" />
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-3">
+          <div className="bg-[#1a1a1a] border border-[#282828] px-3 py-2 rounded-xl w-20 h-11" />
+          <div className="bg-[#1a1a1a] border border-[#C9A55B]/20 px-3 py-2 rounded-xl w-24 h-11" />
+        </div>
+      </div>
+
+      {/* Main Map Canvas Placeholder */}
+      <div className="w-full h-[420px] bg-[#161616] rounded-2xl border border-[#282828] flex items-center justify-center relative overflow-hidden">
+        {/* Pulsing grid layout */}
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#C9A55B_1px,transparent_1px)] [background-size:16px_16px]"></div>
+        
+        {/* Animated Radar Wave circles */}
+        <div className="absolute w-40 h-40 rounded-full border border-[#C9A55B]/10 animate-ping" />
+        <div className="absolute w-20 h-20 rounded-full border border-[#C9A55B]/20 animate-pulse bg-[#C9A55B]/5 flex items-center justify-center">
+          <div className="w-6 h-6 rounded-full bg-[#C9A55B]/30 animate-pulse" />
+        </div>
+        
+        {/* Telemetry overlay labels */}
+        <div className="absolute top-3 left-3 bg-[#0d0d0d]/80 border border-[#282828] px-2.5 py-1.5 rounded-lg w-36 h-7" />
+        <div className="absolute bottom-3 left-3 right-3 bg-[#0d0d0d]/80 border border-[#282828] px-3 py-2 rounded-xl h-10" />
+      </div>
+
+      {/* Step Milestones Grid Placeholder */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-1">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="p-3 rounded-xl border border-[#222222] bg-[#141414] space-y-2.5">
+            <div className="w-7 h-5 bg-[#222222] rounded" />
+            <div className="h-4 w-20 bg-[#1e1e1e] rounded" />
+            <div className="h-3 w-28 bg-[#1a1a1a] rounded" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
   clientAddress,
   cityZone,
@@ -397,10 +451,20 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
   const [inputKey, setInputKey] = useState<string>('');
   const [mapError, setMapError] = useState<string | null>(null);
   const [useVectorMode, setUseVectorMode] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [routeInfo, setRouteInfo] = useState<{ distance: string; duration: string }>({
     distance: '-- km',
     duration: '-- min'
   });
+
+  // Manage loading timer when coordinates/details are loaded
+  useEffect(() => {
+    setIsLoading(true);
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [clientAddress, cityZone, bookingState]);
 
 
   if (bookingState === 'aceptada') {
@@ -415,6 +479,10 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
         </p>
       </div>
     );
+  }
+
+  if (isLoading) {
+    return <LiveTrackingMapSkeleton />;
   }
 
 

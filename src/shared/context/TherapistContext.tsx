@@ -269,49 +269,97 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const [loading, setLoading] = useState(false);
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, sessions } = useAuth();
 
   // Firestore Realtime Subscription for Therapists
   useEffect(() => {
-    setLoading(true);
-    const unsubscribe = onSnapshot(collection(db, 'terapeutas'), (snapshot) => {
-      setFirestoreError(null);
+    if (!firebaseUser) {
+      setTherapists([]);
       setLoading(false);
-      if (snapshot.empty) {
-        setTherapists([]);
-        try {
-          localStorage.setItem('essenya_therapists_list', JSON.stringify([]));
-        } catch {}
-      } else {
-        const loaded: TherapistFullProfile[] = snapshot.docs
-          .map(docSnap => {
-            try {
-              return sanitizeTherapist({
-                id: docSnap.id,
-                ...docSnap.data()
-              });
-            } catch (e) {
-              console.error('Error sanitizing therapist profile:', docSnap.id, e);
-              return null;
-            }
-          })
-          .filter((t): t is TherapistFullProfile => t !== null);
-        setTherapists(loaded);
-      }
-    }, (err) => {
-      setLoading(false);
-      const isPermissionDenied = err.code === 'permission-denied' || (err.message && err.message.includes('permission-denied'));
-      if (isPermissionDenied) {
-        console.error('Firestore permission-denied en colección "terapeutas":', err);
-        setFirestoreError('No fue posible cargar las solicitudes de terapeutas.');
-      } else {
-        handleFirestoreError(err, OperationType.LIST, 'terapeutas');
-        setFirestoreError('No fue posible cargar las solicitudes de terapeutas.');
-      }
-    });
+      return;
+    }
 
-    return () => unsubscribe();
-  }, []);
+    const isAdminSession = !!sessions.administrador;
+    const isTherapistSession = !!sessions.terapeuta;
+
+    setLoading(true);
+
+    if (isAdminSession) {
+      // Subscribe to the entire collection
+      const unsubscribe = onSnapshot(collection(db, 'terapeutas'), (snapshot) => {
+        setFirestoreError(null);
+        setLoading(false);
+        if (snapshot.empty) {
+          setTherapists([]);
+          try {
+            localStorage.setItem('essenya_therapists_list', JSON.stringify([]));
+          } catch {}
+        } else {
+          const loaded: TherapistFullProfile[] = snapshot.docs
+            .map(docSnap => {
+              try {
+                return sanitizeTherapist({
+                  id: docSnap.id,
+                  ...docSnap.data()
+                });
+              } catch (e) {
+                console.error('Error sanitizing therapist profile:', docSnap.id, e);
+                return null;
+              }
+            })
+            .filter((t): t is TherapistFullProfile => t !== null);
+          setTherapists(loaded);
+        }
+      }, (err) => {
+        setLoading(false);
+        const isPermissionDenied = err.code === 'permission-denied' || (err.message && err.message.includes('permission-denied'));
+        if (isPermissionDenied) {
+          console.error('Firestore permission-denied en colección "terapeutas" (admin):', err);
+          setFirestoreError('No fue posible cargar las solicitudes de terapeutas.');
+        } else {
+          handleFirestoreError(err, OperationType.LIST, 'terapeutas');
+          setFirestoreError('No fue posible cargar las solicitudes de terapeutas.');
+        }
+      });
+      return () => unsubscribe();
+    } else if (isTherapistSession) {
+      // Subscribe ONLY to their own therapist document
+      const therapistId = sessions.terapeuta?.id || firebaseUser.uid;
+      const unsubscribe = onSnapshot(doc(db, 'terapeutas', therapistId), (docSnap) => {
+        setFirestoreError(null);
+        setLoading(false);
+        if (!docSnap.exists()) {
+          setTherapists([]);
+        } else {
+          try {
+            const profile = sanitizeTherapist({
+              id: docSnap.id,
+              ...docSnap.data()
+            });
+            setTherapists([profile]);
+          } catch (e) {
+            console.error('Error sanitizing self therapist profile:', docSnap.id, e);
+            setTherapists([]);
+          }
+        }
+      }, (err) => {
+        setLoading(false);
+        const isPermissionDenied = err.code === 'permission-denied' || (err.message && err.message.includes('permission-denied'));
+        if (isPermissionDenied) {
+          console.error(`Firestore permission-denied en "terapeutas/${therapistId}":`, err);
+          setFirestoreError('No fue posible cargar tu perfil de terapeuta.');
+        } else {
+          handleFirestoreError(err, OperationType.GET, `terapeutas/${therapistId}`);
+          setFirestoreError('No fue posible cargar tu perfil de terapeuta.');
+        }
+      });
+      return () => unsubscribe();
+    } else {
+      // Clients or unauthenticated users don't need any therapist documents
+      setTherapists([]);
+      setLoading(false);
+    }
+  }, [firebaseUser, sessions.administrador, sessions.terapeuta]);
 
   // Sync state to LocalStorage
   useEffect(() => {
