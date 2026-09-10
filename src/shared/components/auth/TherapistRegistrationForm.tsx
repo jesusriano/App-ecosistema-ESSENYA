@@ -6,7 +6,8 @@ import {
 } from 'lucide-react';
 import { createUserWithEmailAndPassword, updateProfile, signOut } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../../../lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { auth, db, storage } from '../../../lib/firebase';
 import { LuxuryButton } from '../ui/LuxuryButton';
 import { useTherapistContext } from '../../context/TherapistContext';
 import { useAuth } from '../../context/AuthContext';
@@ -78,6 +79,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
   // Terms Acceptance
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [uploadedDocuments, setUploadedDocuments] = useState<Array<{ id: string; tipo: string; nombre: string; url: string; estado: string }>>([]);
+  const [rawFiles, setRawFiles] = useState<{ ine?: File; cert?: File }>({});
   const [showTermsModal, setShowTermsModal] = useState(false);
 
   // UI state
@@ -195,7 +197,28 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
         createdAt: new Date().toISOString()
       }, { merge: true });
 
-      // 4. Guardar expediente profesional completo en colección 'terapeutas'
+      // 4. Subir documentos a Firebase Cloud Storage si fueron seleccionados
+      let finalDocuments = [...(registrationPayload.documentos || [])];
+      try {
+        if (rawFiles.ine) {
+          const safeName = rawFiles.ine.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const ineRef = ref(storage, `terapeutas/${uid}/documentos/INE_${Date.now()}_${safeName}`);
+          await uploadBytes(ineRef, rawFiles.ine);
+          const ineDownloadUrl = await getDownloadURL(ineRef);
+          finalDocuments = finalDocuments.map(d => d.tipo === 'INE' ? { ...d, url: ineDownloadUrl } : d);
+        }
+        if (rawFiles.cert) {
+          const safeName = rawFiles.cert.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const certRef = ref(storage, `terapeutas/${uid}/documentos/Certificado_${Date.now()}_${safeName}`);
+          await uploadBytes(certRef, rawFiles.cert);
+          const certDownloadUrl = await getDownloadURL(certRef);
+          finalDocuments = finalDocuments.map(d => d.tipo === 'Certificado' ? { ...d, url: certDownloadUrl } : d);
+        }
+      } catch (storageErr) {
+        console.warn('[Storage] Fallback para documentos de registro:', storageErr);
+      }
+
+      // 5. Guardar expediente profesional completo en colección 'terapeutas'
       const therapistRef = doc(db, 'terapeutas', uid);
       await setDoc(therapistRef, {
         id: uid,
@@ -217,7 +240,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
         experienciaAnos: registrationPayload.experienciaAnos,
         disponibilidad: registrationPayload.disponibilidad,
         zonasCobertura: registrationPayload.zonasCobertura,
-        documentos: registrationPayload.documentos,
+        documentos: finalDocuments,
         estado: 'pendiente',
         estadoAprobacion: 'pendiente',
         estadoVerificacion: 'no_verificado',
@@ -229,7 +252,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
         solicitudRegistroFecha: new Date().toISOString()
       }, { merge: true });
 
-      // 5. Cerrar la sesión activa para que el usuario regrese a la pantalla de login con aviso de revisión
+      // 6. Cerrar la sesión activa para que el usuario regrese a la pantalla de login con aviso de revisión
       try {
         await signOut(auth);
       } catch {
@@ -603,6 +626,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
+                        setRawFiles(prev => ({ ...prev, ine: file }));
                         const reader = new FileReader();
                         reader.onload = () => {
                           setUploadedDocuments(prev => [...prev.filter(d => d.tipo !== 'INE'), { id: 'ine_' + Date.now(), tipo: 'INE', nombre: file.name, url: reader.result as string, estado: 'pendiente' }]);
@@ -627,6 +651,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
+                        setRawFiles(prev => ({ ...prev, cert: file }));
                         const reader = new FileReader();
                         reader.onload = () => {
                           setUploadedDocuments(prev => [...prev.filter(d => d.tipo !== 'Certificado'), { id: 'cert_' + Date.now(), tipo: 'Certificado', nombre: file.name, url: reader.result as string, estado: 'pendiente' }]);
