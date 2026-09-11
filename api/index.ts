@@ -50,13 +50,6 @@ if (adminApp.getApps().length === 0) {
   const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
   const envProjectId = process.env.FIREBASE_ADMIN_PROJECT_ID || "essenya-ecosistema";
 
-  if (isProd) {
-    if (!privateKey || !clientEmail || !process.env.FIREBASE_ADMIN_PROJECT_ID) {
-      console.error("FATAL ERROR: FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL, and FIREBASE_ADMIN_PRIVATE_KEY must be set in production.");
-      process.exit(1);
-    }
-  }
-
   if (privateKey && clientEmail) {
     // Process private key line breaks (Vercel uses \n or literal line breaks)
     const formattedPrivateKey = privateKey.replace(/\\n/g, '\n');
@@ -71,10 +64,12 @@ if (adminApp.getApps().length === 0) {
       console.log("Firebase Admin initialized successfully with Service Account credentials.");
     } catch (err) {
       console.error("Failed to initialize Firebase Admin with Service Account:", err);
-      if (isProd) process.exit(1);
       adminApp.initializeApp({ projectId: envProjectId });
     }
   } else {
+    if (isProd) {
+      console.warn("WARNING: FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL, and FIREBASE_ADMIN_PRIVATE_KEY are not fully configured. Using fallback default credentials.");
+    }
     // Fallback to application default credentials (useful for local development or GCP runtimes)
     adminApp.initializeApp({ projectId: envProjectId });
     console.log("Firebase Admin initialized with default project configuration.");
