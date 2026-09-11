@@ -259,8 +259,16 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
     const finalClientName = clientData?.nombreCompleto || clientData?.name || email;
     const finalClientPhone = clientData?.telefono || clientData?.phone || "";
 
-    // Get service official pricing
-    const srvDoc = await db.collection("servicios").doc(serviceId).get();
+    // Get service official pricing with robust ID mapping fallback
+    let srvDoc = await db.collection("servicios").doc(serviceId).get();
+    if (!srvDoc.exists) {
+      if (serviceId === "SRB-relajante") {
+        srvDoc = await db.collection("servicios").doc("srv-relajante").get();
+      } else if (serviceId === "srv-relajante") {
+        srvDoc = await db.collection("servicios").doc("SRB-relajante").get();
+      }
+    }
+
     if (!srvDoc.exists) {
       const errRes = { success: false, error: "El servicio solicitado no existe." };
       console.log("=== API BOOKING OUTGOING ERROR RESPONSE ===");

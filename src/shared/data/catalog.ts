@@ -20,7 +20,7 @@ export function calculateServicePrice(basePrice: number, durationMinutes: number
 // Official and Definitive Catalog of 6 Services
 export const OFFICIAL_SERVICES: ServiceItem[] = [
   {
-    id: 'srv-relajante',
+    id: 'SRB-relajante',
     name: 'Masaje Relajante',
     tagline: 'Maniobras suaves y fluidas para inducir relajación profunda y calmar el estrés.',
     description: 'Tratamiento sedante que combina efluvios rítmicos y presión progresiva para calmar el sistema nervioso, aliviar la fatiga mental y renovar la vitalidad corporal.',
