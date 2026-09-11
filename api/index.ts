@@ -1,7 +1,6 @@
 import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import fs from "fs";
-import { GoogleGenAI } from "@google/genai";
 import * as adminApp from "firebase-admin/app";
 import * as adminAuth from "firebase-admin/auth";
 import * as adminFirestore from "firebase-admin/firestore";
@@ -18,7 +17,8 @@ function sanitizePromptInput(input: any, maxLength: number = 500): string {
 
 const app = express();
 
-function getGeminiClient() {
+async function getGeminiClient() {
+  const { GoogleGenAI } = await import("@google/genai");
   const key = process.env.VITE_FIREBASE_API_KEY || ""; // If the user didn't specify GEMINI_API_KEY, fallback or throw
   if (process.env.GEMINI_API_KEY) {
     return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -650,7 +650,7 @@ Devuelve una respuesta JSON estricta con las siguientes propiedades:
   "conciergeGreeting": "mensaje directo al cliente con tono de concierge de hotel de 5 estrellas"
 }`;
 
-      const ai = getGeminiClient();
+      const ai = await getGeminiClient();
       const response = await ai.models.generateContent({
         model: "gemini-flash-latest",
         contents: prompt,
@@ -728,7 +728,7 @@ Devuelve un JSON estricto con:
   "matchExplanation": "breve explicación sofisticada de por qué este terapeuta es ideal para la sesión"
 }`;
 
-      const ai = getGeminiClient();
+      const ai = await getGeminiClient();
       const response = await ai.models.generateContent({
         model: "gemini-flash-latest",
         contents: prompt,
@@ -783,7 +783,7 @@ Devuelve un JSON estricto con:
   "careMessage": "Mensaje personalizado de despedida de lujo"
 }`;
 
-      const ai = getGeminiClient();
+      const ai = await getGeminiClient();
       const response = await ai.models.generateContent({
         model: "gemini-flash-latest",
         contents: prompt,
