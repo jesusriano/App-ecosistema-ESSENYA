@@ -52,8 +52,94 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
   };
 
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'schedule' | 'active' | 'earnings' | 'postcare'>('active');
+  const [activeTab, setActiveTab] = useState<'schedule' | 'active' | 'earnings' | 'postcare' | 'history'>('active');
   const [availability, setAvailability] = useState<'disponible' | 'desconectado'>('disponible');
+
+  const defaultCompletedServices = [
+    {
+      id: 'bk-comp-1',
+      code: 'ESS-4821',
+      serviceName: 'Masaje Tejido Profundo VIP',
+      date: '2026-09-10',
+      time: '16:00',
+      clientName: 'Don Alejandro',
+      clientPhone: '55 1234 5678',
+      price: 1800,
+      tip: 300,
+      total: 2100,
+      rating: 5,
+      reviewComment: 'Excelente técnica y profesionalismo. Alivió por completo mi dolor lumbar.',
+    },
+    {
+      id: 'bk-comp-2',
+      code: 'ESS-3921',
+      serviceName: 'Ritual Holístico Essenya',
+      date: '2026-09-08',
+      time: '11:30',
+      clientName: 'Sra. Sofia Lorenz',
+      clientPhone: '55 8765 4321',
+      price: 2200,
+      tip: 400,
+      total: 2600,
+      rating: 5,
+      reviewComment: 'Una experiencia verdaderamente mística. El aceite de lavanda y la música zen crearon una atmósfera insuperable.',
+    },
+    {
+      id: 'bk-comp-3',
+      code: 'ESS-3104',
+      serviceName: 'Masaje Descontracturante VIP',
+      date: '2026-09-05',
+      time: '18:00',
+      clientName: 'Ing. Carlos Mendoza',
+      clientPhone: '55 4321 8765',
+      price: 1950,
+      tip: 200,
+      total: 2150,
+      rating: 4.8,
+      reviewComment: 'Muy recomendado. Liberó la rigidez de mis hombros y cuello después de una semana muy pesada.',
+    }
+  ];
+
+  const mergedCompletedBookings = React.useMemo(() => {
+    const realCompleted = bookings.filter(b => b.state === 'servicio_finalizado');
+    const allCompleted = [...realCompleted];
+    
+    defaultCompletedServices.forEach(def => {
+      if (!allCompleted.some(b => b.code === def.code)) {
+        allCompleted.push({
+          id: def.id,
+          code: def.code,
+          clientId: 'client-dummy',
+          clientName: def.clientName,
+          clientPhone: def.clientPhone,
+          clientAddress: 'Lomas de Chapultepec, CDMX',
+          cityZone: 'Lomas',
+          serviceId: 'srv-dummy',
+          serviceName: def.serviceName,
+          durationMinutes: 90,
+          price: def.price,
+          tip: def.tip,
+          total: def.total,
+          date: def.date,
+          time: def.time,
+          preferences: {
+            genderPreference: 'sin_preferencia',
+            pressureLevel: 'Firme',
+            essentialOil: 'Lavanda Francesa',
+            musicStyle: 'Ambient Gold'
+          },
+          state: 'servicio_finalizado',
+          etaMinutes: 0,
+          paymentMethod: 'Tarjeta de Crédito / Débito',
+          paymentStatus: 'pagado',
+          createdAt: def.date,
+          rating: def.rating,
+          reviewComment: def.reviewComment
+        });
+      }
+    });
+    return allCompleted;
+  }, [bookings]);
   const [showPanicModal, setShowPanicModal] = useState<boolean>(false);
   const [declinedBookingIds, setDeclinedBookingIds] = useState<string[]>([]);
 
@@ -108,6 +194,15 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
   };
 
   const handleGeneratePostCare = async () => {
+    if (therapistNotes.trim().length < 20) {
+      showToast(
+        'Notas insuficientes',
+        'Por favor, ingresa al menos 20 caracteres en las notas clínicas para asegurar recomendaciones precisas.',
+        'error'
+      );
+      return;
+    }
+
     setPostCareLoading(true);
     setPostCareResult(null);
     try {
@@ -264,6 +359,19 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
           >
             <DollarSign className="w-4 h-4" />
             <span>Mis Ganancias</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('history')}
+            id="therapist-tab-history"
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-medium transition-all shrink-0 whitespace-nowrap ${
+              activeTab === 'history'
+                ? 'bg-[#C9A55B]/20 text-[#C9A55B] border border-[#C9A55B]/40'
+                : 'text-white/60 hover:text-white'
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span>Historial de Servicios</span>
           </button>
 
           <button
@@ -654,6 +762,117 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
           </div>
         )}
 
+        {/* TAB: HISTORY */}
+        {activeTab === 'history' && (
+          <motion.div
+            key="tab-history-content"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.25 }}
+            className="space-y-6 max-w-4xl mx-auto"
+          >
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h3 className="text-2xl font-serif font-bold text-[#1C1917] dark:text-white">Historial de Servicios Completados</h3>
+                <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] mt-1">
+                  Consulta el registro de tus sesiones finalizadas, ingresos y la retroalimentación de los socios VIP.
+                </p>
+              </div>
+              <span className="text-xs text-[#806020] dark:text-[#C9A55B] bg-[#C9A55B]/15 px-3.5 py-1.5 rounded-full border border-[#C9A55B]/30 font-bold shrink-0">
+                {mergedCompletedBookings.length} Servicios en Historial
+              </span>
+            </div>
+
+            {/* Scrollable List Container */}
+            <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 no-scrollbar">
+              {mergedCompletedBookings.map((bk) => (
+                <div
+                  key={bk.id}
+                  className="bg-white dark:bg-[#141414] p-5 rounded-2xl border border-[#E5DFD3] dark:border-[#C9A55B]/20 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-[#C9A55B]/40 dark:hover:border-[#C9A55B]/40 transition-all duration-300 shadow-md"
+                >
+                  <div className="space-y-2.5 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-[#806020] dark:text-[#C9A55B] font-mono font-bold">{bk.time} hrs</span>
+                      <span className="text-xs text-[#6B655F] dark:text-[#888888] font-medium">• {bk.date}</span>
+                      <span className="font-mono text-[10px] text-[#6B655F] dark:text-[#C9A55B]/70 bg-[#F5F1EA] dark:bg-[#1C1C1C] px-2 py-0.5 rounded border border-[#E5DFD3] dark:border-transparent">
+                        #{bk.code}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h4 className="text-base font-bold text-[#1C1917] dark:text-white flex items-center gap-1.5">
+                        {bk.serviceName}
+                        <span className="text-[10px] bg-emerald-100 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-500/20">
+                          Completado
+                        </span>
+                      </h4>
+                      <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] mt-0.5">
+                        Socio VIP: <span className="text-[#1C1917] dark:text-white font-semibold">{bk.clientName}</span>
+                        {bk.clientPhone && <span className="ml-1.5 text-[#888888]">({bk.clientPhone})</span>}
+                      </p>
+                    </div>
+
+                    {/* Feedback summary */}
+                    <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-3 rounded-xl border border-[#E5DFD3] dark:border-[#333333] space-y-1.5">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-xs font-bold text-[#1C1917] dark:text-white">Calificación del Cliente:</span>
+                        <div className="flex items-center">
+                          {[...Array(5)].map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`w-3.5 h-3.5 ${
+                                i < Math.floor(bk.rating || 5)
+                                  ? 'text-[#C9A55B] fill-[#C9A55B]'
+                                  : 'text-gray-300 dark:text-gray-600'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-[11px] font-bold text-[#806020] dark:text-[#C9A55B] ml-1">
+                          {bk.rating || 5} / 5
+                        </span>
+                      </div>
+                      
+                      {bk.reviewComment ? (
+                        <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] italic pl-2 border-l-2 border-[#C9A55B]/40">
+                          "{bk.reviewComment}"
+                        </p>
+                      ) : (
+                        <p className="text-xs text-[#888888] dark:text-[#666666] italic">
+                          El cliente no dejó comentarios, pero calificó la experiencia con excelente puntuación.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex md:flex-col items-end justify-between md:justify-center w-full md:w-auto border-t md:border-t-0 border-[#E5DFD3] dark:border-transparent pt-3.5 md:pt-0 shrink-0 gap-1.5">
+                    <div className="text-left md:text-right">
+                      <span className="text-[10px] text-[#6B655F] dark:text-[#888888] uppercase tracking-wider block">Servicio</span>
+                      <span className="text-sm font-semibold text-[#1C1917] dark:text-white">${bk.price.toLocaleString()} MXN</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-[#6B655F] dark:text-[#888888] uppercase tracking-wider block">Propina Extra</span>
+                      <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">+${(bk.tip || 0).toLocaleString()} MXN</span>
+                    </div>
+                    <div className="text-right bg-[#C9A55B]/10 dark:bg-[#C9A55B]/5 px-3 py-1.5 rounded-xl border border-[#C9A55B]/20">
+                      <span className="text-[9px] text-[#806020] dark:text-[#C9A55B] uppercase tracking-wider block font-bold">Total Ganado</span>
+                      <span className="text-base font-bold text-[#806020] dark:text-[#C9A55B]">${bk.total.toLocaleString()} MXN</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {mergedCompletedBookings.length === 0 && (
+                <div className="bg-white dark:bg-[#141414] p-8 rounded-2xl border border-[#E5DFD3] dark:border-[#333333] text-center space-y-2 text-[#6B655F] dark:text-[#888888]">
+                  <Clock className="w-8 h-8 text-[#C9A55B]/40 mx-auto animate-pulse" />
+                  <p className="text-sm font-semibold">No se encontraron servicios completados en tu historial.</p>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
         {/* TAB: POST CARE GENERATOR */}
         {activeTab === 'postcare' && (
           <div className="max-w-2xl mx-auto bg-[#141414] p-6 sm:p-8 rounded-2xl border border-[#C9A55B]/30 space-y-6">
@@ -677,16 +896,29 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                 className="w-full bg-[#1A1A1A] border border-[#333333] rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#C9A55B]"
               ></textarea>
 
+              <div className="flex justify-between items-center px-1">
+                <span className="text-[10px] text-[#888888]">
+                  Mínimo 20 caracteres para activar IA
+                </span>
+                <span className={`text-[10px] font-semibold transition-colors ${therapistNotes.trim().length >= 20 ? 'text-[#C9A55B]' : 'text-red-400'}`}>
+                  {therapistNotes.trim().length} / 20
+                </span>
+              </div>
+
               <button
                 onClick={handleGeneratePostCare}
-                disabled={postCareLoading}
-                className="w-full py-3 bg-gradient-to-r from-[#C9A55B] via-[#E6CA65] to-[#C9A55B] text-black font-bold text-xs rounded-xl gold-button-hover flex items-center justify-center space-x-2"
+                disabled={postCareLoading || therapistNotes.trim().length < 20}
+                className={`w-full py-3 font-bold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all ${
+                  therapistNotes.trim().length >= 20 && !postCareLoading
+                    ? 'bg-gradient-to-r from-[#C9A55B] via-[#E6CA65] to-[#C9A55B] text-black gold-button-hover'
+                    : 'bg-[#222222] text-[#666666] border border-[#333333] cursor-not-allowed opacity-60'
+                }`}
               >
                 {postCareLoading ? (
                   <span>Generando Recomendación con Gemini...</span>
                 ) : (
                   <>
-                    <Bot className="w-4 h-4 text-black" />
+                    <Bot className="w-4 h-4" />
                     <span>Generar Reporte Post-Atención de Lujo</span>
                   </>
                 )}

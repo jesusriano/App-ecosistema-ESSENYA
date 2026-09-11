@@ -14,7 +14,6 @@ service cloud.firestore {
     }
     function isAdmin() {
       return isSignedIn() && (
-        ('email' in request.auth.token && request.auth.token.email == 'essenya222@gmail.com') ||
         ('admin' in request.auth.token && request.auth.token.admin == true) ||
         ('role' in request.auth.token && request.auth.token.role == 'administrador') ||
         ('rol' in request.auth.token && request.auth.token.rol == 'administrador') ||
@@ -78,12 +77,15 @@ service cloud.firestore {
       allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
       allow create: if isSignedIn() && isOwner(userId) && 
                     (request.resource.data.rol in ['cliente', 'terapeuta'] || isAdmin()) &&
-                    request.resource.data.uid == userId;
+                    request.resource.data.uid == userId &&
+                    (isAdmin() || !request.resource.data.keys().hasAny(['role', 'admin', 'claims', 'permissions', 'nivelAcceso', 'estado', 'isActive', 'saldo', 'balance', 'membershipTier', 'rewardsPoints', 'spentTotal', 'membership']));
       allow update: if isSignedIn() && (
         isAdmin() || 
         (isOwner(userId) && 
          request.resource.data.rol == resource.data.rol && 
-         (!('estado' in resource.data) || request.resource.data.estado == resource.data.estado))
+         (!('estado' in resource.data) || request.resource.data.estado == resource.data.estado) &&
+         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'rol', 'admin', 'claims', 'permissions', 'nivelAcceso', 'estado', 'isActive', 'saldo', 'balance', 'membershipTier', 'rewardsPoints', 'spentTotal', 'membership'])
+        )
       );
       allow delete: if isAdmin();
     }
@@ -93,8 +95,14 @@ service cloud.firestore {
     // ==========================================
     match /clientes/{clienteId} {
       allow read: if isSignedIn() && (isOwner(clienteId) || isAdmin());
-      allow create: if isSignedIn() && (isOwner(clienteId) || isAdmin());
-      allow update: if isSignedIn() && (isOwner(clienteId) || isAdmin());
+      allow create: if isSignedIn() && (
+        isAdmin() || 
+        (isOwner(clienteId) && !request.resource.data.keys().hasAny(['role', 'rol', 'admin', 'claims', 'permissions', 'nivelAcceso', 'estado', 'isActive', 'saldo', 'balance', 'membershipTier', 'rewardsPoints', 'spentTotal', 'membership', 'membresia']))
+      );
+      allow update: if isSignedIn() && (
+        isAdmin() || 
+        (isOwner(clienteId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'rol', 'admin', 'claims', 'permissions', 'nivelAcceso', 'estado', 'isActive', 'saldo', 'balance', 'membershipTier', 'rewardsPoints', 'spentTotal', 'membership', 'membresia']))
+      );
       allow delete: if isAdmin();
     }
 
@@ -171,10 +179,9 @@ service cloud.firestore {
         (isActiveTherapist() && resource.data.state == 'pendiente')
       );
       
-      allow create: if isSignedIn() && (
-        isAdmin() || 
-        (isClient() && request.resource.data.clientId == request.auth.uid)
-      );
+      // BOOKING CREATION IS EXCLUSIVELY HANDLED BY SECURE BACKEND ENDPOINT (Admin SDK)
+      // Clients are explicitly blocked from creating bookings directly to prevent price/discount/payment manipulation.
+      allow create: if isAdmin();
       
       allow update: if isSignedIn() && (
         isAdmin() || 
@@ -192,7 +199,14 @@ service cloud.firestore {
           isActiveTherapist() &&
           resource.data.therapistId == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'etaMinutes', 'liveLat', 'liveLng', 'updatedAt']) &&
-          request.resource.data.state in ['aceptada', 'en_camino', 'llegue', 'servicio_iniciado', 'servicio_finalizado']
+          (
+            (resource.data.state == 'pendiente' && request.resource.data.state == 'aceptada') ||
+            (resource.data.state == 'aceptada' && request.resource.data.state == 'en_camino') ||
+            (resource.data.state == 'en_camino' && request.resource.data.state == 'llegue') ||
+            (resource.data.state == 'llegue' && request.resource.data.state == 'servicio_iniciado') ||
+            (resource.data.state == 'servicio_iniciado' && request.resource.data.state == 'servicio_finalizado') ||
+            (resource.data.state == request.resource.data.state) // Allow updating location/eta without state change
+          )
         ) ||
         
         // UNASSIGNED THERAPIST DISPATCH: Must be ACTIVE to accept

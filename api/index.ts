@@ -45,7 +45,40 @@ if (fs.existsSync(configPath)) {
 }
 
 if (adminApp.getApps().length === 0) {
-  adminApp.initializeApp({ projectId });
+  const isProd = process.env.NODE_ENV === "production";
+  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+  const envProjectId = process.env.FIREBASE_ADMIN_PROJECT_ID || "essenya-ecosistema";
+
+  if (isProd) {
+    if (!privateKey || !clientEmail || !process.env.FIREBASE_ADMIN_PROJECT_ID) {
+      console.error("FATAL ERROR: FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL, and FIREBASE_ADMIN_PRIVATE_KEY must be set in production.");
+      process.exit(1);
+    }
+  }
+
+  if (privateKey && clientEmail) {
+    // Process private key line breaks (Vercel uses \n or literal line breaks)
+    const formattedPrivateKey = privateKey.replace(/\\n/g, '\n');
+    try {
+      adminApp.initializeApp({
+        credential: adminApp.cert({
+          projectId: envProjectId,
+          clientEmail: clientEmail,
+          privateKey: formattedPrivateKey,
+        })
+      });
+      console.log("Firebase Admin initialized successfully with Service Account credentials.");
+    } catch (err) {
+      console.error("Failed to initialize Firebase Admin with Service Account:", err);
+      if (isProd) process.exit(1);
+      adminApp.initializeApp({ projectId: envProjectId });
+    }
+  } else {
+    // Fallback to application default credentials (useful for local development or GCP runtimes)
+    adminApp.initializeApp({ projectId: envProjectId });
+    console.log("Firebase Admin initialized with default project configuration.");
+  }
 }
 
 function getAdminFirestore() {
@@ -146,12 +179,6 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction): Pr
   await requireAuth(req, res, async () => {
     // Determine admin status safely
     const uid = (req as any).user.uid;
-    const email = (req as any).user.email;
-    
-    if (email === "essenya222@gmail.com" || email === "admin@essenya.com" || email === "admin.test.phase1@essenya.com") {
-      (req as any).user.role = "administrador";
-      return next();
-    }
     
     try {
       const db = getAdminFirestore();
@@ -165,14 +192,6 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction): Pr
         (req as any).user.role = "administrador";
         return next();
       }
-      const userDoc = await db.collection("users").doc(uid).get();
-      if (userDoc.exists) {
-        const data = userDoc.data();
-        if (data && (data.role === "administrador" || data.rol === "administrador" || data.role === "admin" || data.rol === "admin")) {
-          (req as any).user.role = "administrador";
-          return next();
-        }
-      }
     } catch (e) {
       console.warn("Error fetching user role", e);
     }
@@ -182,10 +201,17 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction): Pr
 }
 
 async function requireSuperAdmin(req: Request, res: Response, next: NextFunction): Promise<void | any> {
-  await requireAuth(req, res, () => {
-    if ((req as any).user.email === "essenya222@gmail.com") {
-      (req as any).user.role = "administrador";
-      return next();
+  await requireAuth(req, res, async () => {
+    const uid = (req as any).user.uid;
+    try {
+      const db = getAdminFirestore();
+      const adminDoc = await db.collection("administradores").doc(uid).get();
+      if (adminDoc.exists && adminDoc.data()?.role === "superadmin") {
+        (req as any).user.role = "superadmin";
+        return next();
+      }
+    } catch (e) {
+      console.warn("Error checking superadmin", e);
     }
     return res.status(403).json({ success: false, error: "No autorizado. Se requiere superadministrador." });
   });
@@ -194,6 +220,97 @@ async function requireSuperAdmin(req: Request, res: Response, next: NextFunction
 // Health check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", environment: process.env.NODE_ENV || "development", timestamp: new Date().toISOString() });
+});
+
+// Secure booking creation endpoint
+app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { serviceId, date, time, preferences, clientAddress, cityZone } = req.body;
+    const uid = (req as any).user.uid;
+    const email = (req as any).user.email;
+    
+    if (!serviceId) {
+      return res.status(400).json({ success: false, error: "serviceId es requerido." });
+    }
+    if (!date || !time) {
+      return res.status(400).json({ success: false, error: "Fecha y hora son requeridos." });
+    }
+    if (!cityZone || !clientAddress) {
+      return res.status(400).json({ success: false, error: "Zona y dirección son requeridos." });
+    }
+
+    const db = getAdminFirestore();
+    
+    // Get client name and phone from Firestore
+    const userDoc = await db.collection("users").doc(uid).get();
+    const clientData = userDoc.exists ? userDoc.data() : {};
+    const finalClientName = clientData?.nombreCompleto || clientData?.name || email;
+    const finalClientPhone = clientData?.telefono || clientData?.phone || "";
+
+    // Get service official pricing
+    const srvDoc = await db.collection("servicios").doc(serviceId).get();
+    if (!srvDoc.exists) {
+      return res.status(400).json({ success: false, error: "El servicio solicitado no existe." });
+    }
+    
+    const srvData = srvDoc.data();
+    if (srvData?.estado === "inactivo" || srvData?.active === false) {
+      return res.status(400).json({ success: false, error: "El servicio solicitado está inactivo." });
+    }
+    
+    const price = srvData?.price;
+    if (price === undefined || price === null) {
+      return res.status(400).json({ success: false, error: "El precio del servicio no está configurado." });
+    }
+    
+    const serviceName = srvData?.name || srvData?.nombre || "Servicio ESSENYA";
+    const durationMinutes = srvData?.durationMinutes || srvData?.duracion || 90;
+
+    // Generate unique code
+    let code = "";
+    let isUnique = false;
+    let attempts = 0;
+    while (!isUnique && attempts < 10) {
+      const codeNum = Math.floor(1000 + Math.random() * 9000);
+      code = `ESS-${codeNum}`;
+      const existing = await db.collection("reservas").where("code", "==", code).limit(1).get();
+      if (existing.empty) {
+        isUnique = true;
+      }
+      attempts++;
+    }
+    if (!isUnique) {
+      return res.status(500).json({ success: false, error: "Error al generar un código único de reserva." });
+    }
+
+    const newBooking = {
+      code,
+      clientId: uid,
+      clientName: finalClientName,
+      clientPhone: finalClientPhone,
+      clientAddress,
+      cityZone,
+      serviceId,
+      serviceName,
+      durationMinutes,
+      price: price,
+      total: price, // no custom total from client
+      tip: 0,
+      date,
+      time,
+      preferences: preferences || {},
+      state: "pendiente",
+      paymentStatus: "pendiente", // ALWAYS pendiente on creation
+      createdAt: new Date().toISOString()
+    };
+
+    const newDocRef = db.collection("reservas").doc();
+    await newDocRef.set(newBooking);
+    
+    res.json({ success: true, bookingId: newDocRef.id, booking: { id: newDocRef.id, ...newBooking } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Therapist Registration Endpoint (Public Registration Application)

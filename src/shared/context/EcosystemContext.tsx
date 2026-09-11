@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { collection, onSnapshot, doc, getDoc, setDoc, updateDoc, deleteDoc, query, where, runTransaction, arrayUnion } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { db, auth } from '../../lib/firebase';
 import { useAuth } from './AuthContext';
 import { handleFirestoreError, OperationType, cleanForFirestore } from '../utils/firestoreDebug';
@@ -438,60 +439,71 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Handlers with Firestore Persistence
   const handleNewBooking = async (newBooking: Booking) => {
-    const resolvedClientId = newBooking.clientId || (firebaseUser ? firebaseUser.uid : (client?.id || ''));
-    const resolvedClientName = newBooking.clientName || client?.name || (firebaseUser?.displayName || 'Cliente VIP');
-    const resolvedClientPhone = newBooking.clientPhone || client?.phone || '';
-
-    const finalizedBooking: Booking = {
-      ...newBooking,
-      clientId: resolvedClientId,
-      clientName: resolvedClientName,
-      clientPhone: resolvedClientPhone,
-      createdAt: newBooking.createdAt || new Date().toISOString(),
-      state: newBooking.state || 'pendiente',
-    };
-
-    // 1. Write to Firestore 'reservas' FIRST
+    // Call the secure backend endpoint to create booking
     try {
-      await setDoc(doc(db, 'reservas', finalizedBooking.id), cleanForFirestore(finalizedBooking));
+      const auth = getAuth();
+      const token = await auth.currentUser?.getIdToken();
+      
+      const resolvedClientName = newBooking.clientName || client?.name || (firebaseUser?.displayName || 'Cliente VIP');
+      const resolvedClientPhone = newBooking.clientPhone || client?.phone || '';
+
+      const response = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          ...newBooking,
+          clientName: resolvedClientName,
+          clientPhone: resolvedClientPhone
+        })
+      });
+      
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to create booking on backend');
+      }
+      
+      const finalizedBooking = data.booking as Booking;
+      
+      // Update local state directly to show it in the UI before snapshot catches up
+      setBookings(prev => [finalizedBooking, ...prev.filter(b => b.id !== finalizedBooking.id)]);
+
+      // 3. Generate Invoice
+      const newInv: Invoice = {
+        id: finalizedBooking.invoiceId || `inv-${Date.now()}`,
+        bookingId: finalizedBooking.id,
+        clientId: finalizedBooking.clientId,
+        invoiceNumber: `ESS-FAC-2026-${Math.floor(100 + Math.random() * 900)}`,
+        date: finalizedBooking.date,
+        rfc: 'DELA850412VIP',
+        businessName: 'ESSENYA PRIVÉ S.A. DE C.V.',
+        subtotal: Number((finalizedBooking.total * 0.84).toFixed(2)),
+        tax: Number((finalizedBooking.total * 0.16).toFixed(2)),
+        total: finalizedBooking.total,
+        status: 'emitida',
+        pdfUrl: '#'
+      };
+      try {
+        await setDoc(doc(db, 'invoices', newInv.id), cleanForFirestore(newInv));
+        setInvoices(prev => [newInv, ...prev]);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, `invoices/${newInv.id}`, newInv);
+      }
+
+      try {
+        await addLog(
+          'Cliente VIP',
+          resolvedClientName,
+          'Creación de Reserva',
+          `Nueva reserva ${finalizedBooking.code} de ${finalizedBooking.serviceName} por $${finalizedBooking.total} MXN.`
+        );
+      } catch {}
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `reservas/${finalizedBooking.id}`, finalizedBooking);
+      handleFirestoreError(err, OperationType.CREATE, `api/bookings`, newBooking);
       throw err;
     }
-
-    // 2. Update local state
-    setBookings(prev => [finalizedBooking, ...prev.filter(b => b.id !== finalizedBooking.id)]);
-
-    // 3. Generate Invoice
-    const newInv: Invoice = {
-      id: finalizedBooking.invoiceId || `inv-${Date.now()}`,
-      bookingId: finalizedBooking.id,
-      clientId: resolvedClientId || (firebaseUser ? firebaseUser.uid : 'client-1'),
-      invoiceNumber: `ESS-FAC-2026-${Math.floor(100 + Math.random() * 900)}`,
-      date: finalizedBooking.date,
-      rfc: 'DELA850412VIP',
-      businessName: 'ESSENYA PRIVÉ S.A. DE C.V.',
-      subtotal: Number((finalizedBooking.total * 0.84).toFixed(2)),
-      tax: Number((finalizedBooking.total * 0.16).toFixed(2)),
-      total: finalizedBooking.total,
-      status: 'emitida',
-      pdfUrl: '#'
-    };
-    try {
-      await setDoc(doc(db, 'invoices', newInv.id), cleanForFirestore(newInv));
-      setInvoices(prev => [newInv, ...prev]);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `invoices/${newInv.id}`, newInv);
-    }
-
-    try {
-      await addLog(
-        'Cliente VIP',
-        resolvedClientName,
-        'Creación de Reserva',
-        `Nueva reserva ${finalizedBooking.code} de ${finalizedBooking.serviceName} por $${finalizedBooking.total} MXN.`
-      );
-    } catch {}
   };
 
   // Therapist Booking Acceptance & Rejection Handlers

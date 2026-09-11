@@ -19,6 +19,7 @@ import {
   Firestore
 } from 'firebase/firestore';
 import fs from 'fs';
+import crypto from 'crypto';
 
 // Read Firebase Config
 const config = JSON.parse(fs.readFileSync('./firebase-applet-config.json', 'utf8'));
@@ -70,37 +71,33 @@ function generateBookingCode(): string {
 
 async function runTests() {
   console.log("==========================================");
-  console.log("STARTING LIVE E2E VALIDATION ON FIRESTORE");
+  console.log("STARTING LIVE E2E VALIDATION ON FIRESTORE EMULATOR");
   console.log("==========================================");
-  console.log(`Database ID: ${config.firestoreDatabaseId || "(default)"}`);
-  console.log(`Project ID: ${config.projectId}`);
-
-  // Generate unique client email to guarantee fresh successful registration
-  const clientEmail = `client-e2e-${Date.now()}@essenya.com`;
-  const clientPassword = "TestPassword123!";
   
-  // We will try admin@essenya.com. Since it is hardcoded in firestore.rules isAdmin(),
-  // if it's not yet registered in Auth, we can register it with our password and gain admin rights!
-  const adminEmail = "admin@essenya.com";
-  const adminPassword = "AdminPassword123!";
+  if (!process.env.FIREBASE_AUTH_EMULATOR_HOST || !process.env.FIRESTORE_EMULATOR_HOST) {
+    console.error("ERROR: Este script solo puede ejecutarse contra el emulador. Variables FIREBASE_AUTH_EMULATOR_HOST y FIRESTORE_EMULATOR_HOST son requeridas.");
+    process.exit(1);
+  }
+
+  // Generate unique client email
+  const clientEmail = `client-e2e-${Date.now()}@test.com`;
+  const clientPassword = crypto.randomBytes(12).toString('hex') + "A!1";
+  
+  // Use env variables for admin or random if not provided (but admin must exist or be created in emulator)
+  const activeAdminEmail = process.env.E2E_ADMIN_EMAIL || `admin-${Date.now()}@test.com`;
+  const activeAdminPassword = process.env.E2E_ADMIN_PASSWORD || (crypto.randomBytes(12).toString('hex') + "A!1");
 
   console.log("\n--- Authenticating Users ---");
   const clientUid = await getAuthenticatedUser(clientEmail, clientPassword);
   console.log(`Client authenticated. Email: ${clientEmail}, UID: ${clientUid}`);
 
   let adminUid: string;
-  let activeAdminEmail = adminEmail;
-  let activeAdminPassword = adminPassword;
-
   try {
     adminUid = await getAuthenticatedUser(activeAdminEmail, activeAdminPassword);
-    console.log(`Admin authenticated. Email: ${adminEmail}, UID: ${adminUid}`);
-  } catch (err: any) {
-    console.log(`Failed with admin@essenya.com. Trying with essenya222@gmail.com...`);
-    activeAdminEmail = "essenya222@gmail.com";
-    activeAdminPassword = "AdminEssenya2026!";
-    adminUid = await getAuthenticatedUser(activeAdminEmail, activeAdminPassword);
     console.log(`Admin authenticated. Email: ${activeAdminEmail}, UID: ${adminUid}`);
+  } catch (err: any) {
+    console.error("Could not authenticate admin:", err);
+    process.exit(1);
   }
 
   // Register the new admin user as an admin in Firestore 'administradores' collection if needed/possible.
