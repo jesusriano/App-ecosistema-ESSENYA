@@ -7,7 +7,9 @@ import {
   ServicePreference, BookingState, PressureLevel, EssentialOil, MusicStyle, ExtraServiceSelection 
 } from '../../../shared/types/index';
 import { 
-  calculateServicePrice, OIL_OPTIONS, MUSIC_OPTIONS, PAYMENT_METHODS 
+  calculateServicePrice, calculateBookingPricing, BookingPricingResult,
+  PRESSURE_OPTIONS, formatPressureLevel, OFFICIAL_SERVICES,
+  OIL_OPTIONS, MUSIC_OPTIONS, PAYMENT_METHODS 
 } from '../../../shared/data/catalog';
 import { 
   Calendar, Clock, MapPin, Sparkles, CheckCircle2, CheckCircle, Navigation, 
@@ -43,7 +45,7 @@ interface ClientAppProps {
   therapists: Therapist[];
   bookings: Booking[];
   invoices: Invoice[];
-  onNewBooking: (booking: Booking) => Promise<void> | void;
+  onNewBooking: (booking: Booking) => Promise<Booking | void> | Booking | void;
   onUpdateBookingState: (bookingId: string, newState: BookingState) => void;
   onViewInvoice: (invoice: Invoice) => void;
   onSendMessage: (bookingId: string, text: string) => void;
@@ -72,7 +74,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
   // Booking Flow State
   const [step, setStep] = useState<number>(1);
-  const [selectedService, setSelectedService] = useState<ServiceItem | null>(services?.[0] || null);
+  const [selectedServiceId, setSelectedServiceId] = useState<string>(() => services?.[0]?.id || 'SRB-relajante');
   const [duration, setDuration] = useState<60 | 90 | 120>(90);
   const [selectedDate, setSelectedDate] = useState<string>('2026-07-23');
   const [selectedTime, setSelectedTime] = useState<string>('18:00');
@@ -212,46 +214,64 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   const extrasTotalPrice = reflexologyPrice + craneofacialPrice;
   const totalServiceDurationMinutes = duration + reflexologyDuration + craneofacialDuration;
 
-  const calculateBasePrice = () => {
-    if (!selectedService) return 0;
-    return calculateServicePrice(selectedService.basePrice, duration);
+  // Reactively resolve selectedService based on selectedServiceId
+  const selectedService = useMemo(() => {
+    return (
+      services.find((s) => s.id === selectedServiceId) ||
+      OFFICIAL_SERVICES.find((s) => s.id === selectedServiceId) ||
+      services[0] ||
+      OFFICIAL_SERVICES[0] ||
+      null
+    );
+  }, [services, selectedServiceId]);
+
+  // Backward-compatible setter that updates selectedServiceId
+  const setSelectedService = (srv: ServiceItem | null) => {
+    if (srv) {
+      handleSelectService(srv);
+    }
   };
 
-  const baseMassagePrice = calculateBasePrice();
-  const rawPrice = baseMassagePrice + extrasTotalPrice;
-
-  // Calculate promotional discount dynamically
-  const promoDiscountAmount = useMemo(() => {
-    if (!appliedPromo) return discountAmount;
-    if (appliedPromo.discountPercent) {
-      return Math.round(rawPrice * (appliedPromo.discountPercent / 100));
-    }
-    return appliedPromo.fixedDiscount || discountAmount;
-  }, [appliedPromo, rawPrice, discountAmount]);
-
-  const priceAfterPromo = Math.max(0, rawPrice - promoDiscountAmount);
-
-  // Calculate Gift Card deduction ($1,400 MXN card system)
-  const giftCardDeduction = useMemo(() => {
-    if (!appliedGiftCard) return 0;
-    return Math.min(appliedGiftCard.currentBalance, priceAfterPromo);
-  }, [appliedGiftCard, priceAfterPromo]);
-
-  const giftCardRemainingBalance = useMemo(() => {
-    if (!appliedGiftCard) return 0;
-    return Math.max(0, appliedGiftCard.currentBalance - giftCardDeduction);
-  }, [appliedGiftCard, giftCardDeduction]);
-
-  const totalPrice = Math.max(0, priceAfterPromo - giftCardDeduction);
-
-  // Select service helper
+  // Select service helper - updates id and ensures duration is valid
   const handleSelectService = (srv: ServiceItem) => {
-    setSelectedService(srv);
+    setSelectedServiceId(srv.id);
     const allowed = srv.allowedDurations || [60, 90, 120];
     if (!allowed.includes(duration)) {
       setDuration(allowed[0] as 60 | 90 | 120);
     }
   };
+
+  // Single source of truth calculation for booking pricing
+  const bookingPricing = useMemo(() => {
+    let promoDiscount = discountAmount;
+    if (appliedPromo) {
+      if (appliedPromo.discountPercent) {
+        const rawSubtotal = calculateServicePrice(selectedService?.basePrice || 0, duration) + extrasTotalPrice;
+        promoDiscount = Math.round(rawSubtotal * (appliedPromo.discountPercent / 100));
+      } else if (appliedPromo.fixedDiscount) {
+        promoDiscount = appliedPromo.fixedDiscount;
+      }
+    }
+
+    return calculateBookingPricing({
+      service: selectedService,
+      duration,
+      extrasTotal: extrasTotalPrice,
+      tip: tipAmount,
+      promoDiscount,
+      giftCardBalance: appliedGiftCard ? appliedGiftCard.currentBalance : 0
+    });
+  }, [selectedService, duration, extrasTotalPrice, tipAmount, appliedPromo, discountAmount, appliedGiftCard]);
+
+  const baseMassagePrice = bookingPricing.durationPrice;
+  const rawPrice = bookingPricing.subtotal;
+  const promoDiscountAmount = bookingPricing.discountAmount;
+  const giftCardDeduction = bookingPricing.giftCardDeduction;
+  const giftCardRemainingBalance = useMemo(() => {
+    if (!appliedGiftCard) return 0;
+    return Math.max(0, appliedGiftCard.currentBalance - giftCardDeduction);
+  }, [appliedGiftCard, giftCardDeduction]);
+  const totalPrice = bookingPricing.total;
 
   // Apply Coupon with strict membership tier validation (DIAMOND10, VIP15, GOLD2026, ESSENYABLACK)
   const handleApplyCoupon = (customCode?: string) => {
@@ -309,6 +329,10 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   // Submit Booking
   const handleConfirmBooking = async () => {
     if (!selectedService || isSubmittingBooking) return;
+    if (!bookingPricing.isPriceAvailable) {
+      showToast('Precio no disponible', 'Precio no disponible. Selecciona otro servicio o comunícate con ESSENYA.', 'error');
+      return;
+    }
     setIsSubmittingBooking(true);
 
     // NO therapist is assigned at creation time
@@ -371,7 +395,16 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     };
 
     try {
-      await onNewBooking(newBk);
+      const finalized = await onNewBooking(newBk);
+      const finalizedBooking = finalized as Booking | undefined;
+
+      if (finalizedBooking && typeof finalizedBooking.total === 'number' && finalizedBooking.total !== newBk.total) {
+        showToast(
+          'Tarifa Oficial Aplicada',
+          'El precio fue actualizado de acuerdo con la tarifa oficial del servicio.',
+          'info'
+        );
+      }
 
       // Consume VIP15 courtesy benefit if applied (single-use)
       if (appliedPromo?.type === 'VIP15') {
@@ -428,7 +461,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
         
         // Auto match service
         const matched = services.find(s => s?.name?.toLowerCase().includes(data.recommendation.recommendedRitual?.toLowerCase())) || services[0];
-        setSelectedService(matched);
+        handleSelectService(matched);
         if (data.recommendation.recommendedDuration) {
           setDuration(data.recommendation.recommendedDuration as any);
         }
@@ -773,7 +806,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                   {services.map((srv) => (
                     <div
                       key={srv.id}
-                      onClick={() => setSelectedService(srv)}
+                      onClick={() => handleSelectService(srv)}
                       className={`bg-white dark:bg-[#141414] rounded-2xl overflow-hidden border transition-all cursor-pointer group flex flex-col justify-between shadow-sm hover:shadow-md ${
                         selectedService?.id === srv.id
                           ? 'border-[#C9A55B] ring-2 ring-[#C9A55B] shadow-xl shadow-[#C9A55B]/10'
@@ -821,7 +854,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                         </div>
 
                         <button 
-                          onClick={(e) => { e.stopPropagation(); setSelectedService(srv); setStep(2); }}
+                          onClick={(e) => { e.stopPropagation(); handleSelectService(srv); setStep(2); }}
                           className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
                             selectedService?.id === srv.id
                               ? 'bg-[#C9A55B] text-black shadow-md shadow-[#C9A55B]/30'
@@ -885,7 +918,11 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                       : 'grid-cols-1 sm:grid-cols-2'
                   }`}>
                     {(selectedService.allowedDurations || [60, 90, 120]).map((m) => {
-                      const p = m === 60 ? selectedService.basePrice : m === 90 ? selectedService.price90 : selectedService.price120;
+                      const durPricing = calculateBookingPricing({
+                        service: selectedService,
+                        duration: m
+                      });
+                      const p = durPricing.durationPrice;
                       const desc = m === 60 ? 'Sesión Express focalizada' : m === 90 ? 'Recomendación ESSENYA' : 'Inmersión Total de Lujo';
                       return (
                         <div
@@ -899,7 +936,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                         >
                           <span className="text-lg sm:text-xl font-bold text-[#1C1917] dark:text-white block">{m} Min</span>
                           <span className="text-xs sm:text-sm font-semibold text-[#806020] dark:text-gold-gradient block mt-1">
-                            ${p.toLocaleString()} MXN
+                            {durPricing.isPriceAvailable ? `$${p.toLocaleString()} MXN` : 'Precio no disponible'}
                           </span>
                           <span className="text-[10px] text-[#6B655F] dark:text-[#888888] block mt-1">{desc}</span>
                         </div>
@@ -1021,25 +1058,31 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                 </div>
 
                 {/* Total Duration & Price Live Box */}
-                <div className="bg-[#FAF6EE] dark:bg-[#1A1813] p-4 rounded-xl border border-[#C9A55B]/40 space-y-2 text-xs">
-                  <div className="flex justify-between text-[#6B655F] dark:text-[#888888]">
-                    <span>Masaje Base ({duration} min):</span>
-                    <span className="text-[#1C1917] dark:text-white font-medium">${baseMassagePrice.toLocaleString()} MXN</span>
+                {!bookingPricing.isPriceAvailable ? (
+                  <div className="bg-amber-50 dark:bg-amber-950/40 p-4 rounded-xl border border-amber-300 dark:border-amber-700/50 text-xs text-amber-800 dark:text-amber-200">
+                    <p className="font-semibold">Precio no disponible. Selecciona otro servicio o comunícate con ESSENYA.</p>
                   </div>
-                  {extrasTotalPrice > 0 && (
+                ) : (
+                  <div className="bg-[#FAF6EE] dark:bg-[#1A1813] p-4 rounded-xl border border-[#C9A55B]/40 space-y-2 text-xs">
                     <div className="flex justify-between text-[#6B655F] dark:text-[#888888]">
-                      <span>Servicios Extras (+{reflexologyDuration + craneofacialDuration} min):</span>
-                      <span className="text-[#806020] dark:text-[#C9A55B] font-medium">+${extrasTotalPrice.toLocaleString()} MXN</span>
+                      <span>Masaje Base ({selectedService.name} - {duration} min):</span>
+                      <span className="text-[#1C1917] dark:text-white font-medium">${baseMassagePrice.toLocaleString()} MXN</span>
                     </div>
-                  )}
-                  <div className="pt-2 border-t border-[#E5DFD3] dark:border-[#333333] flex justify-between items-center text-sm font-bold">
-                    <span className="text-[#1C1917] dark:text-white flex items-center gap-1.5">
-                      <Clock className="w-4 h-4 text-[#C9A55B]" />
-                      <span>Tiempo Total: {totalServiceDurationMinutes} Minutos</span>
-                    </span>
-                    <span className="text-[#806020] dark:text-[#C9A55B] text-base">${rawPrice.toLocaleString()} MXN</span>
+                    {extrasTotalPrice > 0 && (
+                      <div className="flex justify-between text-[#6B655F] dark:text-[#888888]">
+                        <span>Servicios Extras (+{reflexologyDuration + craneofacialDuration} min):</span>
+                        <span className="text-[#806020] dark:text-[#C9A55B] font-medium">+${extrasTotalPrice.toLocaleString()} MXN</span>
+                      </div>
+                    )}
+                    <div className="pt-2 border-t border-[#E5DFD3] dark:border-[#333333] flex justify-between items-center text-sm font-bold">
+                      <span className="text-[#1C1917] dark:text-white flex items-center gap-1.5">
+                        <Clock className="w-4 h-4 text-[#C9A55B]" />
+                        <span>Tiempo Total: {totalServiceDurationMinutes} Minutos</span>
+                      </span>
+                      <span className="text-[#806020] dark:text-[#C9A55B] text-base">${rawPrice.toLocaleString()} MXN</span>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Date & Time Picker */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-[#E5DFD3] dark:border-[#222222]">
@@ -1111,8 +1154,19 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                   </button>
 
                   <button
-                    onClick={() => setStep(3)}
-                    className="flex items-center space-x-2 bg-gradient-to-r from-[#C9A55B] to-[#B38F43] text-black font-semibold px-6 py-3 rounded-xl gold-button-hover"
+                    disabled={!bookingPricing.isPriceAvailable}
+                    onClick={() => {
+                      if (!bookingPricing.isPriceAvailable) {
+                        showToast('Precio no disponible', 'Precio no disponible. Selecciona otro servicio o comunícate con ESSENYA.', 'error');
+                        return;
+                      }
+                      setStep(3);
+                    }}
+                    className={`flex items-center space-x-2 px-6 py-3 rounded-xl transition-all ${
+                      !bookingPricing.isPriceAvailable
+                        ? 'bg-neutral-300 dark:bg-neutral-800 text-neutral-500 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-[#C9A55B] to-[#B38F43] text-black font-semibold gold-button-hover'
+                    }`}
                   >
                     <span>Siguiente: Personalizar Lujo</span>
                     <ChevronRight className="w-4 h-4" />
@@ -1162,21 +1216,28 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                     <Sliders className="w-3.5 h-3.5 text-[#C9A55B]" />
                     <span>Nivel de Presión Muscular</span>
                   </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                    {(['Suave', 'Media', 'Firme', 'Profunda'] as PressureLevel[]).map((p) => (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => setPreferences(prev => ({ ...prev, pressureLevel: p }))}
-                        className={`py-3 px-2 rounded-xl border text-xs font-semibold text-center transition-all ${
-                          preferences.pressureLevel === p
-                            ? 'bg-[#C9A55B]/20 border-[#C9A55B] text-[#806020] dark:text-[#C9A55B] font-bold'
-                            : 'bg-[#F5F1EA] dark:bg-[#1A1A1A] border-[#E5DFD3] dark:border-[#333333] text-[#6B655F] dark:text-[#AAAAAA]'
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                    {PRESSURE_OPTIONS.map((opt) => {
+                      const isSelected = 
+                        preferences.pressureLevel?.toLowerCase() === opt.value.toLowerCase() ||
+                        preferences.pressureLevel?.toLowerCase() === opt.label.toLowerCase();
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          translate="no"
+                          onClick={() => setPreferences(prev => ({ ...prev, pressureLevel: opt.label as any }))}
+                          className={`p-3 rounded-xl border text-left transition-all notranslate ${
+                            isSelected
+                              ? 'bg-[#C9A55B]/20 border-[#C9A55B] text-[#806020] dark:text-[#C9A55B] font-bold ring-1 ring-[#C9A55B]'
+                              : 'bg-[#F5F1EA] dark:bg-[#1A1A1A] border-[#E5DFD3] dark:border-[#333333] text-[#6B655F] dark:text-[#AAAAAA] hover:border-[#C9A55B]/40'
+                          }`}
+                        >
+                          <span className="text-xs font-bold block text-[#1C1917] dark:text-white">{opt.label}</span>
+                          <span className="text-[10px] text-[#6B655F] dark:text-[#888888] block mt-1 leading-snug">{opt.description}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1448,6 +1509,13 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                       </p>
                     </div>
                   )}
+
+                  <div className="flex justify-between items-center py-2 border-b border-[#E5DFD3] dark:border-[#222222]">
+                    <span className="text-[#6B655F] dark:text-[#AAAAAA]">Nivel de Presión:</span>
+                    <span className="font-bold text-[#1C1917] dark:text-white notranslate" translate="no">
+                      {formatPressureLevel(preferences.pressureLevel)}
+                    </span>
+                  </div>
 
                   <div className="flex justify-between items-center py-2 border-b border-[#E5DFD3] dark:border-[#222222]">
                     <span className="text-[#6B655F] dark:text-[#AAAAAA]">Aceite Esencial:</span>

@@ -30,7 +30,7 @@ interface EcosystemContextType {
   setActiveInvoice: (invoice: Invoice | null) => void;
   handleViewInvoice: (invoice: Invoice) => void;
   
-  handleNewBooking: (newBooking: Booking) => void;
+  handleNewBooking: (newBooking: Booking) => Promise<Booking | void>;
   handleAcceptBooking: (bookingId: string, acceptingTherapist: Partial<Therapist>) => void;
   handleRejectBooking: (bookingId: string, reason?: string) => void;
   handleAdminAcceptBooking: (bookingId: string) => Promise<void>;
@@ -500,6 +500,8 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
           `Nueva reserva ${finalizedBooking.code} de ${finalizedBooking.serviceName} por $${finalizedBooking.total} MXN.`
         );
       } catch {}
+
+      return finalizedBooking;
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `api/bookings`, newBooking);
       throw err;

@@ -165,6 +165,72 @@ async function runTests() {
     console.error("Test 8 error", e);
     passed = false;
   }
+
+  // Test 9: Pricing Calculation & Catalog Pressure Options Integrity
+  try {
+    const { calculateBookingPricing, PRESSURE_OPTIONS, formatPressureLevel, OFFICIAL_SERVICE_BASE_PRICES } = await import('../src/shared/data/pricing.js');
+    
+    // Check pressure options
+    const pressureLabels = PRESSURE_OPTIONS.map(p => p.label);
+    const expectedLabels = ['Suave', 'Media', 'Firme', 'Profunda'];
+    const hasExactLabels = pressureLabels.length === 4 && expectedLabels.every(l => pressureLabels.includes(l));
+    if (!hasExactLabels) {
+      console.error("❌ Test 9 failed: PRESSURE_OPTIONS does not match ['Suave', 'Media', 'Firme', 'Profunda']", pressureLabels);
+      passed = false;
+    } else {
+      console.log("✅ Test 9a: PRESSURE_OPTIONS has exact 4 approved levels: Suave, Media, Firme, Profunda.");
+    }
+
+    // Check SRB-relajante pricing across durations
+    const relajante = { id: 'SRB-relajante', name: 'Masaje Relajante', basePrice: OFFICIAL_SERVICE_BASE_PRICES['SRB-relajante'] };
+    const p60 = calculateBookingPricing({ service: relajante, duration: 60 });
+    const p90 = calculateBookingPricing({ service: relajante, duration: 90 });
+    const p120 = calculateBookingPricing({ service: relajante, duration: 120 });
+    const p60WithExtras = calculateBookingPricing({
+      service: relajante,
+      duration: 60,
+      selectedExtras: [{ id: 'extra-reflexo-15', name: 'Reflexología', durationMinutes: 15, price: 500 }]
+    });
+
+    if (p60.durationPrice === 1100 && p90.durationPrice === 1650 && p120.durationPrice === 2200 && p60WithExtras.total === 1600) {
+      console.log("✅ Test 9b: SRB-relajante pricing calculates correctly for 60 ($1,100), 90 ($1,650), 120 min ($2,200) and extras ($1,600).");
+    } else {
+      console.error("❌ Test 9 failed: Pricing calculation mismatch:", { p60, p90, p120, p60WithExtras });
+      passed = false;
+    }
+
+    // Check formatPressureLevel
+    if (formatPressureLevel('profunda') === 'Profunda' && formatPressureLevel('media') === 'Media' && formatPressureLevel('Firme') === 'Firme') {
+      console.log("✅ Test 9c: formatPressureLevel correctly formats legacy and modern pressure strings.");
+    } else {
+      console.error("❌ Test 9 failed: formatPressureLevel failed.");
+      passed = false;
+    }
+  } catch (e) {
+    console.error("Test 9 error", e);
+    passed = false;
+  }
+
+  // Test 10: Booking creation without auth blocked (401)
+  try {
+    const res = await fetch("http://localhost:3001/api/bookings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        serviceId: "SRB-relajante",
+        durationMinutes: 60
+      })
+    });
+    if (res.status === 401) {
+      console.log("✅ Test 10: Booking creation without auth blocked (401).");
+    } else {
+      console.error(`❌ Test 10 failed, got status ${res.status}`);
+      passed = false;
+    }
+  } catch(e) {
+    console.error("Test 10 error", e);
+    passed = false;
+  }
   
   server.close();
   

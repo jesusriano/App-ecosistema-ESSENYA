@@ -6,16 +6,8 @@ import imgCouples from '../../assets/images/couples_massage_1785522546191.jpg';
 import imgRelaxing from '../../assets/images/relaxing_massage_1785522575769.jpg';
 import imgTension from '../../assets/images/tension_release_massage_1785522590275.jpg';
 
-// Helper function to calculate duration pricing according to official rules:
-// - 60 min: Base price
-// - 90 min: Base price + 50% (1.5x)
-// - 120 min: Double base price (2x)
-export function calculateServicePrice(basePrice: number, durationMinutes: number): number {
-  if (durationMinutes === 60) return basePrice;
-  if (durationMinutes === 90) return Math.round(basePrice * 1.5);
-  if (durationMinutes === 120) return Math.round(basePrice * 2);
-  return basePrice;
-}
+export * from './pricing';
+import { calculateServicePrice } from './pricing';
 
 // Official and Definitive Catalog of 6 Services
 export const OFFICIAL_SERVICES: ServiceItem[] = [
@@ -141,3 +133,4 @@ export const PAYMENT_METHODS = [
     description: 'Pago en efectivo directo a la masajista antes de iniciar el masaje.'
   }
 ] as const;
+

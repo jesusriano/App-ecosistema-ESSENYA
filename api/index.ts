@@ -284,16 +284,82 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
       return res.status(400).json(errRes);
     }
     
-    const price = srvData?.price;
-    if (price === undefined || price === null) {
-      const errRes = { success: false, error: "El precio del servicio no está configurado." };
+    const serviceName = srvData?.name || srvData?.nombre || "Servicio ESSENYA";
+
+    // Validate requested duration
+    const requestedDuration = Number(req.body.durationMinutes) || 90;
+    const allowedDurations: number[] = Array.isArray(srvData?.allowedDurations) && srvData.allowedDurations.length > 0
+      ? srvData.allowedDurations
+      : [60, 90, 120];
+    const durationMinutes = allowedDurations.includes(requestedDuration) ? requestedDuration : (allowedDurations[0] || 90);
+
+    // Get official base price (60 min)
+    let officialBasePrice = typeof srvData?.basePrice === "number" && srvData.basePrice > 0
+      ? srvData.basePrice
+      : (typeof srvData?.price === "number" && srvData.price > 0 ? srvData.price : undefined);
+
+    // Fallback to standard catalog prices if unconfigured in doc
+    if (!officialBasePrice) {
+      const standardServicePrices: Record<string, number> = {
+        'SRB-relajante': 1100,
+        'srv-relajante': 1100,
+        'srv-descontracturante': 1200,
+        'srv-deportivo': 1250,
+        'srv-tejido-profundo': 1300,
+        'srv-prenatal': 1100,
+        'srv-pareja': 2400
+      };
+      officialBasePrice = standardServicePrices[serviceId];
+    }
+
+    if (!officialBasePrice || officialBasePrice <= 0) {
+      const errRes = { success: false, error: "Precio no disponible. Selecciona otro servicio o comunícate con ESSENYA." };
       console.log("=== API BOOKING OUTGOING ERROR RESPONSE ===");
       console.log(JSON.stringify(errRes, null, 2));
       return res.status(400).json(errRes);
     }
-    
-    const serviceName = srvData?.name || srvData?.nombre || "Servicio ESSENYA";
-    const durationMinutes = srvData?.durationMinutes || srvData?.duracion || 90;
+
+    // Calculate official price by duration
+    let officialDurationPrice: number;
+    if (durationMinutes === 60) {
+      officialDurationPrice = officialBasePrice;
+    } else if (durationMinutes === 90) {
+      officialDurationPrice = typeof srvData?.price90 === "number" && srvData.price90 > 0
+        ? srvData.price90
+        : Math.round(officialBasePrice * 1.5);
+    } else if (durationMinutes === 120) {
+      officialDurationPrice = typeof srvData?.price120 === "number" && srvData.price120 > 0
+        ? srvData.price120
+        : Math.round(officialBasePrice * 2);
+    } else {
+      officialDurationPrice = officialBasePrice;
+    }
+
+    // Authorized add-ons calculation
+    let extrasTotal = 0;
+    const validatedExtras: any[] = [];
+    if (Array.isArray(req.body.selectedExtras)) {
+      for (const extra of req.body.selectedExtras) {
+        const extraId = String(extra?.id || "");
+        if (extraId.includes("ref-15")) {
+          validatedExtras.push({ id: "extra-ref-15", name: "Reflexología Podal (15 min)", durationMinutes: 15, price: 300 });
+          extrasTotal += 300;
+        } else if (extraId.includes("ref-30")) {
+          validatedExtras.push({ id: "extra-ref-30", name: "Reflexología Podal (30 min)", durationMinutes: 30, price: 500 });
+          extrasTotal += 500;
+        } else if (extraId.includes("cra-15")) {
+          validatedExtras.push({ id: "extra-cra-15", name: "Masaje Craneofacial (15 min)", durationMinutes: 15, price: 300 });
+          extrasTotal += 300;
+        } else if (extraId.includes("cra-30")) {
+          validatedExtras.push({ id: "extra-cra-30", name: "Masaje Craneofacial (30 min)", durationMinutes: 30, price: 500 });
+          extrasTotal += 500;
+        }
+      }
+    }
+
+    const subtotal = officialDurationPrice + extrasTotal;
+    const authorizedTip = typeof req.body.tip === "number" && req.body.tip >= 0 && req.body.tip <= 2000 ? Math.round(req.body.tip) : 0;
+    const officialTotal = subtotal + authorizedTip;
 
     // Generate unique code
     let code = "";
@@ -315,6 +381,8 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
       return res.status(500).json(errRes);
     }
 
+    const extrasDurationMinutes = validatedExtras.reduce((acc, e) => acc + (Number(e.durationMinutes) || 0), 0);
+
     const newBooking = {
       code,
       clientId: uid,
@@ -325,9 +393,12 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
       serviceId,
       serviceName,
       durationMinutes,
-      price: price,
-      total: price, // no custom total from client
-      tip: 0,
+      totalDurationMinutes: durationMinutes + extrasDurationMinutes,
+      ...(validatedExtras.length > 0 ? { selectedExtras: validatedExtras } : {}),
+      ...(srvData?.requiresDualTherapist ? { requiresDualTherapist: true } : {}),
+      price: subtotal,
+      total: officialTotal,
+      tip: authorizedTip,
       date,
       time,
       preferences: preferences || {},
