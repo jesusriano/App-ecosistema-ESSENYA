@@ -77,9 +77,13 @@ if (adminApp.getApps().length === 0) {
 }
 
 function getAdminFirestore() {
-  return firestoreDatabaseId
-    ? adminFirestore.getFirestore(firestoreDatabaseId)
-    : adminFirestore.getFirestore();
+  const apps = adminApp.getApps();
+  const defaultApp = apps.length > 0 ? apps[0] : undefined;
+  
+  if (firestoreDatabaseId && defaultApp) {
+    return adminFirestore.getFirestore(defaultApp, firestoreDatabaseId);
+  }
+  return adminFirestore.getFirestore();
 }
 
 // In-memory robust rate limiter (fast, zero network overhead, resilient)
@@ -223,15 +227,28 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
     const { serviceId, date, time, preferences, clientAddress, cityZone } = req.body;
     const uid = (req as any).user.uid;
     const email = (req as any).user.email;
+
+    // Log the raw incoming request payload as requested
+    console.log("=== API BOOKING INCOMING PAYLOAD ===");
+    console.log(JSON.stringify({ serviceId, date, time, clientAddress, cityZone, uid, email }, null, 2));
     
     if (!serviceId) {
-      return res.status(400).json({ success: false, error: "serviceId es requerido." });
+      const errRes = { success: false, error: "serviceId es requerido." };
+      console.log("=== API BOOKING OUTGOING ERROR RESPONSE ===");
+      console.log(JSON.stringify(errRes, null, 2));
+      return res.status(400).json(errRes);
     }
     if (!date || !time) {
-      return res.status(400).json({ success: false, error: "Fecha y hora son requeridos." });
+      const errRes = { success: false, error: "Fecha y hora son requeridos." };
+      console.log("=== API BOOKING OUTGOING ERROR RESPONSE ===");
+      console.log(JSON.stringify(errRes, null, 2));
+      return res.status(400).json(errRes);
     }
     if (!cityZone || !clientAddress) {
-      return res.status(400).json({ success: false, error: "Zona y dirección son requeridos." });
+      const errRes = { success: false, error: "Zona y dirección son requeridos." };
+      console.log("=== API BOOKING OUTGOING ERROR RESPONSE ===");
+      console.log(JSON.stringify(errRes, null, 2));
+      return res.status(400).json(errRes);
     }
 
     const db = getAdminFirestore();
@@ -245,17 +262,26 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
     // Get service official pricing
     const srvDoc = await db.collection("servicios").doc(serviceId).get();
     if (!srvDoc.exists) {
-      return res.status(400).json({ success: false, error: "El servicio solicitado no existe." });
+      const errRes = { success: false, error: "El servicio solicitado no existe." };
+      console.log("=== API BOOKING OUTGOING ERROR RESPONSE ===");
+      console.log(JSON.stringify(errRes, null, 2));
+      return res.status(400).json(errRes);
     }
     
     const srvData = srvDoc.data();
     if (srvData?.estado === "inactivo" || srvData?.active === false) {
-      return res.status(400).json({ success: false, error: "El servicio solicitado está inactivo." });
+      const errRes = { success: false, error: "El servicio solicitado está inactivo." };
+      console.log("=== API BOOKING OUTGOING ERROR RESPONSE ===");
+      console.log(JSON.stringify(errRes, null, 2));
+      return res.status(400).json(errRes);
     }
     
     const price = srvData?.price;
     if (price === undefined || price === null) {
-      return res.status(400).json({ success: false, error: "El precio del servicio no está configurado." });
+      const errRes = { success: false, error: "El precio del servicio no está configurado." };
+      console.log("=== API BOOKING OUTGOING ERROR RESPONSE ===");
+      console.log(JSON.stringify(errRes, null, 2));
+      return res.status(400).json(errRes);
     }
     
     const serviceName = srvData?.name || srvData?.nombre || "Servicio ESSENYA";
@@ -275,7 +301,10 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
       attempts++;
     }
     if (!isUnique) {
-      return res.status(500).json({ success: false, error: "Error al generar un código único de reserva." });
+      const errRes = { success: false, error: "Error al generar un código único de reserva." };
+      console.log("=== API BOOKING OUTGOING ERROR RESPONSE ===");
+      console.log(JSON.stringify(errRes, null, 2));
+      return res.status(500).json(errRes);
     }
 
     const newBooking = {
@@ -302,9 +331,16 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
     const newDocRef = db.collection("reservas").doc();
     await newDocRef.set(newBooking);
     
-    res.json({ success: true, bookingId: newDocRef.id, booking: { id: newDocRef.id, ...newBooking } });
+    const successRes = { success: true, bookingId: newDocRef.id, booking: { id: newDocRef.id, ...newBooking } };
+    console.log("=== API BOOKING OUTGOING SUCCESS RESPONSE ===");
+    console.log(JSON.stringify(successRes, null, 2));
+    res.json(successRes);
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    const errRes = { success: false, error: err.message || "Error interno al procesar la reserva." };
+    console.log("=== API BOOKING OUTGOING CRITICAL EXCEPTION RESPONSE ===");
+    console.log(JSON.stringify(errRes, null, 2));
+    console.error("Critical error in booking handler stack:", err);
+    res.status(500).json(errRes);
   }
 });
 
