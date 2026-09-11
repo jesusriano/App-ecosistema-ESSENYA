@@ -76,14 +76,165 @@ if (adminApp.getApps().length === 0) {
   }
 }
 
+export const OFFICIAL_SERVICES_CATALOG: Record<string, {
+  id: string;
+  name: string;
+  nombre?: string;
+  tagline: string;
+  description: string;
+  basePrice: number;
+  price: number;
+  price90: number;
+  price120: number;
+  category: string;
+  allowedDurations: number[];
+  requiresDualTherapist?: boolean;
+  therapistAssignmentNote?: string;
+  estado: string;
+  active: boolean;
+}> = {
+  'SRB-relajante': {
+    id: 'SRB-relajante',
+    name: 'Masaje Relajante',
+    nombre: 'Masaje Relajante',
+    tagline: 'Maniobras suaves y fluidas para inducir relajación profunda y calmar el estrés.',
+    description: 'Tratamiento sedante que combina efluvios rítmicos y presión progresiva para calmar el sistema nervioso, aliviar la fatiga mental y renovar la vitalidad corporal.',
+    basePrice: 1100,
+    price: 1100,
+    price90: 1650,
+    price120: 2200,
+    category: 'Holístico',
+    allowedDurations: [60, 90, 120],
+    estado: 'activo',
+    active: true
+  },
+  'srv-relajante': {
+    id: 'srv-relajante',
+    name: 'Masaje Relajante',
+    nombre: 'Masaje Relajante',
+    tagline: 'Maniobras suaves y fluidas para inducir relajación profunda y calmar el estrés.',
+    description: 'Tratamiento sedante que combina efluvios rítmicos y presión progresiva para calmar el sistema nervioso, aliviar la fatiga mental y renovar la vitalidad corporal.',
+    basePrice: 1100,
+    price: 1100,
+    price90: 1650,
+    price120: 2200,
+    category: 'Holístico',
+    allowedDurations: [60, 90, 120],
+    estado: 'activo',
+    active: true
+  },
+  'srv-descontracturante': {
+    id: 'srv-descontracturante',
+    name: 'Masaje Descontracturante',
+    nombre: 'Masaje Descontracturante',
+    tagline: 'Presión focalizada para disolver nudos musculares y rigidez acumulada.',
+    description: 'Sesión terapéutica diseñada para liberar la tensión concentrada en espalda, cuello y hombros. Elimina contracturas provocadas por estrés postural o trabajo intenso.',
+    basePrice: 1200,
+    price: 1200,
+    price90: 1800,
+    price120: 2400,
+    category: 'Terapéutico',
+    allowedDurations: [60, 90, 120],
+    estado: 'activo',
+    active: true
+  },
+  'srv-deportivo': {
+    id: 'srv-deportivo',
+    name: 'Masaje Deportivo',
+    nombre: 'Masaje Deportivo',
+    tagline: 'Terapia muscular de alto rendimiento para preparación o recuperación física.',
+    description: 'Técnicas dinámicas, compresiones y estiramientos asistidos para acondicionar o recuperar la musculatura antes o después de la actividad deportiva intensa.',
+    basePrice: 1250,
+    price: 1250,
+    price90: 1875,
+    price120: 2500,
+    category: 'Terapéutico',
+    allowedDurations: [60, 90, 120],
+    estado: 'activo',
+    active: true
+  },
+  'srv-tejido-profundo': {
+    id: 'srv-tejido-profundo',
+    name: 'Masaje de Tejido Profundo',
+    nombre: 'Masaje de Tejido Profundo',
+    tagline: 'Presión firme sobre la fascia subyacente y capas musculares profundas.',
+    description: 'Enfoque biomecánico meticuloso que actúa sobre los tejidos conectivos más profundos para eliminar contracturas crónicas resistentes y restaurar la postura.',
+    basePrice: 1300,
+    price: 1300,
+    price90: 1950,
+    price120: 2600,
+    category: 'Terapéutico',
+    allowedDurations: [60, 90, 120],
+    estado: 'activo',
+    active: true
+  },
+  'srv-prenatal': {
+    id: 'srv-prenatal',
+    name: 'Masaje Prenatal',
+    nombre: 'Masaje Prenatal',
+    tagline: 'Cuidado especializado y seguro en posiciones ergonómicas para gestantes.',
+    description: 'Terapia reconfortante adaptada especialmente para la etapa de embarazo. Alivia la sobrecarga en zona lumbar, cadera y piernas, proporcionando un estado de calma total.',
+    basePrice: 1100,
+    price: 1100,
+    price90: 1650,
+    price120: 2200,
+    category: 'Exclusivo',
+    allowedDurations: [60, 90, 120],
+    estado: 'activo',
+    active: true
+  },
+  'srv-pareja': {
+    id: 'srv-pareja',
+    name: 'Masaje en Pareja',
+    nombre: 'Masaje en Pareja',
+    tagline: 'Experiencia simultánea coordinada con 2 masajistas (1 para cada cliente).',
+    description: 'Ritual armonizado para dos personas en la comodidad de tu residencia. El sistema asigna automáticamente a 2 masajistas certificadas simultáneas con montaje completo.',
+    basePrice: 2400,
+    price: 2400,
+    price90: 3600,
+    price120: 4800,
+    category: 'Parejas',
+    allowedDurations: [60, 90, 120],
+    requiresDualTherapist: true,
+    therapistAssignmentNote: '2 Masajistas asignados automáticamente (1 para cada persona)',
+    estado: 'activo',
+    active: true
+  }
+};
+
+let hasEnsuredServicesSeeded = false;
+
+async function ensureOfficialServicesSeeded(db: adminFirestore.Firestore) {
+  try {
+    const servicesCol = db.collection("servicios");
+    const snap = await servicesCol.limit(3).get();
+    if (snap.empty) {
+      console.log("Seeding official services catalog to Firestore 'servicios' collection...");
+      const batch = db.batch();
+      for (const [id, srv] of Object.entries(OFFICIAL_SERVICES_CATALOG)) {
+        batch.set(servicesCol.doc(id), srv, { merge: true });
+      }
+      await batch.commit();
+      console.log("Official services successfully seeded to Firestore.");
+    }
+  } catch (err) {
+    console.warn("Non-fatal: could not auto-seed services to Firestore on startup:", err);
+  }
+}
+
 function getAdminFirestore() {
   const apps = adminApp.getApps();
   const defaultApp = apps.length > 0 ? apps[0] : undefined;
   
-  if (firestoreDatabaseId && defaultApp) {
-    return adminFirestore.getFirestore(defaultApp, firestoreDatabaseId);
+  const db = firestoreDatabaseId && defaultApp 
+    ? adminFirestore.getFirestore(defaultApp, firestoreDatabaseId)
+    : adminFirestore.getFirestore();
+
+  if (!hasEnsuredServicesSeeded) {
+    hasEnsuredServicesSeeded = true;
+    ensureOfficialServicesSeeded(db).catch(() => {});
   }
-  return adminFirestore.getFirestore();
+  return db;
 }
 
 // In-memory robust rate limiter (fast, zero network overhead, resilient)
@@ -244,6 +395,30 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
       console.log(JSON.stringify(errRes, null, 2));
       return res.status(400).json(errRes);
     }
+
+    const [h, m] = String(time).split(":").map(Number);
+    const minutesFromMidnight = (h || 0) * 60 + (m || 0);
+    if (minutesFromMidnight < 9 * 60 || minutesFromMidnight > 20 * 60) {
+      const errRes = { 
+        success: false, 
+        error: "El horario de atención para masajes es exclusivamente entre 9:00 AM y 8:00 PM (09:00 a 20:00 hrs)." 
+      };
+      console.log("=== API BOOKING OUTGOING ERROR RESPONSE ===");
+      console.log(JSON.stringify(errRes, null, 2));
+      return res.status(400).json(errRes);
+    }
+
+    const [y, mon, d] = String(date).split("-").map(Number);
+    if (y && mon && d && !isNaN(h)) {
+      const serviceDt = new Date(y, mon - 1, d, h, m || 0, 0);
+      const now = new Date();
+      if (serviceDt.getTime() < now.getTime()) {
+        const errRes = { success: false, error: "La fecha y hora del servicio no pueden ser en el pasado." };
+        console.log("=== API BOOKING OUTGOING ERROR RESPONSE ===");
+        console.log(JSON.stringify(errRes, null, 2));
+        return res.status(400).json(errRes);
+      }
+    }
     if (!cityZone || !clientAddress) {
       const errRes = { success: false, error: "Zona y dirección son requeridos." };
       console.log("=== API BOOKING OUTGOING ERROR RESPONSE ===");
@@ -259,24 +434,53 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
     const finalClientName = clientData?.nombreCompleto || clientData?.name || email;
     const finalClientPhone = clientData?.telefono || clientData?.phone || "";
 
-    // Get service official pricing with robust ID mapping fallback
-    let srvDoc = await db.collection("servicios").doc(serviceId).get();
-    if (!srvDoc.exists) {
-      if (serviceId === "SRB-relajante") {
-        srvDoc = await db.collection("servicios").doc("srv-relajante").get();
-      } else if (serviceId === "srv-relajante") {
-        srvDoc = await db.collection("servicios").doc("SRB-relajante").get();
+    // Get service official pricing with robust ID mapping fallback and official catalog guarantee
+    let srvDoc: adminFirestore.DocumentSnapshot | null = null;
+    let srvData: any = null;
+
+    try {
+      srvDoc = await db.collection("servicios").doc(serviceId).get();
+      if (!srvDoc.exists) {
+        if (serviceId === "SRB-relajante") {
+          srvDoc = await db.collection("servicios").doc("srv-relajante").get();
+        } else if (serviceId === "srv-relajante") {
+          srvDoc = await db.collection("servicios").doc("SRB-relajante").get();
+        }
+      }
+      if (srvDoc && srvDoc.exists) {
+        srvData = srvDoc.data();
+      }
+    } catch (e) {
+      console.warn("Error fetching service document from Firestore:", e);
+    }
+
+    // Fallback to canonical official catalog if not found in Firestore collection
+    if (!srvData) {
+      const fallbackSrv = OFFICIAL_SERVICES_CATALOG[serviceId] ||
+        (serviceId === "SRB-relajante" ? OFFICIAL_SERVICES_CATALOG["srv-relajante"] : null) ||
+        (serviceId === "srv-relajante" ? OFFICIAL_SERVICES_CATALOG["SRB-relajante"] : null);
+
+      if (fallbackSrv) {
+        srvData = fallbackSrv;
+        // Asynchronously persist to Firestore collection so it exists for future direct queries
+        try {
+          db.collection("servicios").doc(serviceId).set(fallbackSrv, { merge: true }).catch(() => {});
+          if (serviceId === "SRB-relajante") {
+            db.collection("servicios").doc("srv-relajante").set({ ...fallbackSrv, id: "srv-relajante" }, { merge: true }).catch(() => {});
+          }
+        } catch (seedErr) {
+          console.warn("Non-fatal: Failed to auto-persist service to Firestore:", seedErr);
+        }
       }
     }
 
-    if (!srvDoc.exists) {
+    if (!srvData) {
       const errRes = { success: false, error: "El servicio solicitado no existe." };
       console.log("=== API BOOKING OUTGOING ERROR RESPONSE ===");
       console.log(JSON.stringify(errRes, null, 2));
       return res.status(400).json(errRes);
     }
     
-    const srvData = srvDoc.data();
     if (srvData?.estado === "inactivo" || srvData?.active === false) {
       const errRes = { success: false, error: "El servicio solicitado está inactivo." };
       console.log("=== API BOOKING OUTGOING ERROR RESPONSE ===");

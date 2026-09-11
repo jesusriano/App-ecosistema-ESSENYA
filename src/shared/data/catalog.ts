@@ -7,6 +7,7 @@ import imgRelaxing from '../../assets/images/relaxing_massage_1785522575769.jpg'
 import imgTension from '../../assets/images/tension_release_massage_1785522590275.jpg';
 
 export * from './pricing';
+export * from './scheduling';
 import { calculateServicePrice } from './pricing';
 
 // Official and Definitive Catalog of 6 Services

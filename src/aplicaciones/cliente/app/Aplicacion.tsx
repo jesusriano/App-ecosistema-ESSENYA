@@ -9,7 +9,8 @@ import {
 import { 
   calculateServicePrice, calculateBookingPricing, BookingPricingResult,
   PRESSURE_OPTIONS, formatPressureLevel, OFFICIAL_SERVICES,
-  OIL_OPTIONS, MUSIC_OPTIONS, PAYMENT_METHODS 
+  OIL_OPTIONS, MUSIC_OPTIONS, PAYMENT_METHODS,
+  getTodayDateString, evaluateTimeSlot, getScheduleSlotsForDate, getFirstAvailableSlot, OFFICIAL_BOOKING_HOURS 
 } from '../../../shared/data/catalog';
 import { 
   Calendar, Clock, MapPin, Sparkles, CheckCircle2, CheckCircle, Navigation, 
@@ -76,8 +77,11 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   const [step, setStep] = useState<number>(1);
   const [selectedServiceId, setSelectedServiceId] = useState<string>(() => services?.[0]?.id || 'SRB-relajante');
   const [duration, setDuration] = useState<60 | 90 | 120>(90);
-  const [selectedDate, setSelectedDate] = useState<string>('2026-07-23');
-  const [selectedTime, setSelectedTime] = useState<string>('18:00');
+  const todayDateStr = useMemo(() => getTodayDateString(), []);
+  const [selectedDate, setSelectedDate] = useState<string>(() => getTodayDateString());
+  const [selectedTime, setSelectedTime] = useState<string>(() => {
+    return getFirstAvailableSlot(getTodayDateString(), false) || '11:00';
+  });
   const [address, setAddress] = useState<string>(client?.address || 'Av. Paseo de las Palmas 735, Polanco');
   const [cityZone, setCityZone] = useState<string>(client?.cityZone || 'Polanco / Lomas CDMX');
   
@@ -185,6 +189,37 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   const currentTierData = useMemo(() => {
     return calculateMembershipTier(completedMassagesCount);
   }, [completedMassagesCount]);
+
+  // Higher-tier membership check: Diamond or Gold have priority express reservation (less than 5 hours)
+  const isHighTier = currentTierData.level > 1;
+
+  // Available official slots for current date taking into account the 09:00-20:00 window and notice policy
+  const availableSlots = useMemo(() => {
+    return getScheduleSlotsForDate(selectedDate, isHighTier);
+  }, [selectedDate, isHighTier]);
+
+  const hasAvailableSlots = useMemo(() => {
+    return availableSlots.some(s => s.available);
+  }, [availableSlots]);
+
+  const firstAvailableTime = useMemo(() => {
+    const found = availableSlots.find(s => s.available);
+    return found ? found.time : null;
+  }, [availableSlots]);
+
+  const selectedTimeSlotEvaluation = useMemo(() => {
+    return evaluateTimeSlot(selectedDate, selectedTime, isHighTier);
+  }, [selectedDate, selectedTime, isHighTier]);
+
+  // Automatically update selected time to the first available slot if the current selection is invalid
+  React.useEffect(() => {
+    const currentSlot = availableSlots.find(s => s.time === selectedTime);
+    if (!currentSlot || !currentSlot.available) {
+      if (firstAvailableTime) {
+        setSelectedTime(firstAvailableTime);
+      }
+    }
+  }, [selectedDate, isHighTier, availableSlots, firstAvailableTime, selectedTime]);
 
   // AI Concierge State
   const [showAiConcierge, setShowAiConcierge] = useState<boolean>(false);
@@ -331,6 +366,14 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     if (!selectedService || isSubmittingBooking) return;
     if (!bookingPricing.isPriceAvailable) {
       showToast('Precio no disponible', 'Precio no disponible. Selecciona otro servicio o comunícate con ESSENYA.', 'error');
+      return;
+    }
+    if (!selectedTimeSlotEvaluation.available) {
+      showToast(
+        'Horario no permitido',
+        selectedTimeSlotEvaluation.reason || 'El horario seleccionado no cumple con las políticas de reserva.',
+        'error'
+      );
       return;
     }
     setIsSubmittingBooking(true);
@@ -1087,34 +1130,90 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                 {/* Date & Time Picker */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-[#E5DFD3] dark:border-[#222222]">
                   <div className="space-y-2">
-                    <label className="text-xs uppercase tracking-wider text-[#6B655F] dark:text-[#AAAAAA] font-semibold flex items-center space-x-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-[#C9A55B]" />
-                      <span>Fecha del Servicio</span>
-                    </label>
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs uppercase tracking-wider text-[#6B655F] dark:text-[#AAAAAA] font-semibold flex items-center space-x-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-[#C9A55B]" />
+                        <span>Fecha del Servicio</span>
+                      </label>
+                      {selectedDate === todayDateStr && (
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B]">
+                          Hoy
+                        </span>
+                      )}
+                    </div>
                     <input 
                       type="date"
+                      min={todayDateStr}
                       value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val) {
+                          setSelectedDate(val);
+                        }
+                      }}
                       className="w-full bg-[#F5F1EA] dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-4 py-3 text-sm text-[#1C1917] dark:text-white focus:outline-none focus:border-[#C9A55B]"
                     />
+                    <p className="text-[11px] text-[#6B655F] dark:text-[#888888]">
+                      Citas disponibles de 09:00 a 20:00 hrs.
+                    </p>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-xs uppercase tracking-wider text-[#6B655F] dark:text-[#AAAAAA] font-semibold flex items-center space-x-1.5">
-                      <Clock className="w-3.5 h-3.5 text-[#C9A55B]" />
-                      <span>Horario Sugerido</span>
-                    </label>
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs uppercase tracking-wider text-[#6B655F] dark:text-[#AAAAAA] font-semibold flex items-center space-x-1.5">
+                        <Clock className="w-3.5 h-3.5 text-[#C9A55B]" />
+                        <span>Horario del Masaje</span>
+                      </label>
+                      <span className="text-[10px] text-[#806020] dark:text-[#C9A55B] font-medium">
+                        {isHighTier ? 'Reserva Express VIP' : 'Anticipación: mín. 5 hrs'}
+                      </span>
+                    </div>
                     <select
                       value={selectedTime}
                       onChange={(e) => setSelectedTime(e.target.value)}
-                      className="w-full bg-[#F5F1EA] dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-4 py-3 text-sm text-[#1C1917] dark:text-white focus:outline-none focus:border-[#C9A55B]"
+                      disabled={!hasAvailableSlots}
+                      className="w-full bg-[#F5F1EA] dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-4 py-3 text-sm text-[#1C1917] dark:text-white focus:outline-none focus:border-[#C9A55B] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {['09:00', '11:00', '13:00', '15:00', '17:00', '18:00', '19:30', '21:00'].map((t) => (
-                        <option key={t} value={t} className="bg-white dark:bg-[#141414] text-[#1C1917] dark:text-white">{t} hrs</option>
+                      {availableSlots.map((slot) => (
+                        <option 
+                          key={slot.time} 
+                          value={slot.time} 
+                          disabled={!slot.available}
+                          className="bg-white dark:bg-[#141414] text-[#1C1917] dark:text-white disabled:text-neutral-400 disabled:dark:text-neutral-600"
+                        >
+                          {slot.time} hrs {!slot.available ? (slot.needsHigherTier ? '(Mínimo 5h - Requiere Gold/Diamond)' : slot.isPast ? '(Horario concluido)' : '(No disponible)') : ''}
+                        </option>
                       ))}
                     </select>
+                    {isHighTier ? (
+                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" />
+                        <span>Beneficio VIP ({currentTierData.fullLabel}): Reserva express con menos de 5 horas de anticipación activada.</span>
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-[#6B655F] dark:text-[#888888]">
+                        Socios Platino: Se requiere reservar con un mínimo de 5 horas de anticipación.
+                      </p>
+                    )}
                   </div>
                 </div>
+
+                {/* Banner if no slots available for today */}
+                {!hasAvailableSlots && selectedDate === todayDateStr && (
+                  <div className="bg-[#FAF6EE] dark:bg-[#1C1811] p-3.5 rounded-xl border border-[#C9A55B]/40 flex items-start space-x-3">
+                    <AlertCircle className="w-5 h-5 text-[#806020] dark:text-[#C9A55B] shrink-0 mt-0.5" />
+                    <div className="text-xs space-y-1">
+                      <p className="font-bold text-[#806020] dark:text-[#C9A55B]">
+                        Horarios concluidos para el día de hoy
+                      </p>
+                      <p className="text-[#6B655F] dark:text-[#AAAAAA]">
+                        {isHighTier
+                          ? 'Los turnos de atención para hoy han concluido (horario de atención hasta las 20:00 hrs). Por favor selecciona una fecha posterior.'
+                          : 'Para socios Platino se requiere un mínimo de 5 horas de anticipación y los masajes se brindan hasta las 20:00 hrs. Te sugerimos seleccionar una fecha a partir de mañana.'}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Location / Domicilio Address */}
                 <div className="space-y-2 pt-2">
@@ -1154,16 +1253,32 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                   </button>
 
                   <button
-                    disabled={!bookingPricing.isPriceAvailable}
+                    disabled={!bookingPricing.isPriceAvailable || !hasAvailableSlots || !selectedTimeSlotEvaluation.available}
                     onClick={() => {
                       if (!bookingPricing.isPriceAvailable) {
                         showToast('Precio no disponible', 'Precio no disponible. Selecciona otro servicio o comunícate con ESSENYA.', 'error');
                         return;
                       }
+                      if (!hasAvailableSlots) {
+                        showToast(
+                          'Sin horarios disponibles',
+                          'No hay turnos disponibles para esta fecha con el tiempo de anticipación requerido. Por favor selecciona otra fecha.',
+                          'error'
+                        );
+                        return;
+                      }
+                      if (!selectedTimeSlotEvaluation.available) {
+                        showToast(
+                          'Horario no permitido',
+                          selectedTimeSlotEvaluation.reason || 'El horario seleccionado no cumple con las políticas de reserva.',
+                          'error'
+                        );
+                        return;
+                      }
                       setStep(3);
                     }}
                     className={`flex items-center space-x-2 px-6 py-3 rounded-xl transition-all ${
-                      !bookingPricing.isPriceAvailable
+                      !bookingPricing.isPriceAvailable || !hasAvailableSlots || !selectedTimeSlotEvaluation.available
                         ? 'bg-neutral-300 dark:bg-neutral-800 text-neutral-500 cursor-not-allowed'
                         : 'bg-gradient-to-r from-[#C9A55B] to-[#B38F43] text-black font-semibold gold-button-hover'
                     }`}

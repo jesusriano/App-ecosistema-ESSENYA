@@ -231,6 +231,119 @@ async function runTests() {
     console.error("Test 10 error", e);
     passed = false;
   }
+
+  // Test 11: Scheduling, Operating Hours (09:00 - 20:00) & 5-Hour Notice Rule
+  try {
+    const { 
+      getTodayDateString, 
+      evaluateTimeSlot, 
+      OFFICIAL_BOOKING_HOURS, 
+      SERVICE_START_HOUR, 
+      SERVICE_END_HOUR 
+    } = await import('../src/shared/data/scheduling.js');
+
+    const todayStr = getTodayDateString();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(todayStr)) {
+      console.log(`✅ Test 11a: getTodayDateString returns valid ISO date (${todayStr}).`);
+    } else {
+      console.error("❌ Test 11a failed: invalid date format", todayStr);
+      passed = false;
+    }
+
+    // Operating hours check
+    const allWithinWindow = OFFICIAL_BOOKING_HOURS.every(t => {
+      const h = Number(t.split(':')[0]);
+      return h >= SERVICE_START_HOUR && h <= SERVICE_END_HOUR;
+    });
+    if (allWithinWindow && SERVICE_START_HOUR === 9 && SERVICE_END_HOUR === 20) {
+      console.log("✅ Test 11b: All official booking hours are strictly within 09:00 and 20:00.");
+    } else {
+      console.error("❌ Test 11b failed: hours outside 09:00-20:00 range.");
+      passed = false;
+    }
+
+    // Simulated test scenario: mock current time to 10:00 AM on todayStr
+    const [y, m, d] = todayStr.split('-').map(Number);
+    const mockNow = new Date(y, m - 1, d, 10, 0, 0, 0);
+
+    // 14:00 (4 hours ahead) -> Platino (isHighTier = false) must be rejected
+    const platino4h = evaluateTimeSlot(todayStr, '14:00', false, mockNow);
+    if (!platino4h.available && platino4h.needsHigherTier) {
+      console.log("✅ Test 11c: Platino member blocked from booking with < 5h notice (14:00 vs 10:00 now).");
+    } else {
+      console.error("❌ Test 11c failed: Platino should not be able to book 4h ahead.", platino4h);
+      passed = false;
+    }
+
+    // 14:00 -> High tier (Gold/Diamond, isHighTier = true) must be accepted (since >= 2h)
+    const highTier4h = evaluateTimeSlot(todayStr, '14:00', true, mockNow);
+    if (highTier4h.available) {
+      console.log("✅ Test 11d: High-tier member (Gold/Diamond) allowed to book with < 5h notice (4h).");
+    } else {
+      console.error("❌ Test 11d failed: High-tier should be able to book 4h ahead.", highTier4h);
+      passed = false;
+    }
+
+    // 16:00 (6 hours ahead) -> Platino should be allowed
+    const platino6h = evaluateTimeSlot(todayStr, '16:00', false, mockNow);
+    if (platino6h.available) {
+      console.log("✅ Test 11e: Platino member allowed to book with >= 5h notice (16:00 vs 10:00 now).");
+    } else {
+      console.error("❌ Test 11e failed: Platino should be able to book 6h ahead.", platino6h);
+      passed = false;
+    }
+
+    // Out of operating hours (08:00 or 21:00) -> must be rejected for everyone
+    const tooEarly = evaluateTimeSlot(todayStr, '08:00', true, mockNow);
+    const tooLate = evaluateTimeSlot(todayStr, '21:00', true, mockNow);
+    if (!tooEarly.available && !tooLate.available) {
+      console.log("✅ Test 11f: Hours outside 09:00 - 20:00 strictly rejected.");
+    } else {
+      console.error("❌ Test 11f failed: out of window hours accepted.", { tooEarly, tooLate });
+      passed = false;
+    }
+  } catch (e) {
+    console.error("Test 11 error", e);
+    passed = false;
+  }
+
+  // Test 12: Validate OFFICIAL_SERVICES_CATALOG coverage and pricing
+  try {
+    const { OFFICIAL_SERVICES_CATALOG } = await import('../api/index.js');
+    const requiredServiceIds = [
+      'SRB-relajante',
+      'srv-relajante',
+      'srv-descontracturante',
+      'srv-deportivo',
+      'srv-tejido-profundo',
+      'srv-prenatal',
+      'srv-pareja'
+    ];
+
+    let allServicesPresent = true;
+    for (const sId of requiredServiceIds) {
+      if (!OFFICIAL_SERVICES_CATALOG[sId]) {
+        console.error(`❌ Test 12: Missing service ${sId} in OFFICIAL_SERVICES_CATALOG`);
+        allServicesPresent = false;
+      }
+    }
+
+    if (
+      allServicesPresent &&
+      OFFICIAL_SERVICES_CATALOG['SRB-relajante'].basePrice === 1100 &&
+      OFFICIAL_SERVICES_CATALOG['SRB-relajante'].price90 === 1650 &&
+      OFFICIAL_SERVICES_CATALOG['SRB-relajante'].price120 === 2200 &&
+      OFFICIAL_SERVICES_CATALOG['srv-pareja'].basePrice === 2400
+    ) {
+      console.log("✅ Test 12: OFFICIAL_SERVICES_CATALOG contains all official ESSENYA services with validated pricing.");
+    } else {
+      console.error("❌ Test 12 failed: Service catalog verification failed.");
+      passed = false;
+    }
+  } catch (e) {
+    console.error("Test 12 error", e);
+    passed = false;
+  }
   
   server.close();
   
