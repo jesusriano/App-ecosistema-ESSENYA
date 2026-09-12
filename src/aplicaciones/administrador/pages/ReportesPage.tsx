@@ -6,6 +6,7 @@ import {
 import { useAdmin } from '../hooks/useAdmin';
 import { useToast } from '../../../shared/context/ToastContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
+import { formatSafeDate } from '../../../shared/utils/dateUtils';
 
 export const ReportesPage: React.FC = () => {
   const { auditLogs, bookings, therapists, services, zones } = useAdmin();
@@ -161,7 +162,7 @@ export const ReportesPage: React.FC = () => {
                 <p className="text-[var(--text-muted)]">{log.details}</p>
               </div>
               <div className="text-right text-[11px] text-[var(--text-muted)]">
-                <span>{log.timestamp}</span>
+                <span>{formatSafeDate(log.timestamp)}</span>
                 <span className="block text-[var(--text-primary)] font-mono">{log.userName} ({log.userRole})</span>
               </div>
             </div>

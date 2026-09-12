@@ -10,6 +10,11 @@ async function startLocalServer() {
   const app = express();
   app.use(apiApp);
 
+  // Catch unhandled /api routes and return JSON 404 (preventing Vite SPA HTML fallback)
+  app.all("/api/*", (req, res) => {
+    res.status(404).json({ success: false, error: `Ruta API no encontrada: ${req.method} ${req.path}` });
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

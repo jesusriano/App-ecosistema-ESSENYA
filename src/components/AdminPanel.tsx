@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from '../context/ToastContext';
 import { LuxuryButton } from './ui/LuxuryButton';
 import { Booking, Therapist, ClientUser, CoverageZone, SystemAuditLog, BookingState } from '../types';
+import { formatSafeDate } from '../shared/utils/dateUtils';
 import { 
   Shield, TrendingUp, Users, Calendar, MapPin, DollarSign, 
   Activity, Search, Plus, Edit, Trash2, Star, Award, 
@@ -828,7 +829,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <tbody className="divide-y divide-[#E5DFD3] dark:divide-[#222222]">
                   {auditLogs.map((log) => (
                     <tr key={log.id} className="hover:bg-[#FAF8F5] dark:hover:bg-[#1A1A1A] transition-colors">
-                      <td className="p-4 font-mono text-[#6B655F] dark:text-[#888888]">{log.timestamp}</td>
+                      <td className="p-4 font-mono text-[#6B655F] dark:text-[#888888]">{formatSafeDate(log.timestamp)}</td>
                       <td className="p-4 font-bold text-[#1C1917] dark:text-white">{log.userName} ({log.userRole})</td>
                       <td className="p-4 text-[#806020] dark:text-[#C9A55B] font-semibold">{log.action}</td>
                       <td className="p-4 text-[#6B655F] dark:text-[#AAAAAA]">{log.details}</td>

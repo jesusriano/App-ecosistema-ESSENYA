@@ -14,6 +14,7 @@ import {
   getVipCourtesyStatus 
 } from '../services/membershipService';
 import { getBilleteraTotalBalance } from '../services/billeteraService';
+import { getServiceImage } from '../../../shared/utils/serviceImage';
 
 interface InicioPageProps {
   onGoToReservas: () => void;
@@ -306,7 +307,7 @@ export const InicioPage: React.FC<InicioPageProps> = ({ onGoToReservas }) => {
             >
               <div className="aspect-video rounded-xl overflow-hidden relative">
                 <img 
-                  src={service.image || undefined} 
+                  src={getServiceImage(service)} 
                   alt={service.name} 
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                   referrerPolicy="no-referrer"

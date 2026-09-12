@@ -16,7 +16,7 @@ import {
   Calendar, Clock, MapPin, Sparkles, CheckCircle2, CheckCircle, Navigation, 
   MessageSquare, FileText, Star, Award, ShieldCheck, ChevronRight, 
   Bot, AlertCircle, RefreshCw, Send, X, Heart, Droplets, Music, Sliders,
-  AlertTriangle, CreditCard, Building2, Check, Copy, Users, UserCheck, Banknote, Camera, Upload,
+  AlertTriangle, CreditCard, Building2, Check, CheckCheck, Copy, Users, UserCheck, Banknote, Camera, Upload,
   LocateFixed, Crown, Gem, Shield, Gift, Wallet, Lock
 } from 'lucide-react';
 import { PanicModal } from '../../../shared/components/PanicModal';
@@ -55,10 +55,10 @@ interface ClientAppProps {
 
 export const ClientApp: React.FC<ClientAppProps> = ({
   client,
-  services,
-  therapists,
-  bookings,
-  invoices,
+  services = [],
+  therapists = [],
+  bookings = [],
+  invoices = [],
   onNewBooking,
   onUpdateBookingState,
   onViewInvoice,
@@ -72,6 +72,20 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   // Rating state for completed bookings
   const [pendingRating, setPendingRating] = useState<Record<string, number>>({});
   const [pendingComment, setPendingComment] = useState<Record<string, string>>({});
+
+  const getServiceImage = (srv: any): string => {
+    if (srv?.image && typeof srv.image === 'string' && srv.image.trim().length > 5) {
+      return srv.image;
+    }
+    const id = srv?.id || '';
+    if (id.includes('relajante')) return 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&q=80&w=800';
+    if (id.includes('descontracturante') || id.includes('tension')) return 'https://images.unsplash.com/photo-1519823551278-64ac92734fb1?auto=format&fit=crop&q=80&w=800';
+    if (id.includes('deportivo')) return 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&q=80&w=800';
+    if (id.includes('profundo')) return 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&q=80&w=800';
+    if (id.includes('prenatal')) return 'https://images.unsplash.com/photo-1512290900672-8a9d18b39058?auto=format&fit=crop&q=80&w=800';
+    if (id.includes('pareja')) return 'https://images.unsplash.com/photo-1519824145371-296894a0daa9?auto=format&fit=crop&q=80&w=800';
+    return 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&q=80&w=800';
+  };
 
   // Booking Flow State
   const [step, setStep] = useState<number>(1);
@@ -230,9 +244,10 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   // Chat Drawer
   const [showChat, setShowChat] = useState<boolean>(false);
   const [chatInput, setChatInput] = useState<string>('');
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: string, text: string, time: string }>>([
-    { sender: 'Concierge', text: 'Bienvenido a ESSENYA, Don Alejandro. Su terapeuta fue notificada y está coordinando el transporte ejecutivo.', time: '10:16 AM' },
-    { sender: 'Dra. Elena Rostova', text: 'Buenas tardes. Me encuentro en camino con todo el equipo esterilizado y camilla VIP.', time: '10:20 AM' }
+  const [isOtherTyping, setIsOtherTyping] = useState<boolean>(false);
+  const [chatMessages, setChatMessages] = useState<Array<{ sender: string, text: string, time: string, read?: boolean }>>([
+    { sender: 'Concierge', text: 'Bienvenido a ESSENYA, Don Alejandro. Su terapeuta fue notificada y está coordinando el transporte ejecutivo.', time: '10:16 AM', read: true },
+    { sender: 'Dra. Elena Rostova', text: 'Buenas tardes. Me encuentro en camino con todo el equipo esterilizado y camilla VIP.', time: '10:20 AM', read: true }
   ]);
 
   // Extras Selection State
@@ -520,25 +535,38 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   const handleSendChat = () => {
     if (!chatInput.trim()) return;
     const newMsg = {
-      sender: client?.name,
+      sender: client?.name || 'Don Alejandro',
       text: chatInput,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      read: false
     };
     setChatMessages(prev => [...prev, newMsg]);
     onSendMessage(activeBooking.id, chatInput);
     setChatInput('');
 
-    // Simulate therapist quick auto reply
+    // Mark as read after 1s
     setTimeout(() => {
+      setChatMessages(prev => prev.map(m => m === newMsg ? { ...m, read: true } : m));
+    }, 1000);
+
+    // Show typing indicator after 800ms
+    setTimeout(() => {
+      setIsOtherTyping(true);
+    }, 800);
+
+    // Therapist reply after 2200ms
+    setTimeout(() => {
+      setIsOtherTyping(false);
       setChatMessages(prev => [
         ...prev,
         {
           sender: activeBooking.therapistName || 'Dra. Elena Rostova',
           text: 'Entendido, Don Alejandro. Llevo la mezcla de aromaterapia de Ylang Ylang Dorado indicada.',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          read: true
         }
       ]);
-    }, 1500);
+    }, 2500);
   };
 
   return (
@@ -859,7 +887,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                       <div>
                         <div className="relative h-48 overflow-hidden">
                           <img 
-                            src={srv.image || undefined} 
+                            src={getServiceImage(srv)} 
                             alt={srv.name} 
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                             referrerPolicy="no-referrer"
@@ -879,7 +907,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                           <div className="space-y-1 pt-2">
                             <p className="text-[10px] uppercase text-[#6B655F] dark:text-[#888888] tracking-wider font-semibold">Beneficios Clave:</p>
                             <ul className="text-xs text-[#1C1917]/80 dark:text-white/80 space-y-1">
-                              {srv.benefits.map((b, idx) => (
+                              {(srv.benefits || []).map((b, idx) => (
                                 <li key={idx} className="flex items-center space-x-1.5">
                                   <span className="w-1.5 h-1.5 rounded-full bg-[#C9A55B]"></span>
                                   <span>{b}</span>
@@ -2083,15 +2111,14 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                   🛑 Solicitud Rechazada por la Administración
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-7 gap-2 text-center">
+                <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 text-center">
                   {[
                     { stateKey: 'pendiente', label: '1. Solicitud' },
                     { stateKey: 'aceptada', label: '2. Aceptada' },
-                    { stateKey: 'aceptada', label: '3. Agenda' },
-                    { stateKey: 'en_camino', label: '4. En Camino' },
-                    { stateKey: 'llegue', label: '5. Llegué' },
-                    { stateKey: 'servicio_iniciado', label: '6. Sesión' },
-                    { stateKey: 'servicio_finalizado', label: '7. Concluido' }
+                    { stateKey: 'en_camino', label: '3. En Camino' },
+                    { stateKey: 'llegue', label: '4. Llegué' },
+                    { stateKey: 'servicio_iniciado', label: '5. Sesión' },
+                    { stateKey: 'servicio_finalizado', label: '6. Concluido' }
                   ].map((st) => {
                     const isCurrent = activeBooking.state === st.stateKey;
                     return (
@@ -2767,18 +2794,40 @@ export const ClientApp: React.FC<ClientAppProps> = ({
             {chatMessages.map((msg, idx) => (
               <div 
                 key={idx}
-                className={`flex flex-col ${msg.sender === client?.name ? 'items-end' : 'items-start'}`}
+                className={`flex flex-col ${msg.sender === (client?.name || 'Don Alejandro') ? 'items-end' : 'items-start'}`}
               >
                 <div className={`p-2.5 rounded-xl max-w-[80%] ${
-                  msg.sender === client?.name
+                  msg.sender === (client?.name || 'Don Alejandro')
                     ? 'bg-[#C9A55B] text-black font-medium'
                     : 'bg-[#F5F1EA] dark:bg-[#222222] text-[#1C1917] dark:text-white border border-[#E5DFD3] dark:border-[#333333]'
                 }`}>
                   <p>{msg.text}</p>
                 </div>
-                <span className="text-[9px] text-[#888888] dark:text-[#666666] mt-0.5">{msg.sender} • {msg.time}</span>
+                <div className="flex items-center space-x-1.5 mt-0.5">
+                  <span className="text-[9px] text-[#888888] dark:text-[#666666]">{msg.sender} • {msg.time}</span>
+                  {msg.sender === (client?.name || 'Don Alejandro') && (
+                    <span className="flex items-center text-[9px] text-[#C9A55B]" title={msg.read ? "Visto" : "Enviado"}>
+                      {msg.read ? (
+                        <span className="flex items-center space-x-0.5 font-semibold text-[#C9A55B]">
+                          <CheckCheck className="w-3 h-3 text-[#C9A55B] inline" />
+                          <span className="text-[8px]">Visto</span>
+                        </span>
+                      ) : (
+                        <Check className="w-3 h-3 text-[#888888] inline" />
+                      )}
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
+            {isOtherTyping && (
+              <div className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#F5F1EA] dark:bg-[#1C1917] rounded-xl w-fit text-[10px] text-[#C9A55B] italic border border-[#C9A55B]/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C9A55B] animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C9A55B] animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C9A55B] animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                <span>{activeBooking.therapistName || 'La terapeuta'} está escribiendo...</span>
+              </div>
+            )}
           </div>
 
           <div className="p-2 bg-[#FAF8F5] dark:bg-[#1A1A1A] border-t border-[#E5DFD3] dark:border-[#333333] flex items-center space-x-2">

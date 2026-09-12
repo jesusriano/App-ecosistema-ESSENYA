@@ -92,6 +92,7 @@ export const OFFICIAL_SERVICES_CATALOG: Record<string, {
   therapistAssignmentNote?: string;
   estado: string;
   active: boolean;
+  image?: string;
 }> = {
   'SRB-relajante': {
     id: 'SRB-relajante',
@@ -106,7 +107,8 @@ export const OFFICIAL_SERVICES_CATALOG: Record<string, {
     category: 'Holístico',
     allowedDurations: [60, 90, 120],
     estado: 'activo',
-    active: true
+    active: true,
+    image: 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&q=80&w=800'
   },
   'srv-relajante': {
     id: 'srv-relajante',
@@ -121,7 +123,8 @@ export const OFFICIAL_SERVICES_CATALOG: Record<string, {
     category: 'Holístico',
     allowedDurations: [60, 90, 120],
     estado: 'activo',
-    active: true
+    active: true,
+    image: 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&q=80&w=800'
   },
   'srv-descontracturante': {
     id: 'srv-descontracturante',
@@ -136,7 +139,8 @@ export const OFFICIAL_SERVICES_CATALOG: Record<string, {
     category: 'Terapéutico',
     allowedDurations: [60, 90, 120],
     estado: 'activo',
-    active: true
+    active: true,
+    image: 'https://images.unsplash.com/photo-1519823551278-64ac92734fb1?auto=format&fit=crop&q=80&w=800'
   },
   'srv-deportivo': {
     id: 'srv-deportivo',
@@ -151,7 +155,8 @@ export const OFFICIAL_SERVICES_CATALOG: Record<string, {
     category: 'Terapéutico',
     allowedDurations: [60, 90, 120],
     estado: 'activo',
-    active: true
+    active: true,
+    image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&q=80&w=800'
   },
   'srv-tejido-profundo': {
     id: 'srv-tejido-profundo',
@@ -166,7 +171,8 @@ export const OFFICIAL_SERVICES_CATALOG: Record<string, {
     category: 'Terapéutico',
     allowedDurations: [60, 90, 120],
     estado: 'activo',
-    active: true
+    active: true,
+    image: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&q=80&w=800'
   },
   'srv-prenatal': {
     id: 'srv-prenatal',
@@ -181,7 +187,8 @@ export const OFFICIAL_SERVICES_CATALOG: Record<string, {
     category: 'Exclusivo',
     allowedDurations: [60, 90, 120],
     estado: 'activo',
-    active: true
+    active: true,
+    image: 'https://images.unsplash.com/photo-1512290900672-8a9d18b39058?auto=format&fit=crop&q=80&w=800'
   },
   'srv-pareja': {
     id: 'srv-pareja',
@@ -198,7 +205,8 @@ export const OFFICIAL_SERVICES_CATALOG: Record<string, {
     requiresDualTherapist: true,
     therapistAssignmentNote: '2 Masajistas asignados automáticamente (1 para cada persona)',
     estado: 'activo',
-    active: true
+    active: true,
+    image: 'https://images.unsplash.com/photo-1519824145371-296894a0daa9?auto=format&fit=crop&q=80&w=800'
   }
 };
 
@@ -813,26 +821,48 @@ app.post("/api/admin/clean-demo-data", requireSuperAdmin, async (req, res) => {
   }
 });
 
-app.post("/api/admin/audit-log", requireAdmin, async (req, res) => {
+const handleAuditLogSubmission = async (req: Request, res: Response) => {
   try {
-    const { action, details } = req.body;
+    const { action, details, userRole, userName } = req.body;
     if (!action || !details) return res.status(400).json({ success: false, error: "Datos incompletos" });
     
     const db = getAdminFirestore();
-    await db.collection("audit_logs").add({
+    const resolvedRole = userRole || (req as any).user?.role || "usuario";
+    const resolvedName = userName || (req as any).user?.name || (req as any).user?.email || "Usuario";
+    const nowIso = new Date().toISOString();
+
+    const docRef = await db.collection("audit_logs").add({
       actorId: (req as any).user.uid,
-      actorEmail: (req as any).user.email,
-      actorRole: (req as any).user.role || "administrador",
+      actorEmail: (req as any).user.email || "",
+      actorRole: resolvedRole,
+      userRole: resolvedRole,
+      userName: resolvedName,
       action: action.substring(0, 100),
       details: details.substring(0, 500),
       timestamp: adminFirestore.FieldValue.serverTimestamp(),
+      createdAt: nowIso,
       ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown"
     });
-    res.json({ success: true });
-  } catch (error) {
+
+    res.json({
+      success: true,
+      log: {
+        id: docRef.id,
+        actorId: (req as any).user.uid,
+        userRole: resolvedRole,
+        userName: resolvedName,
+        action: action.substring(0, 100),
+        details: details.substring(0, 500),
+        timestamp: nowIso
+      }
+    });
+  } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
-});
+};
+
+app.post("/api/admin/audit-log", requireAuth, handleAuditLogSubmission);
+app.post("/api/audit-log", requireAuth, handleAuditLogSubmission);
 
 app.post("/api/admin/create-therapist-auth-profile", requireAdmin, async (req, res) => {
   try {

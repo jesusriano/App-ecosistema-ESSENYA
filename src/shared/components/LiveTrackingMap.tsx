@@ -466,26 +466,6 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
     return () => clearTimeout(timer);
   }, [clientAddress, cityZone, bookingState]);
 
-
-  if (bookingState === 'aceptada') {
-    return (
-      <div className="w-full h-96 bg-[#141414] rounded-2xl border border-[#C9A55B]/30 overflow-hidden relative shadow-2xl flex flex-col items-center justify-center text-center p-8">
-        <div className="w-16 h-16 rounded-full bg-[#1A1A1A] border border-[#C9A55B]/30 flex items-center justify-center mb-4">
-          <ShieldCheck className="w-8 h-8 text-[#C9A55B]" />
-        </div>
-        <h3 className="text-lg font-serif font-bold text-white mb-2">Terapeuta Confirmada</h3>
-        <p className="text-sm text-[#AAAAAA] max-w-sm">
-          Tu profesional ha aceptado la solicitud. El seguimiento GPS se activará automáticamente cuando la terapeuta inicie el trayecto hacia tu domicilio.
-        </p>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return <LiveTrackingMapSkeleton />;
-  }
-
-
   // Catch Google Maps API Auth Failure (ApiTargetBlockedMapError / ProjectDeniedMapError)
   useEffect(() => {
     const previousAuthFailure = (window as any).gm_authFailure;
@@ -551,6 +531,24 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
       setUseVectorMode(false);
     }
   };
+
+  if (bookingState === 'aceptada') {
+    return (
+      <div className="w-full h-96 bg-[#141414] rounded-2xl border border-[#C9A55B]/30 overflow-hidden relative shadow-2xl flex flex-col items-center justify-center text-center p-8">
+        <div className="w-16 h-16 rounded-full bg-[#1A1A1A] border border-[#C9A55B]/30 flex items-center justify-center mb-4">
+          <ShieldCheck className="w-8 h-8 text-[#C9A55B]" />
+        </div>
+        <h3 className="text-lg font-serif font-bold text-white mb-2">Terapeuta Confirmada</h3>
+        <p className="text-sm text-[#AAAAAA] max-w-sm">
+          Tu profesional ha aceptado la solicitud. El seguimiento GPS se activará automáticamente cuando la terapeuta inicie el trayecto hacia tu domicilio.
+        </p>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return <LiveTrackingMapSkeleton />;
+  }
 
   return (
     <div className="space-y-4">

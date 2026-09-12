@@ -428,12 +428,19 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         },
         body: JSON.stringify({ userRole, userName, action, details })
       });
+      
+      const contentType = response.headers.get('content-type');
+      if (!response.ok || !contentType || !contentType.includes('application/json')) {
+        console.warn(`Audit log endpoint returned status ${response.status} (non-JSON or unhandled).`);
+        return;
+      }
+
       const data = await response.json();
       if (data.success && data.log) {
         setAuditLogs(prev => [data.log as SystemAuditLog, ...prev]);
       }
     } catch (err) {
-      console.error("Failed to add audit log via API", err);
+      console.warn("Could not record audit log via API", err);
     }
   };
 
@@ -460,7 +467,15 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         })
       });
       
-      const data = await response.json();
+      let data: any;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        throw new Error(text || `Error ${response.status} al procesar la reserva`);
+      }
+
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to create booking on backend');
       }

@@ -5,7 +5,7 @@ import { LuxuryButton } from './ui/LuxuryButton';
 import { Therapist, Booking, BookingState } from '../types';
 import { 
   Calendar, Clock, MapPin, Navigation, MessageSquare, DollarSign, 
-  CheckCircle2, XCircle, Play, Shield, Award, Star, Bot, Send, UserCheck, Check,
+  CheckCircle2, XCircle, Play, Shield, Award, Star, Bot, Send, UserCheck, Check, CheckCheck,
   AlertTriangle, X
 } from 'lucide-react';
 import { PanicModal } from './PanicModal';
@@ -183,9 +183,10 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
 
   // Chat state
   const [chatInput, setChatInput] = useState<string>('');
-  const [messages, setMessages] = useState<Array<{ sender: string, text: string, time: string }>>([
-    { sender: 'Don Alejandro', text: 'Hola Elena, ¿a qué hora aproximadamente estás llegando a Palmas?', time: '10:18 AM' },
-    { sender: activeTherapist.name, text: 'Hola Don Alejandro. Estoy a 12 minutos. El chofer ejecutivo ya está estacionando.', time: '10:20 AM' }
+  const [isClientTyping, setIsClientTyping] = useState<boolean>(false);
+  const [messages, setMessages] = useState<Array<{ sender: string, text: string, time: string, read?: boolean }>>([
+    { sender: 'Don Alejandro', text: 'Hola Elena, ¿a qué hora aproximadamente estás llegando a Palmas?', time: '10:18 AM', read: true },
+    { sender: activeTherapist.name, text: 'Hola Don Alejandro. Estoy a 12 minutos. El chofer ejecutivo ya está estacionando.', time: '10:20 AM', read: true }
   ]);
 
   const handleUpdateStatus = (bookingId: string, newState: BookingState, label: string) => {
@@ -232,11 +233,38 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
 
   const handleSendChat = () => {
     if (!chatInput.trim()) return;
-    setMessages(prev => [
-      ...prev,
-      { sender: activeTherapist.name, text: chatInput, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-    ]);
+    const newMsg = { 
+      sender: activeTherapist.name, 
+      text: chatInput, 
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      read: false
+    };
+    setMessages(prev => [...prev, newMsg]);
     setChatInput('');
+
+    // Mark as read after 1s
+    setTimeout(() => {
+      setMessages(prev => prev.map(m => m === newMsg ? { ...m, read: true } : m));
+    }, 1000);
+
+    // Client typing after 800ms
+    setTimeout(() => {
+      setIsClientTyping(true);
+    }, 800);
+
+    // Client reply after 2500ms
+    setTimeout(() => {
+      setIsClientTyping(false);
+      setMessages(prev => [
+        ...prev,
+        {
+          sender: 'Don Alejandro',
+          text: 'Perfecto Elena, aquí te esperamos en la recepción con gusto.',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          read: true
+        }
+      ]);
+    }, 2500);
   };
 
   return (
@@ -604,9 +632,31 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                     }`}>
                       <p>{m.text}</p>
                     </div>
-                    <span className="text-[9px] text-[#666666] mt-0.5">{m.sender} • {m.time}</span>
+                    <div className="flex items-center space-x-1.5 mt-0.5">
+                      <span className="text-[9px] text-[#666666]">{m.sender} • {m.time}</span>
+                      {m.sender === activeTherapist.name && (
+                        <span className="flex items-center text-[9px] text-[#C9A55B]">
+                          {m.read ? (
+                            <span className="flex items-center space-x-0.5 font-semibold text-[#C9A55B]">
+                              <CheckCheck className="w-3 h-3 text-[#C9A55B] inline" />
+                              <span className="text-[8px]">Visto</span>
+                            </span>
+                          ) : (
+                            <Check className="w-3 h-3 text-[#666666] inline" />
+                          )}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ))}
+                {isClientTyping && (
+                  <div className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#222222] rounded-xl w-fit text-[10px] text-[#C9A55B] italic border border-[#C9A55B]/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#C9A55B] animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#C9A55B] animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#C9A55B] animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                    <span>Don Alejandro está escribiendo...</span>
+                  </div>
+                )}
               </div>
 
               <div className="flex space-x-2">

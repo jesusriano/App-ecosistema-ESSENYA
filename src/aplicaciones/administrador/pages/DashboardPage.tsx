@@ -34,6 +34,20 @@ export const DashboardPage: React.FC = () => {
   const approvedTherapistsCount = fullTherapists.filter(t => t.estado === 'activo').length;
   const rejectedTherapistsCount = fullTherapists.filter(t => t.estado === 'rechazado').length;
 
+  const formatLogTime = (ts: any): string => {
+    if (!ts) return '';
+    if (typeof ts === 'string') {
+      return ts.length >= 16 ? ts.substring(11, 16) : ts;
+    }
+    try {
+      const date = ts instanceof Date ? ts : (typeof ts.toDate === 'function' ? ts.toDate() : (ts.seconds ? new Date(ts.seconds * 1000) : new Date(ts)));
+      if (!isNaN(date.getTime())) {
+        return date.toTimeString().substring(0, 5);
+      }
+    } catch (e) {}
+    return String(ts);
+  };
+
   // Selected Active Booking for Live Tracking
   const activeServicesOnTrack = bookings.filter(b => 
     b.state === 'en_camino' || b.state === 'llegue' || b.state === 'servicio_iniciado' || b.state === 'aceptada'
@@ -551,7 +565,7 @@ export const DashboardPage: React.FC = () => {
                 <div key={log.id} className="text-xs border-b border-[var(--border-color)] pb-2 space-y-0.5">
                   <div className="flex justify-between text-[10px] text-[var(--text-muted)]">
                     <span className="font-semibold text-[#C9A55B]">{log.action}</span>
-                    <span>{log.timestamp.substring(11, 16)} hrs</span>
+                    <span>{formatLogTime(log.timestamp)} hrs</span>
                   </div>
                   <p className="text-[var(--text-primary)] text-[11px]">{log.details}</p>
                 </div>
