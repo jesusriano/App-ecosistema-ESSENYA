@@ -629,7 +629,8 @@ export const TerapeutasPage: React.FC = () => {
                                 onClick={async () => {
                                   const res = await changeTherapistStatus(t.id, 'activo', 'Aprobada por Administradora.');
                                   if (res.success) {
-                                    showToast('success', '¡Acreditación Aprobada! Terapeuta activada.');
+                                    const passMsg = res.tempPassword ? ` Cuenta Auth creada. Contraseña temporal: ${res.tempPassword}` : '';
+                                    showToast('success', `¡Acreditación Aprobada! Terapeuta activada.${passMsg}`);
                                   } else {
                                     showToast('error', res.error || 'Error al aprobar la solicitud.');
                                   }
@@ -1199,7 +1200,12 @@ export const TerapeutasPage: React.FC = () => {
                         onClick={async () => {
                           const res = await changeTherapistStatus(modalData.id, 'activo', 'Acreditada y aprobada por la administración.');
                           setShowDocModal(null);
-                          if (res.success) showToast('success', '¡Acreditación Aprobada! Terapeuta activada.');
+                          if (res.success) {
+                            const passMsg = res.tempPassword ? ` Cuenta Auth creada. Contraseña temporal: ${res.tempPassword}` : '';
+                            showToast('success', `¡Acreditación Aprobada! Terapeuta activada.${passMsg}`);
+                          } else {
+                            showToast('error', res.error || 'Error al aprobar la solicitud.');
+                          }
                         }}
                         className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer shadow-lg shadow-emerald-900/30"
                       >

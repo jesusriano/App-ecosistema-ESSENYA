@@ -46,7 +46,7 @@ interface TherapistContextType {
   }) => Promise<{ success: boolean; tempPassword?: string; error?: string }>;
   
   updateTherapist: (id: string, updates: Partial<TherapistFullProfile>) => Promise<{ success: boolean; error?: string }>;
-  changeTherapistStatus: (id: string, status: AccountStatus, reason?: string) => Promise<{ success: boolean; error?: string }>;
+  changeTherapistStatus: (id: string, status: AccountStatus, reason?: string) => Promise<{ success: boolean; tempPassword?: string; error?: string }>;
   resetTherapistPassword: (id: string) => Promise<{ success: boolean; message?: string; tempPassword?: string; error?: string }>;
   deleteTherapist: (id: string) => Promise<{ success: boolean; error?: string }>;
   
@@ -622,11 +622,12 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   // Admin Operation: Change Status (Activo, Inactivo, Bloqueado, Pendiente, Rechazado)
-  const changeTherapistStatus = async (id: string, status: AccountStatus, reason?: string): Promise<{ success: boolean; error?: string }> => {
+  const changeTherapistStatus = async (id: string, status: AccountStatus, reason?: string): Promise<{ success: boolean; tempPassword?: string; error?: string }> => {
     let target = therapists.find(t => t.id === id);
     if (!target) return { success: false, error: 'Terapeuta no encontrada.' };
 
     let realUid = id;
+    let generatedTempPass: string | undefined = undefined;
 
     // Check Firebase Auth account if approving
     if (status === 'activo') {
@@ -661,16 +662,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
 
       if (!authExists) {
-        // If not found, and it is a self-registered therapist (who has documents uploaded), return clear error
-        const isSelfRegistered = !target.mustChangePassword && target.documentos && target.documentos.length > 0;
-        if (isSelfRegistered) {
-          return { 
-            success: false, 
-            error: 'Error administrativo: No se encontró la cuenta de Firebase Authentication para esta terapeuta auto-registrada. No se puede proceder con la aprobación.' 
-          };
-        }
-
-        // Admin-created: provision now
+        // Automatically provision auth account for any therapist (self-registered or admin-created) upon approval
         try {
           const token = await auth.currentUser?.getIdToken();
           const headers: Record<string, string> = {
@@ -680,13 +672,13 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
             headers['Authorization'] = `Bearer ${token}`;
           }
 
-          const tempPass = `Essenya${Math.floor(1000 + Math.random() * 9000)}!`;
+          generatedTempPass = `Essenya${Math.floor(1000 + Math.random() * 9000)}!`;
           const createResponse = await fetch('/api/admin/create-therapist-auth-profile', {
             method: 'POST',
             headers,
             body: JSON.stringify({
               email: target.correo,
-              password: tempPass,
+              password: generatedTempPass,
               displayName: `${target.nombre} ${target.apellidos || ''}`.trim()
             })
           });
@@ -835,7 +827,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       }));
 
       logAudit(id, `${target.nombre} ${target.apellidos}`, `Estado Cambiado a: ${statusLabel}`, reason || 'Acción ejecutada por Administradora.');
-      return { success: true };
+      return { success: true, tempPassword: generatedTempPass };
     } catch (err: any) {
       handleFirestoreError(err, OperationType.UPDATE, `terapeutas/${id}`, statusPayload);
       return { success: false, error: err?.message || 'Error al modificar el estado de la cuenta.' };
