@@ -6,6 +6,7 @@ export const useTerapeuta = () => {
   return {
     therapist: ecosystem.activeTherapist,
     bookings: ecosystem.bookings,
+    services: ecosystem.services,
     handleUpdateBookingState: ecosystem.handleUpdateBookingState,
     handleAcceptBooking: ecosystem.handleAcceptBooking,
     handleRejectBooking: ecosystem.handleRejectBooking,

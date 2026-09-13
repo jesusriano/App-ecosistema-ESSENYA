@@ -188,7 +188,7 @@ export const OFFICIAL_SERVICES_CATALOG: Record<string, {
     allowedDurations: [60, 90, 120],
     estado: 'activo',
     active: true,
-    image: 'https://images.unsplash.com/photo-1512290900672-8a9d18b39058?auto=format&fit=crop&q=80&w=800'
+    image: 'https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&q=80&w=800'
   },
   'srv-pareja': {
     id: 'srv-pareja',
@@ -215,16 +215,12 @@ let hasEnsuredServicesSeeded = false;
 async function ensureOfficialServicesSeeded(db: adminFirestore.Firestore) {
   try {
     const servicesCol = db.collection("servicios");
-    const snap = await servicesCol.limit(3).get();
-    if (snap.empty) {
-      console.log("Seeding official services catalog to Firestore 'servicios' collection...");
-      const batch = db.batch();
-      for (const [id, srv] of Object.entries(OFFICIAL_SERVICES_CATALOG)) {
-        batch.set(servicesCol.doc(id), srv, { merge: true });
-      }
-      await batch.commit();
-      console.log("Official services successfully seeded to Firestore.");
+    const batch = db.batch();
+    for (const [id, srv] of Object.entries(OFFICIAL_SERVICES_CATALOG)) {
+      batch.set(servicesCol.doc(id), srv, { merge: true });
     }
+    await batch.commit();
+    console.log("Official services successfully synced to Firestore.");
   } catch (err) {
     console.warn("Non-fatal: could not auto-seed services to Firestore on startup:", err);
   }
@@ -418,9 +414,13 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
 
     const [y, mon, d] = String(date).split("-").map(Number);
     if (y && mon && d && !isNaN(h)) {
+      // Evaluation using Mexico City timezone (America/Mexico_City) where ESSENYA operates
+      const nowInMexico = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Mexico_City" }));
       const serviceDt = new Date(y, mon - 1, d, h, m || 0, 0);
-      const now = new Date();
-      if (serviceDt.getTime() < now.getTime()) {
+      const diffMinutes = (serviceDt.getTime() - nowInMexico.getTime()) / (1000 * 60);
+
+      // Only reject if the service date/time is genuinely in the past (allow 15-min grace window for clock skew)
+      if (diffMinutes < -15) {
         const errRes = { success: false, error: "La fecha y hora del servicio no pueden ser en el pasado." };
         console.log("=== API BOOKING OUTGOING ERROR RESPONSE ===");
         console.log(JSON.stringify(errRes, null, 2));

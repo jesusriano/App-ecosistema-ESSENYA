@@ -38,6 +38,10 @@ import {
   getGiftCards, 
   GiftCard 
 } from '../services/billeteraService';
+import { getServiceImage, getStaticServiceImageFallback } from '../../../shared/utils/serviceImage';
+import { RescheduleBookingModal } from '../components/RescheduleBookingModal';
+import { CancelBookingModal } from '../components/CancelBookingModal';
+import { useEcosystem } from '../../../shared/context/EcosystemContext';
 
 
 interface ClientAppProps {
@@ -48,6 +52,8 @@ interface ClientAppProps {
   invoices: Invoice[];
   onNewBooking: (booking: Booking) => Promise<Booking | void> | Booking | void;
   onUpdateBookingState: (bookingId: string, newState: BookingState) => void;
+  onRescheduleBooking?: (bookingId: string, newDate: string, newTime: string) => Promise<void> | void;
+  onCancelBooking?: (bookingId: string, reason: string) => Promise<void> | void;
   onViewInvoice: (invoice: Invoice) => void;
   onSendMessage: (bookingId: string, text: string) => void;
   onRateBooking?: (bookingId: string, rating: number, comment: string) => void;
@@ -61,10 +67,34 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   invoices = [],
   onNewBooking,
   onUpdateBookingState,
+  onRescheduleBooking,
+  onCancelBooking,
   onViewInvoice,
   onSendMessage,
   onRateBooking,
 }) => {
+  const ecosystem = useEcosystem();
+  const executeReschedule = onRescheduleBooking || ecosystem.handleRescheduleBooking;
+  const executeCancel = onCancelBooking || ecosystem.handleCancelBooking;
+
+  // Reschedule & Cancel Modal States
+  const [modalRescheduleBooking, setModalRescheduleBooking] = useState<Booking | null>(null);
+  const [modalCancelBooking, setModalCancelBooking] = useState<Booking | null>(null);
+
+  const handleConfirmReschedule = async (bookingId: string, newDate: string, newTime: string) => {
+    if (executeReschedule) {
+      await executeReschedule(bookingId, newDate, newTime);
+      showToast('Cita Reprogramada', `Tu cita ha sido reprogramada para el ${newDate} a las ${newTime} hrs.`, 'success');
+    }
+  };
+
+  const handleConfirmCancel = async (bookingId: string, reason: string) => {
+    if (executeCancel) {
+      await executeCancel(bookingId, reason);
+      showToast('Cita Cancelada', 'Tu cita ha sido cancelada correctamente.', 'info');
+    }
+  };
+
   const { showToast } = useToast();
   const { lat, lng, loading: geolocLoading, error: geolocError, getPosition } = useGeolocation();
   const [activeTab, setActiveTab] = useState<'book' | 'tracking' | 'history' | 'membership'>('book');
@@ -72,20 +102,6 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   // Rating state for completed bookings
   const [pendingRating, setPendingRating] = useState<Record<string, number>>({});
   const [pendingComment, setPendingComment] = useState<Record<string, string>>({});
-
-  const getServiceImage = (srv: any): string => {
-    if (srv?.image && typeof srv.image === 'string' && srv.image.trim().length > 5) {
-      return srv.image;
-    }
-    const id = srv?.id || '';
-    if (id.includes('relajante')) return 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&q=80&w=800';
-    if (id.includes('descontracturante') || id.includes('tension')) return 'https://images.unsplash.com/photo-1519823551278-64ac92734fb1?auto=format&fit=crop&q=80&w=800';
-    if (id.includes('deportivo')) return 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&q=80&w=800';
-    if (id.includes('profundo')) return 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&q=80&w=800';
-    if (id.includes('prenatal')) return 'https://images.unsplash.com/photo-1512290900672-8a9d18b39058?auto=format&fit=crop&q=80&w=800';
-    if (id.includes('pareja')) return 'https://images.unsplash.com/photo-1519824145371-296894a0daa9?auto=format&fit=crop&q=80&w=800';
-    return 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&q=80&w=800';
-  };
 
   // Booking Flow State
   const [step, setStep] = useState<number>(1);
@@ -891,6 +907,11 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                             alt={srv.name} 
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                             referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              const fb = getStaticServiceImageFallback(srv?.id || srv?.name);
+                              if (target.src !== fb) target.src = fb;
+                            }}
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-white/90 dark:from-[#141414] via-transparent to-transparent"></div>
                           <span className="absolute top-3 right-3 bg-white/90 dark:bg-[#0D0D0D]/80 backdrop-blur-md text-[#806020] dark:text-[#C9A55B] text-[10px] font-bold uppercase px-3 py-1 rounded-full border border-[#C9A55B]/30">
@@ -2091,14 +2112,37 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                 <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] mt-1">{activeBooking.clientAddress}</p>
               </div>
 
-              <div className="flex items-center space-x-3">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <button
                   onClick={() => setShowChat(true)}
-                  className="flex items-center space-x-2 bg-[#FAF6EE] dark:bg-[#222222] border border-[#C9A55B]/40 px-4 py-2.5 rounded-xl text-xs font-semibold text-[#806020] dark:text-[#C9A55B] hover:bg-[#C9A55B] hover:text-black transition-all"
+                  className="flex items-center space-x-1.5 bg-[#FAF6EE] dark:bg-[#222222] border border-[#C9A55B]/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-[#806020] dark:text-[#C9A55B] hover:bg-[#C9A55B] hover:text-black transition-all cursor-pointer"
                 >
                   <MessageSquare className="w-4 h-4" />
                   <span>Chat con Terapeuta</span>
                 </button>
+
+                {activeBooking.state !== 'servicio_finalizado' && activeBooking.state !== 'cancelado' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setModalRescheduleBooking(activeBooking)}
+                      className="flex items-center space-x-1.5 bg-[#FAF6EE] dark:bg-[#222222] border border-[#C9A55B]/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-[#806020] dark:text-[#C9A55B] hover:bg-[#C9A55B] hover:text-black transition-all cursor-pointer"
+                    >
+                      <Calendar className="w-4 h-4 text-[#C9A55B]" />
+                      <span>Reprogramar Masaje</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setModalCancelBooking(activeBooking)}
+                      className="flex items-center space-x-1.5 bg-rose-500/10 border border-rose-500/30 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white transition-all cursor-pointer"
+                      title="Cancelación disponible hasta 4 horas antes"
+                    >
+                      <X className="w-4 h-4" />
+                      <span>Cancelar Cita</span>
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -2522,11 +2566,39 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                         </p>
                       </div>
 
-                      <div className="flex items-center space-x-4">
+                      <div className="flex flex-wrap items-center gap-3">
                         <div className="text-right">
                           <span className="text-xs text-[#6B655F] dark:text-[#888888] block">Monto Pagado</span>
                           <span className="text-base font-bold text-[#806020] dark:text-gold-gradient">${bk.total.toLocaleString()} MXN</span>
                         </div>
+
+                        {bk.state !== 'servicio_finalizado' && bk.state !== 'cancelado' && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setModalRescheduleBooking(bk)}
+                              className="flex items-center space-x-1.5 bg-[#FAF6EE] dark:bg-[#222222] border border-[#C9A55B]/40 px-3 py-1.5 rounded-xl text-xs text-[#806020] dark:text-[#C9A55B] font-semibold hover:bg-[#C9A55B] hover:text-black transition-all cursor-pointer"
+                            >
+                              <Calendar className="w-3.5 h-3.5 text-[#C9A55B]" />
+                              <span>Reprogramar</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setModalCancelBooking(bk)}
+                              className="flex items-center space-x-1.5 bg-rose-500/10 border border-rose-500/30 px-3 py-1.5 rounded-xl text-xs text-rose-600 dark:text-rose-400 font-semibold hover:bg-rose-500 hover:text-white transition-all cursor-pointer"
+                              title="Permitido hasta 4 horas antes"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              <span>Cancelar</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {bk.state === 'cancelado' && (
+                          <span className="px-2.5 py-1 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-lg text-xs font-bold">
+                            Cancelada
+                          </span>
+                        )}
 
                         {inv && (
                           <button
@@ -2848,6 +2920,23 @@ export const ClientApp: React.FC<ClientAppProps> = ({
           </div>
         </div>
       )}
+
+      {/* Reschedule Booking Modal */}
+      <RescheduleBookingModal
+        isOpen={!!modalRescheduleBooking}
+        booking={modalRescheduleBooking}
+        isHighTier={appliedPromo?.code === 'BLACK' || appliedPromo?.code === 'GOLD'}
+        onClose={() => setModalRescheduleBooking(null)}
+        onConfirmReschedule={handleConfirmReschedule}
+      />
+
+      {/* Cancel Booking Modal (Enforcing 4-hour rule) */}
+      <CancelBookingModal
+        isOpen={!!modalCancelBooking}
+        booking={modalCancelBooking}
+        onClose={() => setModalCancelBooking(null)}
+        onConfirmCancel={handleConfirmCancel}
+      />
 
       {/* Global Safety & Emergency Panic Modal */}
       <PanicModal 

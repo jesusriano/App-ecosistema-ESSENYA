@@ -11,6 +11,8 @@ export const ReservasPage: React.FC = () => {
     invoices,
     handleNewBooking,
     handleUpdateBookingState,
+    handleRescheduleBooking,
+    handleCancelBooking,
     handleViewInvoice,
     handleSendMessage,
     handleRateBooking,
@@ -25,6 +27,8 @@ export const ReservasPage: React.FC = () => {
       invoices={invoices}
       onNewBooking={handleNewBooking}
       onUpdateBookingState={handleUpdateBookingState}
+      onRescheduleBooking={handleRescheduleBooking}
+      onCancelBooking={handleCancelBooking}
       onViewInvoice={handleViewInvoice}
       onSendMessage={handleSendMessage}
       onRateBooking={handleRateBooking}

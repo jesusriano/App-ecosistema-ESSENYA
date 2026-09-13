@@ -11,6 +11,7 @@ import {
   INITIAL_SERVICES, INITIAL_THERAPISTS, INITIAL_CLIENT, 
   INITIAL_BOOKINGS, INITIAL_INVOICES, INITIAL_COVERAGE_ZONES, INITIAL_AUDIT_LOGS 
 } from '../data/mockData';
+import { getServiceImage } from '../utils/serviceImage';
 
 interface EcosystemContextType {
   currentPortal: PortalType;
@@ -186,7 +187,18 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     // 1. Public Catalogs (Services, Therapists, Zones)
     const unsubServicios = onSnapshot(collection(db, 'servicios'), (snap) => {
       if (!snap.empty) {
-        const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ServiceItem));
+        const list = snap.docs.map(doc => {
+          const data = doc.data();
+          const id = doc.id;
+          const image = (data.image && typeof data.image === 'string' && data.image.trim().length > 5 && !data.image.includes('photo-1512290900672'))
+            ? data.image.trim()
+            : getServiceImage({ id, name: data.name || data.nombre, image: data.image });
+          return {
+            id,
+            ...data,
+            image,
+          } as ServiceItem;
+        });
         setServices(list);
       }
     }, err => handleFirestoreError(err, OperationType.LIST, 'servicios'));
@@ -196,7 +208,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Therapist));
         setTherapists(list);
       }
-    }, err => handleFirestoreError(err, OperationType.LIST, 'terapeutas'));
+    }, err => handleFirestoreError(err, OperationType.LIST, 'terapeutas_publicos'));
 
     const unsubZonas = onSnapshot(collection(db, 'zonas'), (snap) => {
       if (!snap.empty) {

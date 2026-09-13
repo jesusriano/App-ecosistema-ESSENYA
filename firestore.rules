@@ -6,51 +6,77 @@ service cloud.firestore {
       return request.auth != null;
     }
     
+    // ========================================================
+    // 1. PUBLIC CATALOGS (Accessible to guests and users)
+    // ========================================================
+    match /servicios/{servicioId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /zonas/{zonaId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /zones/{zoneId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /terapeutas_publicos/{terapeutaId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /terapeutas/{terapeutaId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // ========================================================
+    // 2. USER, BOOKING, ADMIN & AUDIT COLLECTIONS
+    // ========================================================
     match /administradores/{adminId} {
       allow read, write: if isSignedIn();
     }
+    
     match /admins/{adminId} {
       allow read, write: if isSignedIn();
     }
+    
     match /configuraciones/{configId} {
       allow read, write: if isSignedIn();
     }
+    
     match /settings/{settingId} {
       allow read, write: if isSignedIn();
     }
+    
     match /audit_logs/{logId} {
       allow read, write: if isSignedIn();
     }
+    
     match /users/{userId} {
       allow read, write: if isSignedIn();
     }
+    
     match /clientes/{clienteId} {
       allow read, write: if isSignedIn();
     }
-    match /terapeutas_publicos/{terapeutaId} {
-      allow read, write: if isSignedIn();
-    }
-    match /terapeutas/{terapeutaId} {
-      allow read, write: if isSignedIn();
-    }
+    
     match /reservas/{reservaId} {
       allow read, write: if isSignedIn();
     }
+    
     match /invoices/{invoiceId} {
       allow read, write: if isSignedIn();
     }
+    
     match /pagos/{pagoId} {
       allow read, write: if isSignedIn();
     }
-    match /servicios/{servicioId} {
-      allow read, write: if isSignedIn();
-    }
-    match /zonas/{zonaId} {
-      allow read, write: if isSignedIn();
-    }
-    match /zones/{zoneId} {
-      allow read, write: if isSignedIn();
-    }
+    
     match /alertas_panico/{alertaId} {
       allow read, write: if isSignedIn();
     }

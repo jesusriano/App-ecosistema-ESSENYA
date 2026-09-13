@@ -12,6 +12,8 @@ export const useCliente = () => {
     activeBooking: ecosystem.bookings.find(b => b.state !== 'servicio_finalizado' && b.state !== 'cancelado') || ecosystem.bookings[0],
     handleNewBooking: ecosystem.handleNewBooking,
     handleUpdateBookingState: ecosystem.handleUpdateBookingState,
+    handleRescheduleBooking: ecosystem.handleRescheduleBooking,
+    handleCancelBooking: ecosystem.handleCancelBooking,
     handleViewInvoice: ecosystem.handleViewInvoice,
     handleSendMessage: ecosystem.handleSendMessage,
     handleRateBooking: ecosystem.handleRateBooking,
