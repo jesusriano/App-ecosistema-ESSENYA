@@ -214,6 +214,7 @@ export const sanitizeTherapist = (raw: any): TherapistFullProfile => {
     correo,
     telefono,
     fotografia,
+    photo: raw.photo || fotografia,
     curp: raw.curp || raw.CURP || undefined,
     ineNumber: raw.ineNumber || raw.ine || raw.INE || undefined,
     cuentaBancariaCLABE: raw.cuentaBancariaCLABE || raw.clabe || raw.CLABE || undefined,

@@ -33,7 +33,7 @@ export const TherapistHeader: React.FC<TherapistHeaderProps> = ({ therapist, onO
         {/* Profile info */}
         <div className="flex items-center space-x-2.5 sm:space-x-3 shrink-0">
           <img
-            src={activeTherapist.photo || undefined}
+            src={activeTherapist.photo || (activeTherapist as any).fotografia || undefined}
             alt={activeTherapist.name}
             className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border-2 border-[#C9A55B] shrink-0"
             referrerPolicy="no-referrer"
