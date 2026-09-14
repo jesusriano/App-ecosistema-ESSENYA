@@ -149,8 +149,16 @@ export const PerfilPage: React.FC = () => {
     }
   };
 
-  // Handle Therapist Photo File Upload (From device or camera)
-  const handleTherapistPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Image Cropping & Preview State
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
+  const [cropPreviewUrl, setCropPreviewUrl] = useState<string | null>(null);
+  const [cropZoom, setCropZoom] = useState<number>(1);
+  const [cropOffsetX, setCropOffsetX] = useState<number>(0);
+  const [cropOffsetY, setCropOffsetY] = useState<number>(0);
+  const [isCroppingModalOpen, setIsCroppingModalOpen] = useState<boolean>(false);
+
+  // Handle file selection -> open crop modal
+  const handleFileSelectForCrop = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -164,20 +172,78 @@ export const PerfilPage: React.FC = () => {
       return;
     }
 
-    // Determine extension
-    let ext = 'jpg';
-    if (file.type === 'image/png') ext = 'png';
-    else if (file.type === 'image/webp') ext = 'webp';
+    setPendingImageFile(file);
+    const objectUrl = URL.createObjectURL(file);
+    setCropPreviewUrl(objectUrl);
+    setCropZoom(1);
+    setCropOffsetX(0);
+    setCropOffsetY(0);
+    setIsCroppingModalOpen(true);
+    e.target.value = '';
+  };
 
-    const storagePath = `terapeutas/${activeTherapist.id}/perfil/foto-perfil.${ext}`;
-    const storageRef = ref(storage, storagePath);
-    
-    showToast('success', 'Subiendo fotografía de perfil a Firebase Storage...');
+  // Confirm crop and upload cropped blob to Firebase Storage
+  const handleConfirmCropAndUpload = async () => {
+    if (!cropPreviewUrl || !pendingImageFile) return;
+
+    setIsCroppingModalOpen(false);
+    showToast('success', 'Generando retrato uniforme y subiendo a Firebase Storage...');
 
     try {
-      const uploadTask = uploadBytesResumable(storageRef, file);
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = cropPreviewUrl;
       
-      // Wait for upload task to finish
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+
+      const targetSize = 500;
+      const canvas = document.createElement('canvas');
+      canvas.width = targetSize;
+      canvas.height = targetSize;
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) {
+        throw new Error('No se pudo inicializar el contexto del canvas.');
+      }
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, targetSize, targetSize);
+
+      const sourceWidth = img.naturalWidth;
+      const sourceHeight = img.naturalHeight;
+      const minDim = Math.min(sourceWidth, sourceHeight);
+
+      const cropWidth = minDim / cropZoom;
+      const cropHeight = minDim / cropZoom;
+      const cropX = (sourceWidth - cropWidth) / 2 - (cropOffsetX * sourceWidth / 200);
+      const cropY = (sourceHeight - cropHeight) / 2 - (cropOffsetY * sourceHeight / 200);
+
+      ctx.drawImage(
+        img,
+        Math.max(0, cropX),
+        Math.max(0, cropY),
+        Math.min(sourceWidth, cropWidth),
+        Math.min(sourceHeight, cropHeight),
+        0,
+        0,
+        targetSize,
+        targetSize
+      );
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((b) => {
+          if (b) resolve(b);
+          else reject(new Error('Error al generar la imagen recortada.'));
+        }, 'image/jpeg', 0.92);
+      });
+
+      const storagePath = `terapeutas/${activeTherapist.id}/perfil/foto-perfil.jpg`;
+      const storageRef = ref(storage, storagePath);
+      const uploadTask = uploadBytesResumable(storageRef, blob);
+
       await new Promise<void>((resolve, reject) => {
         uploadTask.on(
           'state_changed',
@@ -189,20 +255,23 @@ export const PerfilPage: React.FC = () => {
 
       const downloadUrl = await getDownloadURL(storageRef);
       setFotografia(downloadUrl);
-      
+
       const res = await updateSelfProfile(activeTherapist.id, {
         fotografia: downloadUrl,
         fotoPerfilStoragePath: storagePath
       });
 
       if (res.success) {
-        showToast('success', 'Fotografía de perfil profesional actualizada exitosamente en Firebase Storage.');
+        showToast('success', 'Fotografía recortada y actualizada con éxito en Firebase Storage.');
       } else {
         showToast('error', res.error || 'Error al guardar la fotografía.');
       }
     } catch (error: any) {
-      console.error('Error uploading photo:', error);
-      showToast('error', 'Error al cargar el archivo de imagen a Firebase Storage: ' + (error.message || ''));
+      console.error('Error cropping/uploading photo:', error);
+      showToast('error', 'Error al procesar la imagen: ' + (error.message || ''));
+    } finally {
+      setPendingImageFile(null);
+      setCropPreviewUrl(null);
     }
   };
 
@@ -264,7 +333,7 @@ export const PerfilPage: React.FC = () => {
                 id="therapist-header-photo-input"
                 type="file"
                 accept="image/png, image/jpeg, image/webp, image/gif"
-                onChange={handleTherapistPhotoUpload}
+                onChange={handleFileSelectForCrop}
                 className="hidden"
               />
               <button
@@ -433,7 +502,7 @@ export const PerfilPage: React.FC = () => {
                         id="form-photo-upload-input"
                         type="file"
                         accept="image/png, image/jpeg, image/webp, image/gif"
-                        onChange={handleTherapistPhotoUpload}
+                        onChange={handleFileSelectForCrop}
                         className="hidden"
                       />
                     </div>
@@ -588,6 +657,83 @@ export const PerfilPage: React.FC = () => {
           />
         )}
       </div>
+
+      {/* Image Cropping & Preview Modal */}
+      {isCroppingModalOpen && cropPreviewUrl && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#141414] border border-[#E5DFD3] dark:border-[#262626] rounded-3xl p-6 max-w-md w-full space-y-6 shadow-2xl">
+            <div>
+              <h3 className="font-serif font-bold text-lg text-[#1C1917] dark:text-white flex items-center gap-2">
+                <Camera className="w-5 h-5 text-[#C9A55B]" />
+                <span>Recortar y Ajustar Retrato Profesional</span>
+              </h3>
+              <p className="text-xs text-[#6B655F] dark:text-[#888888] mt-1">
+                Ajusta el zoom para garantizar un formato circular y cuadrado uniforme en tu expediente ESSENYA.
+              </p>
+            </div>
+
+            {/* Circular Preview Container */}
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-[#C9A55B] shadow-lg bg-black flex items-center justify-center">
+                <img
+                  src={cropPreviewUrl}
+                  alt="Vista previa de recorte"
+                  style={{
+                    transform: `scale(${cropZoom}) translate(${cropOffsetX}px, ${cropOffsetY}px)`,
+                    transition: 'transform 0.1s ease-out',
+                    maxWidth: 'none',
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover'
+                  }}
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+
+              {/* Zoom Control Slider */}
+              <div className="w-full space-y-1.5 bg-[#FAF8F5] dark:bg-[#1A1A1A] p-3 rounded-2xl border border-[#E5DFD3] dark:border-[#262626]">
+                <div className="flex justify-between text-xs font-bold text-[#1C1917] dark:text-white">
+                  <span>Zoom / Escala</span>
+                  <span>{cropZoom.toFixed(1)}x</span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="3"
+                  step="0.1"
+                  value={cropZoom}
+                  onChange={(e) => setCropZoom(Number(e.target.value))}
+                  className="w-full accent-[#C9A55B] cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end space-x-3 pt-3 border-t border-[#E5DFD3] dark:border-[#262626]">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCroppingModalOpen(false);
+                  setPendingImageFile(null);
+                  setCropPreviewUrl(null);
+                }}
+                className="px-4 py-2.5 rounded-xl border border-[#E5DFD3] dark:border-[#333333] text-xs font-bold text-[#6B655F] dark:text-[#AAAAAA] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <LuxuryButton
+                type="button"
+                variant="gold"
+                size="sm"
+                onClick={handleConfirmCropAndUpload}
+                className="py-2.5 px-5 text-xs font-bold"
+              >
+                Recortar y Subir a Firebase
+              </LuxuryButton>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

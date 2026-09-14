@@ -195,6 +195,48 @@ export const ConfiguracionPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Wipe Test Data Section */}
+      <div className="bg-red-500/5 dark:bg-red-500/10 border border-red-500/30 rounded-3xl p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h3 className="font-serif font-bold text-lg text-red-600 dark:text-red-400 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              <span>Limpieza Total del Sistema (Borrar Datos de Prueba)</span>
+            </h3>
+            <p className="text-xs text-[var(--text-muted)] mt-1">
+              Elimina permanentemente todas las reservas simuladas, mensajes de prueba, terapeutas de prueba, alertas de pánico y cachés locales. Dejará el sistema completamente limpio.
+            </p>
+          </div>
+
+          <LuxuryButton
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (window.confirm('¿Estás seguro de que deseas eliminar TODOS los datos de prueba, reservas, mensajes y cachés del sistema? Esta acción no se puede deshacer.')) {
+                const keysToRemove = [
+                  'essenya_therapists_list',
+                  'essenya_therapist_audit_logs',
+                  'essenya_bookings_cache',
+                  'essenya_client_photo',
+                  'essenya_panic_alerts',
+                  'essenya_billetera',
+                  'essenya_vip_courtesy',
+                  'essenya_auth_cliente',
+                  'essenya_auth_terapeuta',
+                  'essenya_auth_administrador'
+                ];
+                keysToRemove.forEach(k => localStorage.removeItem(k));
+                showToast('¡Datos de prueba eliminados! Sistema restablecido a cero.');
+                setTimeout(() => window.location.reload(), 1200);
+              }
+            }}
+          >
+            <Trash2 className="w-4 h-4 mr-1.5 text-red-500" />
+            <span className="text-red-600 dark:text-red-400 font-bold">Limpiar Todos los Datos de Prueba</span>
+          </LuxuryButton>
+        </div>
+      </div>
+
       {/* Add / Edit Zone Modal */}
       {showZoneModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
