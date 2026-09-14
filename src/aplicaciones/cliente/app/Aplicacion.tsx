@@ -913,10 +913,15 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                               if (target.src !== fb) target.src = fb;
                             }}
                           />
-                          <div className="absolute inset-0 bg-gradient-to-t from-white/90 dark:from-[#141414] via-transparent to-transparent"></div>
+                          <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-md border border-[#C9A55B]/40 flex items-center space-x-1 shadow-md">
+                            <span className="text-[10px] font-serif font-bold text-[#C9A55B] tracking-widest">ESSENYA</span>
+                          </div>
                           <span className="absolute top-3 right-3 bg-white/90 dark:bg-[#0D0D0D]/80 backdrop-blur-md text-[#806020] dark:text-[#C9A55B] text-[10px] font-bold uppercase px-3 py-1 rounded-full border border-[#C9A55B]/30">
                             {srv.category}
                           </span>
+                          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-3.5 pt-8">
+                            <p className="text-white font-serif font-bold text-sm tracking-wide drop-shadow-md">{srv.name}</p>
+                          </div>
                         </div>
 
                         <div className="p-5 space-y-3">
