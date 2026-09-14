@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from '../context/ToastContext';
 import { LuxuryButton } from './ui/LuxuryButton';
@@ -54,6 +54,18 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'schedule' | 'active' | 'earnings' | 'postcare' | 'history'>('active');
   const [availability, setAvailability] = useState<'disponible' | 'desconectado'>('disponible');
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const defaultCompletedServices = [
     {
@@ -269,6 +281,13 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#0D0D0D] text-[#1C1917] dark:text-white pb-20 transition-colors duration-300">
+      {!isOnline && (
+        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2.5 text-center text-xs text-amber-700 dark:text-amber-400 font-semibold flex items-center justify-center gap-2 shadow-xs">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500 animate-pulse" />
+          <span>Modo Sin Conexión Activo: Tu agenda y servicios programados se muestran desde la caché local segura de localStorage.</span>
+        </div>
+      )}
+
       {/* Top Professional Strip */}
       <section className="bg-[#F5F1EA] dark:bg-gradient-to-b dark:from-[#141414] dark:to-[#0D0D0D] border-b border-[#E5DFD3] dark:border-[#C9A55B]/20 py-6 px-4 sm:px-6 lg:px-8 shadow-xs">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-4">

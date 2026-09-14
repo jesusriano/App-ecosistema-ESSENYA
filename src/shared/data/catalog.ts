@@ -5,6 +5,7 @@ import imgPrenatal from '../../assets/images/prenatal_massage_1785522530074.jpg'
 import imgCouples from '../../assets/images/couples_massage_1785522546191.jpg';
 import imgRelaxing from '../../assets/images/relaxing_massage_1785522575769.jpg';
 import imgTension from '../../assets/images/tension_release_massage_1785522590275.jpg';
+import imgCustomNew from '../../assets/images/regenerated_image_1789415306021.png';
 
 export * from './pricing';
 export * from './scheduling';
@@ -22,7 +23,7 @@ export const OFFICIAL_SERVICES: ServiceItem[] = [
     price120: 2200,
     category: 'Holístico',
     iconName: 'Feather',
-    image: imgRelaxing,
+    image: imgCustomNew,
     benefits: ['Alivio inmediato del estrés y tensión', 'Inducción al sueño reparador', 'Mejora de la circulación celular'],
     recommendedFor: 'Estrés mental, cansancio acumulado e insomnio.',
     allowedDurations: [60, 90, 120]

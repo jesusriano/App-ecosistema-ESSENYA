@@ -130,17 +130,19 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
   
   // Initialize bookings from LocalStorage for immediate offline availability
   const [bookings, setBookings] = useState<Booking[]>(() => {
-    const cached = localStorage.getItem('essenya_bookings_cache');
+    const cached = localStorage.getItem('essenya_bookings_cache') || localStorage.getItem('essenya_therapist_offline_agenda');
     if (cached) {
       try { return JSON.parse(cached); } catch { return []; }
     }
     return [];
   });
 
-  // Keep LocalStorage in sync with bookings state for offline fallback
+  // Keep LocalStorage in sync with bookings state for robust offline fallback
   useEffect(() => {
     if (bookings.length > 0) {
-      localStorage.setItem('essenya_bookings_cache', JSON.stringify(bookings));
+      const serialized = JSON.stringify(bookings);
+      localStorage.setItem('essenya_bookings_cache', serialized);
+      localStorage.setItem('essenya_therapist_offline_agenda', serialized);
     }
   }, [bookings]);
 
