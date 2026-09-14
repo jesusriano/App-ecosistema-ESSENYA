@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { EssenyaLogo } from '../../../shared/components/EssenyaLogo';
-import { Star, ShieldAlert, AlertTriangle, ToggleLeft, ToggleRight, Radio, LogOut } from 'lucide-react';
+import { Star, ShieldAlert, AlertTriangle, ToggleLeft, ToggleRight, Radio, LogOut, CloudOff, RefreshCw } from 'lucide-react';
 import { Therapist } from '../../../shared/types/index';
 import { useAuth } from '../../../shared/context/AuthContext';
+import { useEcosystem } from '../../../shared/context/EcosystemContext';
 
 interface TherapistHeaderProps {
   therapist: Therapist;
@@ -11,6 +12,7 @@ interface TherapistHeaderProps {
 
 export const TherapistHeader: React.FC<TherapistHeaderProps> = ({ therapist, onOpenPanicModal }) => {
   const { logout } = useAuth();
+  const { pendingSyncCount } = useEcosystem();
   const [isAvailable, setIsAvailable] = useState<boolean>(therapist?.status === 'disponible');
 
   const activeTherapist = therapist || {
@@ -58,6 +60,13 @@ export const TherapistHeader: React.FC<TherapistHeaderProps> = ({ therapist, onO
 
         {/* Status Toggle, SOS & Logout */}
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-3 w-full sm:w-auto justify-between sm:justify-end">
+          {pendingSyncCount > 0 && (
+            <div className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 rounded-xl text-[10px] font-bold animate-pulse">
+              <RefreshCw className="w-3 h-3 animate-spin" />
+              <span>{pendingSyncCount} PENDIENTE{pendingSyncCount > 1 ? 'S' : ''}</span>
+            </div>
+          )}
+          
           <button
             onClick={() => setIsAvailable(!isAvailable)}
             className={`flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl border text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${

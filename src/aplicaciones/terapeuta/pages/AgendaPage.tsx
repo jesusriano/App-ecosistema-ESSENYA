@@ -8,7 +8,8 @@ export const AgendaPage: React.FC = () => {
     bookings, 
     handleUpdateBookingState,
     handleAcceptBooking,
-    handleRejectBooking 
+    handleRejectBooking,
+    handleUpdateLiveLocation
   } = useTerapeuta();
 
   return (
@@ -18,6 +19,7 @@ export const AgendaPage: React.FC = () => {
       onUpdateBookingState={handleUpdateBookingState}
       onAcceptBooking={handleAcceptBooking}
       onRejectBooking={handleRejectBooking}
+      onUpdateLiveLocation={handleUpdateLiveLocation}
     />
   );
 };

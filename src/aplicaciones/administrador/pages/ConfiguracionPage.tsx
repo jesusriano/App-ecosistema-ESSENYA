@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Settings, MapPin, Zap, ShieldCheck, Plus, 
-  Trash2, Edit, Check, Lock, Shield, Clock, AlertTriangle, Users
+  Trash2, Edit, Check, Lock, Shield, Clock, AlertTriangle, Users,
+  RefreshCw
 } from 'lucide-react';
 import { useAdmin } from '../hooks/useAdmin';
 import { useToast } from '../../../shared/context/ToastContext';
@@ -11,9 +12,31 @@ import { CoverageZone } from '../../../shared/types';
 export const ConfiguracionPage: React.FC = () => {
   const { 
     zones, auditLogs, handleToggleZoneSurge, 
-    handleAddZone, handleEditZone, handleDeleteZone 
+    handleAddZone, handleEditZone, handleDeleteZone,
+    handleDataCleanup
   } = useAdmin();
   const { showToast } = useToast();
+
+  const [isCleaning, setIsCleaning] = useState(false);
+
+  useEffect(() => {
+    const runAutoCleanup = async () => {
+      const hasCleaned = localStorage.getItem('essenya_auto_cleanup_done');
+      if (!hasCleaned) {
+        setIsCleaning(true);
+        try {
+          await handleDataCleanup();
+          localStorage.setItem('essenya_auto_cleanup_done', 'true');
+          showToast('Limpieza de datos de prueba completada exitosamente.', 'success');
+        } catch (err) {
+          console.error('Auto-cleanup failed:', err);
+        } finally {
+          setIsCleaning(false);
+        }
+      }
+    };
+    runAutoCleanup();
+  }, [handleDataCleanup, showToast]);
 
   const [showZoneModal, setShowZoneModal] = useState(false);
   const [editingZone, setEditingZone] = useState<CoverageZone | null>(null);
@@ -84,6 +107,15 @@ export const ConfiguracionPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
+      {isCleaning && (
+        <div className="bg-[#C9A55B]/10 border border-[#C9A55B]/40 p-4 rounded-2xl flex items-center justify-between animate-pulse">
+          <div className="flex items-center gap-3">
+            <RefreshCw className="w-5 h-5 text-[#C9A55B] animate-spin" />
+            <span className="text-sm font-bold text-[#C9A55B]">Ejecutando limpieza total de datos de prueba en la nube...</span>
+          </div>
+          <span className="text-[10px] font-mono text-[#C9A55B]">POR FAVOR ESPERE</span>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[var(--border-color)] pb-4">
         <div>
           <h1 className="text-2xl font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
@@ -211,23 +243,24 @@ export const ConfiguracionPage: React.FC = () => {
           <LuxuryButton
             variant="outline"
             size="sm"
-            onClick={() => {
-              if (window.confirm('¿Estás seguro de que deseas eliminar TODOS los datos de prueba, reservas, mensajes y cachés del sistema? Esta acción no se puede deshacer.')) {
-                const keysToRemove = [
-                  'essenya_therapists_list',
-                  'essenya_therapist_audit_logs',
-                  'essenya_bookings_cache',
-                  'essenya_client_photo',
-                  'essenya_panic_alerts',
-                  'essenya_billetera',
-                  'essenya_vip_courtesy',
-                  'essenya_auth_cliente',
-                  'essenya_auth_terapeuta',
-                  'essenya_auth_administrador'
-                ];
-                keysToRemove.forEach(k => localStorage.removeItem(k));
-                showToast('¡Datos de prueba eliminados! Sistema restablecido a cero.');
-                setTimeout(() => window.location.reload(), 1200);
+            onClick={async () => {
+              if (window.confirm('¿Estás seguro de que deseas eliminar TODOS los datos de prueba de la NUBE (Reservas, Clientes de Prueba, Facturas) y cachés locales? Esta acción dejará el sistema en blanco para producción.')) {
+                try {
+                  await handleDataCleanup();
+                  const keysToRemove = [
+                    'essenya_bookings_cache',
+                    'essenya_client_photo',
+                    'essenya_panic_alerts',
+                    'essenya_auth_cliente',
+                    'essenya_auth_terapeuta',
+                    'essenya_auth_administrador'
+                  ];
+                  keysToRemove.forEach(k => localStorage.removeItem(k));
+                  showToast('¡Base de datos y cachés limpiados! Sistema restablecido.');
+                  setTimeout(() => window.location.reload(), 1500);
+                } catch (err) {
+                  showToast('Error al limpiar la base de datos.', 'error');
+                }
               }
             }}
           >

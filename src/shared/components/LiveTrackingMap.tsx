@@ -9,6 +9,10 @@ interface LiveTrackingMapProps {
   therapistPhoto: string;
   therapistPhone?: string;
   bookingState: string;
+  therapistLat?: number;
+  therapistLng?: number;
+  clientLat?: number;
+  clientLng?: number;
 }
 
 const getEffectiveApiKey = (): string => {
@@ -82,6 +86,10 @@ function RouteAndMarkers({
   therapistName,
   therapistPhoto,
   bookingState,
+  therapistLat,
+  therapistLng,
+  clientLat,
+  clientLng,
   onRouteCalculated
 }: {
   clientAddress: string;
@@ -89,6 +97,10 @@ function RouteAndMarkers({
   therapistName: string;
   therapistPhoto: string;
   bookingState: string;
+  therapistLat?: number;
+  therapistLng?: number;
+  clientLat?: number;
+  clientLng?: number;
   onRouteCalculated: (info: { distance: string; duration: string }) => void;
 }) {
   const map = useMap();
@@ -97,14 +109,31 @@ function RouteAndMarkers({
 
   const polylinesRef = useRef<google.maps.Polyline[]>([]);
 
-  // Default initial locations in CDMX (e.g., Therapist starting near Polanco/Condesa)
-  const [therapistPos, setTherapistPos] = useState<google.maps.LatLngLiteral>({ lat: 19.4326, lng: -99.1900 });
-  const [clientPos, setClientPos] = useState<google.maps.LatLngLiteral>({ lat: 19.3620, lng: -99.2650 }); // e.g., Santa Fe / Interlomas
+  // Default initial locations in CDMX
+  const [therapistPos, setTherapistPos] = useState<google.maps.LatLngLiteral>(() => (
+    therapistLat && therapistLng ? { lat: therapistLat, lng: therapistLng } : { lat: 19.4326, lng: -99.1900 }
+  ));
+  const [clientPos, setClientPos] = useState<google.maps.LatLngLiteral>(() => (
+    clientLat && clientLng ? { lat: clientLat, lng: clientLng } : { lat: 19.3620, lng: -99.2650 }
+  ));
   const [, setGeocodedSuccess] = useState<boolean>(false);
 
-  // Geocode destination address
+  // Update positions if real-time coordinates change
   useEffect(() => {
-    if (!geocodingLib || !clientAddress) return;
+    if (therapistLat && therapistLng) {
+      setTherapistPos({ lat: therapistLat, lng: therapistLng });
+    }
+  }, [therapistLat, therapistLng]);
+
+  useEffect(() => {
+    if (clientLat && clientLng) {
+      setClientPos({ lat: clientLat, lng: clientLng });
+    }
+  }, [clientLat, clientLng]);
+
+  // Geocode destination address only if real-time client position is NOT provided
+  useEffect(() => {
+    if (!geocodingLib || !clientAddress || (clientLat && clientLng)) return;
 
     const geocoder = new geocodingLib.Geocoder();
     const query = `${clientAddress}, ${cityZone || 'Ciudad de México'}, México`;
@@ -445,7 +474,11 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
   cityZone,
   therapistName,
   therapistPhoto,
-  bookingState
+  bookingState,
+  therapistLat,
+  therapistLng,
+  clientLat,
+  clientLng
 }) => {
   const [activeApiKey, setActiveApiKey] = useState<string>(() => getEffectiveApiKey());
   const [inputKey, setInputKey] = useState<string>('');
@@ -685,6 +718,10 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
                   therapistName={therapistName}
                   therapistPhoto={therapistPhoto}
                   bookingState={bookingState}
+                  therapistLat={therapistLat}
+                  therapistLng={therapistLng}
+                  clientLat={clientLat}
+                  clientLng={clientLng}
                   onRouteCalculated={(info) => setRouteInfo(info)}
                 />
               </Map>

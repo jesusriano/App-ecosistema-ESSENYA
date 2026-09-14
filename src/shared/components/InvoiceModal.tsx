@@ -15,7 +15,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ invoice, onClose }) 
 
   const handleDownloadPdf = () => {
     if (!invoice) return;
-    showToast('Factura Descargada', `Comprobante de factura ${invoice.invoiceNumber} guardado.`, 'gold');
+    showToast('Recibo Descargado', `Comprobante de pago ${invoice.invoiceNumber} guardado.`, 'gold');
   };
 
   return (
@@ -40,7 +40,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ invoice, onClose }) 
             <div className="flex justify-between items-start border-b border-[#E5DFD3] dark:border-[#262626] pb-4">
               <div>
                 <EssenyaLogo size="xs" showText={true} align="left" />
-                <p className="text-[10px] text-[#6B655F] dark:text-[#888888] mt-1">Factura y Comprobante de Servicio</p>
+                <p className="text-[10px] text-[#6B655F] dark:text-[#888888] mt-1">Recibo y Comprobante de Servicio</p>
               </div>
 
               <div className="text-right">
@@ -49,21 +49,17 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ invoice, onClose }) 
               </div>
             </div>
 
-            {/* Tax Information */}
+            {/* Payment Information */}
             <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 rounded-2xl border border-[#E5DFD3] dark:border-[#262626] space-y-2 text-xs">
               <div className="flex justify-between">
-                <span className="text-[#6B655F] dark:text-[#888888]">Razón Social:</span>
+                <span className="text-[#6B655F] dark:text-[#888888]">Nombre del Cliente:</span>
                 <span className="font-bold text-[#1C1917] dark:text-white">{invoice.businessName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#6B655F] dark:text-[#888888]">RFC Receptor:</span>
-                <span className="font-mono font-bold text-[#806020] dark:text-[#C9A55B]">{invoice.rfc}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[#6B655F] dark:text-[#888888]">Estado del Comprobante:</span>
                 <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center space-x-1">
                   <ShieldCheck className="w-3.5 h-3.5 mr-0.5" />
-                  <span>Factura Emitida y Registrada</span>
+                  <span>Pago Confirmado y Registrado</span>
                 </span>
               </div>
             </div>
@@ -79,7 +75,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ invoice, onClose }) 
                 <span>${invoice.tax.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</span>
               </div>
               <div className="flex justify-between text-base font-bold text-[#1C1917] dark:text-white pt-2 border-t border-[#E5DFD3] dark:border-[#262626]">
-                <span>Total Facturado:</span>
+                <span>Total Pagado:</span>
                 <span className="text-lg font-bold text-[#806020] dark:text-[#C9A55B]">${invoice.total.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</span>
               </div>
             </div>

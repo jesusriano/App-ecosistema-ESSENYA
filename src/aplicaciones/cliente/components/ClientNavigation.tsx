@@ -19,7 +19,7 @@ export const ClientNavigation: React.FC<ClientNavigationProps> = ({
     { path: '/inicio' as ClientRoutePath, label: 'Inicio', icon: Home },
     { path: '/reservas' as ClientRoutePath, label: 'Reservar Masaje', icon: Calendar, badge: activeBookingBadge },
     { path: '/billetera' as ClientRoutePath, label: 'Billetera', icon: Wallet },
-    { path: '/facturas' as ClientRoutePath, label: 'Facturas', icon: FileText },
+    { path: '/facturas' as ClientRoutePath, label: 'Recibos', icon: FileText },
     { path: '/promociones' as ClientRoutePath, label: 'Promociones VIP', icon: Gift },
     { path: '/perfil' as ClientRoutePath, label: 'Mi Perfil', icon: User },
   ];

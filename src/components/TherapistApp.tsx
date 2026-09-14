@@ -20,6 +20,7 @@ interface TherapistAppProps {
   onUpdateBookingState: (bookingId: string, newState: BookingState) => void;
   onAcceptBooking?: (bookingId: string, therapist: Therapist) => void;
   onRejectBooking?: (bookingId: string, reason?: string) => void;
+  onUpdateLiveLocation?: (bookingId: string, lat: number, lng: number) => Promise<void>;
 }
 
 export const TherapistApp: React.FC<TherapistAppProps> = ({
@@ -28,6 +29,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
   onUpdateBookingState,
   onAcceptBooking,
   onRejectBooking,
+  onUpdateLiveLocation,
 }) => {
   const activeTherapist: Therapist = therapist || {
     id: 'ther-1',
@@ -161,6 +163,37 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
 
   // Find active booking assigned to therapist
   const currentBooking = bookings.find(b => b.state !== 'servicio_finalizado' && b.state !== 'cancelado' && b.state !== 'pendiente') || bookings.find(b => b.state !== 'servicio_finalizado' && b.state !== 'cancelado') || bookings[0];
+
+  // Watch position and update Firestore for active bookings
+  useEffect(() => {
+    if (!currentBooking || !onUpdateLiveLocation) return;
+    
+    // Only track if moving towards or at client
+    const statesToTrack: BookingState[] = ['en_camino', 'llegue', 'servicio_iniciado'];
+    if (!statesToTrack.includes(currentBooking.state)) return;
+
+    if (!navigator.geolocation) {
+      console.warn('Geolocation not supported');
+      return;
+    }
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        onUpdateLiveLocation(currentBooking.id, latitude, longitude);
+      },
+      (error) => {
+        console.warn('Geolocation error in tracking:', error.message);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 5000
+      }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [currentBooking?.id, currentBooking?.state, onUpdateLiveLocation]);
 
   const handleAccept = (booking: Booking) => {
     if (onAcceptBooking) {

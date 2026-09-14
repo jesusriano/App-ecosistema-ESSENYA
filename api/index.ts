@@ -939,7 +939,7 @@ app.post("/api/gemini/concierge", requireAuth, async (req, res) => {
         if (typeof userPreferences.focusArea === "string") sanitizedPrefs.focusArea = userPreferences.focusArea.slice(0, 50);
       }
 
-      const prompt = `Eres el Sommelier de Bienestar y Concierge de Lujo de ESSENYA, la plataforma más exclusiva de masajes a domicilio de alta gama.
+      const prompt = `Eres AURA ESSENYA IA, el Sommelier de Bienestar y Concierge de Lujo de ESSENYA, la plataforma más exclusiva de masajes a domicilio de alta gama.
 Colores de marca: Negro Profundo, Blanco Puro y Dorado Metálico.
 
 Consulta del Cliente: "${cleanUserQuery}"
@@ -990,7 +990,7 @@ Devuelve una respuesta JSON estricta con las siguientes propiedades:
           essentialOil: "Lavanda Francesa y Ylang Ylang Dorado",
           pressureLevel: "Media-Firme",
           luxuryReasoning: "Una experiencia sublime diseñada para disolver nudos musculares y restaurar el flujo vital en la tranquilidad de su residencia.",
-          conciergeGreeting: "Es un verdadero privilegio atenderle en ESSENYA. Hemos diseñado esta selección de alta gama para brindarle un espacio de absoluta serenidad."
+          conciergeGreeting: "Soy AURA ESSENYA IA y es un verdadero privilegio atenderle en ESSENYA. Hemos diseñado esta selección de alta gama para brindarle un espacio de absoluta serenidad."
         }
       });
     }

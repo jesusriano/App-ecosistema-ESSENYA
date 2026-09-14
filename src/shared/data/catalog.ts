@@ -1,11 +1,10 @@
 import { ServiceItem } from '../types';
-import imgSportsCalf from '../../assets/images/sports_calf_massage_1785522498237.jpg';
-import imgDeepTissue from '../../assets/images/deep_tissue_massage_1785522513154.jpg';
-import imgPrenatal from '../../assets/images/prenatal_massage_1785522530074.jpg';
-import imgCouples from '../../assets/images/couples_massage_1785522546191.jpg';
-import imgRelaxing from '../../assets/images/relaxing_massage_1785522575769.jpg';
-import imgTension from '../../assets/images/tension_release_massage_1785522590275.jpg';
-import imgCustomNew from '../../assets/images/regenerated_image_1789415306021.png';
+import imgRelaxing from '../../assets/images/relaxing_massage_essenya_1789423105022.jpg';
+import imgDeepTissue from '../../assets/images/deep_tissue_essenya_1789423125038.jpg';
+import imgSports from '../../assets/images/sports_massage_essenya_1789423135431.jpg';
+import imgPrenatal from '../../assets/images/prenatal_massage_essenya_1789423145499.jpg';
+import imgCouples from '../../assets/images/couples_massage_essenya_1789423155702.jpg';
+import imgTension from '../../assets/images/tension_release_essenya_1789423167792.jpg';
 
 export * from './pricing';
 export * from './scheduling';
@@ -23,7 +22,7 @@ export const OFFICIAL_SERVICES: ServiceItem[] = [
     price120: 2200,
     category: 'Holístico',
     iconName: 'Feather',
-    image: imgCustomNew,
+    image: imgRelaxing,
     benefits: ['Alivio inmediato del estrés y tensión', 'Inducción al sueño reparador', 'Mejora de la circulación celular'],
     recommendedFor: 'Estrés mental, cansancio acumulado e insomnio.',
     allowedDurations: [60, 90, 120]
@@ -53,7 +52,7 @@ export const OFFICIAL_SERVICES: ServiceItem[] = [
     price120: 2500,
     category: 'Terapéutico',
     iconName: 'Compass',
-    image: imgSportsCalf,
+    image: imgSports,
     benefits: ['Aceleración del drenaje del ácido láctico', 'Prevención de lesiones atléticas', 'Optimización de flexibilidad muscular'],
     recommendedFor: 'Deportistas, entrenamiento constante y recuperación articular.',
     allowedDurations: [60, 90, 120]

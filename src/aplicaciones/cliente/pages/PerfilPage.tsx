@@ -79,52 +79,52 @@ export const PerfilPage: React.FC = () => {
     {
       level: 1,
       name: 'Socio Platino',
-      range: '0 masajes concluidos',
+      range: '1 a 4 masajes concluidos',
       tag: 'Nivel Inicial',
       icon: Shield,
       color: 'slate',
-      perkSummary: 'Tarifa preferencial de bienvenida, kit esterilizado individual de grado hospitalario y aromaterapia de autor.',
-      promoNote: 'Acceso a cupones estándar de bienvenida.',
+      perkSummary: 'Acceso a reservas 24/7 y atención estándar de lujo.',
+      promoNote: 'Inicia tu camino al bienestar.',
     },
     {
       level: 2,
       name: 'Socio Gold',
-      range: '1 a 2 masajes concluidos',
+      range: '5 a 8 masajes concluidos',
       tag: 'Primer Ascenso',
-      icon: Crown,
+      icon: Sparkles,
       color: 'amber',
-      perkSummary: '10% de bonificación en recompensas por sesión, prioridad de asignación en horarios pico de CDMX.',
-      promoNote: 'Aromaterapia botánica de cortesía en cada visita.',
+      perkSummary: '10% de descuento automático en tus primeros dos servicios de este nivel (masajes 5 y 6).',
+      promoNote: 'Aromaterapia botánica de cortesía.',
     },
     {
       level: 3,
       name: 'Socio Diamante',
-      range: '3 a 5 masajes concluidos',
+      range: '9 a 10 masajes concluidos',
       tag: 'Categoría Élite',
       icon: Gem,
       color: 'sky',
-      perkSummary: '10% OFF en todas tus citas con cupón DIAMOND10, aceites esenciales franceses y prioridad express.',
-      promoNote: 'Acceso exclusivo al código DIAMOND10 habilitado en el sistema.',
+      perkSummary: '15% de descuento automático en los dos servicios del nivel (9 y 10).',
+      promoNote: 'Terapeuta preferido reservado.',
     },
     {
       level: 4,
       name: 'Socio Black Diamond',
-      range: '6 a 9 masajes concluidos',
+      range: '11 a 15 masajes concluidos',
       tag: 'Alta Distinción',
       icon: Sparkles,
-      color: 'purple',
-      perkSummary: 'Concierge ejecutivo 24/7, toallas de algodón egipcio de 800g y acceso ilimitado a promociones.',
-      promoNote: 'Cupón DIAMOND10 y cortesías de reflexología adicionales.',
+      color: 'zinc',
+      perkSummary: '15% de descuento automático fijo para siempre en todas tus citas.',
+      promoNote: 'Concierge ejecutivo 24/7.',
     },
     {
       level: 5,
       name: 'Socio Imperial VIP',
-      range: '10 o más masajes concluidos',
+      range: '16 o más masajes concluidos',
       tag: 'Rango Supremo',
       icon: Crown,
       color: 'yellow',
-      perkSummary: 'Asignación garantizada de terapeuta Master de cabecera y sesión de cortesía anual.',
-      promoNote: 'Todos los beneficios y promociones VIP permanentemente desbloqueados.',
+      perkSummary: '20% de descuento automático fijo para siempre en todas tus citas.',
+      promoNote: 'Asignación garantizada de terapeuta Master.',
     },
   ];
 
@@ -248,7 +248,7 @@ export const PerfilPage: React.FC = () => {
               {tierInfo.perk}
             </span>
             <span className="text-[11px] font-semibold text-[#E6CA65]">
-              {completedCount >= 3 ? '✅ Acceso a cupón DIAMOND10 activo' : '🔒 Requiere Socio Diamante (3+ masajes)'}
+              {completedCount >= 5 ? '✅ Beneficio de Socio Activo: Descuento Automático' : '🔒 Requiere Socio Gold (5+ masajes) para descuentos'}
             </span>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Calendar, Search, Filter, RefreshCw, UserCheck, Clock, MapPin, 
-  Sparkles, CheckCircle2, AlertTriangle, X, ShieldAlert, FileText, Check, ChevronRight, ChevronDown
+  Sparkles, CheckCircle2, AlertTriangle, X, ShieldAlert, FileText, Check, ChevronRight, ChevronDown, Banknote
 } from 'lucide-react';
 import { useAdmin } from '../hooks/useAdmin';
 import { useToast } from '../../../shared/context/ToastContext';
@@ -86,7 +86,7 @@ export const ReservasPage: React.FC = () => {
   const { 
     bookings, therapists, handleUpdateBookingState, 
     handleReassignTherapist, handleRescheduleBooking, handleCancelBooking,
-    handleAdminAcceptBooking, handleAdminRejectBooking
+    handleAdminAcceptBooking, handleAdminRejectBooking, handleConfirmPayment
   } = useAdmin();
   const { showToast } = useToast();
 
@@ -392,6 +392,21 @@ export const ReservasPage: React.FC = () => {
                               <Clock className="w-3.5 h-3.5 mr-1" />
                               <span>Reprogramar</span>
                             </LuxuryButton>
+                          )}
+
+                          {b.state !== 'cancelado' && b.state !== 'rechazada' && b.paymentStatus !== 'pagado' && b.paymentMethod.includes('Transferencia') && (
+                            <button
+                              onClick={async () => {
+                                if (confirm(`¿Confirmar recepción de pago para la reserva ${b.code}?`)) {
+                                  await handleConfirmPayment(b.id);
+                                  showToast(`Pago de ${b.code} confirmado exitosamente.`);
+                                }
+                              }}
+                              className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-500 dark:text-emerald-400 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <Banknote className="w-3.5 h-3.5" />
+                              <span>Confirmar Pago</span>
+                            </button>
                           )}
 
                           {b.state !== 'cancelado' && b.state !== 'rechazada' && b.state !== 'servicio_finalizado' && (

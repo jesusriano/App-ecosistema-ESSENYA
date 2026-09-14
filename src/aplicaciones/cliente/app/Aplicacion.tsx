@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from '../../../context/ToastContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
@@ -13,7 +13,7 @@ import {
   getTodayDateString, evaluateTimeSlot, getScheduleSlotsForDate, getFirstAvailableSlot, OFFICIAL_BOOKING_HOURS 
 } from '../../../shared/data/catalog';
 import { 
-  Calendar, Clock, MapPin, Sparkles, CheckCircle2, CheckCircle, Navigation, 
+  Calendar, Clock, MapPin, Sparkles, BrainCircuit, CheckCircle2, CheckCircle, Navigation, 
   MessageSquare, FileText, Star, Award, ShieldCheck, ChevronRight, 
   Bot, AlertCircle, RefreshCw, Send, X, Heart, Droplets, Music, Sliders,
   AlertTriangle, CreditCard, Building2, Check, CheckCheck, Copy, Users, UserCheck, Banknote, Camera, Upload,
@@ -96,8 +96,35 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   };
 
   const { showToast } = useToast();
+  const [prevPaymentStatus, setPrevPaymentStatus] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    bookings.forEach(b => {
+      const prevStatus = prevPaymentStatus[b.id];
+      if (prevStatus && prevStatus !== b.paymentStatus) {
+        if (b.paymentStatus === 'pagado') {
+          showToast('Pago Acreditado', `Tu pago para la reserva ${b.code} ha sido validado correctamente. ¡Disfruta tu sesión!`, 'success');
+        } else if (b.paymentStatus === 'rechazado') {
+          showToast('Comprobante Rechazado', `Tu comprobante para la reserva ${b.code} no pudo ser validado. Por favor revisa los detalles.`, 'error');
+        }
+      }
+    });
+
+    const currentStatuses: Record<string, string> = {};
+    bookings.forEach(b => {
+      currentStatuses[b.id] = b.paymentStatus;
+    });
+    setPrevPaymentStatus(currentStatuses);
+  }, [bookings, showToast]);
   const { lat, lng, loading: geolocLoading, error: geolocError, getPosition } = useGeolocation();
   const [activeTab, setActiveTab] = useState<'book' | 'tracking' | 'history' | 'membership'>('book');
+
+  // Trigger geolocation when tracking tab is active
+  useEffect(() => {
+    if (activeTab === 'tracking') {
+      getPosition();
+    }
+  }, [activeTab, getPosition]);
 
   // Rating state for completed bookings
   const [pendingRating, setPendingRating] = useState<Record<string, number>>({});
@@ -262,7 +289,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   const [chatInput, setChatInput] = useState<string>('');
   const [isOtherTyping, setIsOtherTyping] = useState<boolean>(false);
   const [chatMessages, setChatMessages] = useState<Array<{ sender: string, text: string, time: string, read?: boolean }>>([
-    { sender: 'Concierge', text: 'Bienvenido a ESSENYA, Don Alejandro. Su terapeuta fue notificada y está coordinando el transporte ejecutivo.', time: '10:16 AM', read: true },
+    { sender: 'AURA ESSENYA IA', text: 'Bienvenido a ESSENYA, Don Alejandro. Su terapeuta fue notificada y está coordinando el transporte ejecutivo.', time: '10:16 AM', read: true },
     { sender: 'Dra. Elena Rostova', text: 'Buenas tardes. Me encuentro en camino con todo el equipo esterilizado y camilla VIP.', time: '10:20 AM', read: true }
   ]);
 
@@ -325,9 +352,10 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       extrasTotal: extrasTotalPrice,
       tip: tipAmount,
       promoDiscount,
-      giftCardBalance: appliedGiftCard ? appliedGiftCard.currentBalance : 0
+      giftCardBalance: appliedGiftCard ? appliedGiftCard.currentBalance : 0,
+      completedMassagesCount: ecosystem.completedServicesCount
     });
-  }, [selectedService, duration, extrasTotalPrice, tipAmount, appliedPromo, discountAmount, appliedGiftCard]);
+  }, [selectedService, duration, extrasTotalPrice, tipAmount, appliedPromo, discountAmount, appliedGiftCard, ecosystem.completedServicesCount]);
 
   const baseMassagePrice = bookingPricing.durationPrice;
   const rawPrice = bookingPricing.subtotal;
@@ -752,8 +780,8 @@ export const ClientApp: React.FC<ClientAppProps> = ({
               id="ai-concierge-btn"
               className="flex-1 md:flex-none py-2.5"
             >
-              <Bot className="w-4 h-4" />
-              <span>Sommelier & Concierge AI</span>
+              <BrainCircuit className="w-4 h-4" />
+              <span style={{ fontStyle: 'italic', fontSize: '14px', lineHeight: '20px' }}>AURA ESSENYA IA</span>
             </LuxuryButton>
 
             <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#333333] px-3.5 py-1.5 rounded-2xl text-center shadow-xs shrink-0">
@@ -802,7 +830,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
             }`}
           >
             <Clock className="w-4 h-4" />
-            <span>Historial y Facturas</span>
+            <span>Historial y Recibos</span>
           </button>
 
           <button
@@ -1987,11 +2015,11 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                           <div className="flex justify-between items-center">
                             <span className="text-[#6B655F] dark:text-[#AAAAAA]">CLABE Interbancaria:</span>
                             <div className="flex items-center space-x-2">
-                              <span className="font-mono font-bold text-[#1C1917] dark:text-white">012180001234567890</span>
+                              <span className="font-mono font-bold text-[#1C1917] dark:text-white">012 180 01569427152 0</span>
                               <button
                                 type="button"
                                 onClick={() => {
-                                  navigator.clipboard.writeText('012180001234567890');
+                                  navigator.clipboard.writeText('012180015694271520');
                                   setClabeCopied(true);
                                   setTimeout(() => setClabeCopied(false), 2000);
                                 }}
@@ -2004,11 +2032,15 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                           </div>
                           <div className="flex justify-between">
                             <span className="text-[#6B655F] dark:text-[#AAAAAA]">Beneficiario:</span>
-                            <span className="font-bold text-[#1C1917] dark:text-white">ESSENYA S.A. DE C.V.</span>
+                            <span className="font-bold text-[#1C1917] dark:text-white">Elizabeth Lopez</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-[#6B655F] dark:text-[#AAAAAA]">Banco Receptivo:</span>
-                            <span className="font-bold text-[#1C1917] dark:text-white">BBVA México</span>
+                            <span className="font-bold text-[#1C1917] dark:text-white">Bancomer (BBVA)</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-[#6B655F] dark:text-[#AAAAAA]">Cuenta:</span>
+                            <span className="font-bold text-[#1C1917] dark:text-white">156 942 7152</span>
                           </div>
                         </div>
                       </div>
@@ -2312,6 +2344,10 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                       therapistPhoto={activeBooking.therapistPhoto || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=600&q=80'}
                       therapistPhone={activeBooking.therapistPhone}
                       bookingState={activeBooking.state}
+                      therapistLat={activeBooking.liveLat}
+                      therapistLng={activeBooking.liveLng}
+                      clientLat={lat || undefined}
+                      clientLng={lng || undefined}
                     />
                   </div>
 
@@ -2534,13 +2570,13 @@ export const ClientApp: React.FC<ClientAppProps> = ({
           </div>
         )}
 
-        {/* TAB 3: BOOKING HISTORY & INVOICES */}
+        {/* TAB 3: BOOKING HISTORY & RECIBOS */}
         {activeTab === 'history' && (
           <div className="space-y-6 max-w-5xl mx-auto">
             <div className="flex justify-between items-center border-b border-[#E5DFD3] dark:border-[#C9A55B]/20 pb-4">
               <div>
-                <h3 className="text-2xl font-serif font-bold text-[#1C1917] dark:text-white">Historial de Experiencias y Facturación</h3>
-                <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA]">Gestiona tus facturas fiscales y consulta los registros de sesiones pasadas.</p>
+                <h3 className="text-2xl font-serif font-bold text-[#1C1917] dark:text-white">Historial de Experiencias y Recibos</h3>
+                <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA]">Gestiona tus comprobantes de pago y consulta los registros de sesiones pasadas.</p>
               </div>
             </div>
 
@@ -2611,7 +2647,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                             className="flex items-center space-x-1.5 bg-[#FAF6EE] dark:bg-[#222222] border border-[#C9A55B]/40 px-3.5 py-2 rounded-xl text-xs text-[#806020] dark:text-[#C9A55B] font-semibold hover:bg-[#C9A55B] hover:text-black transition-all"
                           >
                             <FileText className="w-4 h-4" />
-                            <span>Ver Factura PDF</span>
+                            <span>Ver Recibo PDF</span>
                           </button>
                         )}
                       </div>
@@ -2697,66 +2733,88 @@ export const ClientApp: React.FC<ClientAppProps> = ({
               <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA]">
                 Asegura tu agenda mensual con terapeutas Senior dedicados, tarifas preferenciales y atención prioritaria 24/7.
               </p>
+              <div className="pt-2">
+                <span className="bg-[#C9A55B]/20 text-[#806020] dark:text-[#C9A55B] px-4 py-1.5 rounded-full text-xs font-bold border border-[#C9A55B]/40">
+                  Masajes concluidos: {ecosystem.completedServicesCount}
+                </span>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
               {[
+                {
+                  tier: 'Platino',
+                  price: '0',
+                  desc: 'Nivel Inicial (1-4 masajes)',
+                  benefits: ['Acceso a reservas 24/7', 'Historial digital', 'Atención estándar'],
+                  color: 'border-[#E5DFD3] dark:border-[#C9A55B]/20'
+                },
                 {
                   tier: 'Gold',
                   price: '4,500',
-                  desc: '2 Masajes de 90 min al mes',
-                  benefits: ['15% desc en servicios extra', 'Elección de aromaterapia premium', 'Cancelación flexible sin penalización']
+                  desc: 'Frecuente (5-8 masajes)',
+                  benefits: ['10% desc en primeros 2 masajes', 'Aromaterapia Premium', 'Prioridad Media'],
+                  color: 'border-[#C9A55B]/40 shadow-gold-900/5'
                 },
                 {
                   tier: 'Diamond',
                   price: '8,200',
-                  desc: '4 Masajes de 90 min al mes',
-                  benefits: ['20% desc en servicios extra', 'Terapeuta preferido reservado', '1 Experiencia en pareja al año gratis']
+                  desc: 'Premium (9-10 masajes)',
+                  benefits: ['15% desc en primeros 2 masajes', 'Terapeuta preferido', 'Prioridad Alta'],
+                  color: 'border-slate-400/50 shadow-slate-900/5 dark:border-slate-600/50'
                 },
                 {
-                  tier: 'Black',
-                  price: '14,000',
-                  desc: 'Ilimitado & Concierge Privado',
-                  benefits: ['Asignación inmediata garantizada', 'Lencería de seda exclusiva', 'Transferencias de créditos a familiares']
+                  tier: 'Black Diamond',
+                  price: '12,500',
+                  desc: 'Exclusivo (11-15 masajes)',
+                  benefits: ['15% desc para siempre', 'Concierge Privado 24/7', 'Asignación inmediata'],
+                  color: 'border-black dark:border-slate-800 shadow-xl'
+                },
+                {
+                  tier: 'Imperial VIP',
+                  price: '20,000',
+                  desc: 'Elite (16+ masajes)',
+                  benefits: ['20% desc para siempre', 'Lencería de seda', 'Transferencia ilimitada'],
+                  color: 'border-amber-600 dark:border-amber-400 shadow-2xl'
                 }
               ].map((m) => (
                 <div 
                   key={m.tier}
-                  className={`bg-white dark:bg-[#141414] p-6 rounded-2xl border transition-all flex flex-col justify-between space-y-6 shadow-sm ${
+                  className={`bg-white dark:bg-[#141414] p-4 rounded-2xl border transition-all flex flex-col justify-between space-y-4 shadow-sm ${
                     client.membershipTier === m.tier
                       ? 'border-[#C9A55B] ring-2 ring-[#C9A55B] shadow-xl'
-                      : 'border-[#E5DFD3] dark:border-[#C9A55B]/20'
-                  }`}
+                      : m.color
+                  } ${m.tier === 'Diamond' ? 'bg-gradient-to-b from-white to-slate-50 dark:from-[#141414] dark:to-slate-900/30' : ''}`}
                 >
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="font-serif text-xl font-bold text-[#1C1917] dark:text-white">{m.tier}</span>
+                      <span className={`font-serif text-base font-bold ${m.tier === 'Diamond' ? 'text-slate-600 dark:text-slate-300' : 'text-[#1C1917] dark:text-white'}`}>{m.tier}</span>
                       {client.membershipTier === m.tier && (
-                        <span className="bg-[#C9A55B] text-black text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full">
-                          Tu Nivel Actual
+                        <span className="bg-[#C9A55B] text-black text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-full">
+                          Actual
                         </span>
                       )}
                     </div>
 
-                    <div className="space-y-0.5">
-                      <span className="text-2xl font-bold text-[#806020] dark:text-gold-gradient">${m.price} MXN</span>
-                      <span className="text-xs text-[#6B655F] dark:text-[#888888] block">/ mes</span>
+                    <div className="space-y-0">
+                      <span className={`text-lg font-bold ${m.tier === 'Diamond' ? 'text-slate-500' : 'text-[#806020] dark:text-gold-gradient'}`}>${m.price}</span>
+                      <span className="text-[10px] text-[#6B655F] dark:text-[#888888]">/ mes</span>
                     </div>
 
-                    <p className="text-xs text-[#806020] dark:text-[#C9A55B] font-semibold">{m.desc}</p>
+                    <p className="text-[10px] text-[#806020] dark:text-[#C9A55B] font-semibold">{m.desc}</p>
 
-                    <ul className="text-xs text-[#6B655F] dark:text-[#AAAAAA] space-y-2 pt-2 border-t border-[#E5DFD3] dark:border-[#222222]">
+                    <ul className="text-[10px] text-[#6B655F] dark:text-[#AAAAAA] space-y-1.5 pt-2 border-t border-[#E5DFD3] dark:border-[#222222]">
                       {m.benefits.map((b, idx) => (
-                        <li key={idx} className="flex items-center space-x-2">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-[#C9A55B]" />
-                          <span>{b}</span>
+                        <li key={idx} className="flex items-center space-x-1.5">
+                          <CheckCircle2 className="w-3 h-3 text-[#C9A55B]" />
+                          <span className="leading-tight">{b}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
 
-                  <button className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C9A55B] to-[#B38F43] text-black font-bold text-xs gold-button-hover">
-                    {client.membershipTier === m.tier ? 'Membresía Activa' : 'Mejorar a este Plan'}
+                  <button className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#C9A55B] to-[#B38F43] text-black font-bold text-[10px] gold-button-hover">
+                    {client.membershipTier === m.tier ? 'Activa' : 'Mejorar'}
                   </button>
                 </div>
               ))}
@@ -2778,10 +2836,10 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
             <div className="flex items-center space-x-3 border-b border-[#E5DFD3] dark:border-[#C9A55B]/20 pb-4">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#E6CA65] to-[#9A7B38] flex items-center justify-center text-black">
-                <Bot className="w-6 h-6" />
+                <BrainCircuit className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="font-serif text-lg font-bold text-[#1C1917] dark:text-white">Sommelier de Bienestar AI ESSENYA</h3>
+                <h3 className="font-serif text-lg font-bold text-[#1C1917] dark:text-white">AURA ESSENYA IA</h3>
                 <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA]">Asistente inteligente alimentado por Gemini 3.6 Flash</p>
               </div>
             </div>

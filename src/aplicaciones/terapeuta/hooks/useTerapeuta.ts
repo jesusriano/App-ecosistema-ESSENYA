@@ -10,5 +10,6 @@ export const useTerapeuta = () => {
     handleUpdateBookingState: ecosystem.handleUpdateBookingState,
     handleAcceptBooking: ecosystem.handleAcceptBooking,
     handleRejectBooking: ecosystem.handleRejectBooking,
+    handleUpdateLiveLocation: ecosystem.handleUpdateLiveLocation,
   };
 };

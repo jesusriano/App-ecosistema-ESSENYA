@@ -38,6 +38,7 @@ export const useAdmin = () => {
     activePanicAlertsCount: ecosystem.activePanicAlertsCount,
     handleResolvePanicAlert: ecosystem.handleResolvePanicAlert,
     handleAttendPanicAlert: ecosystem.handleAttendPanicAlert,
+    handleDataCleanup: ecosystem.handleDataCleanup,
     activeBookingCount: ecosystem.activeBookingCount,
   };
 };

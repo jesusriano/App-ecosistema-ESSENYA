@@ -43,6 +43,7 @@ export interface BookingPricingInput {
   tip?: number;
   promoDiscount?: number;
   giftCardBalance?: number;
+  completedMassagesCount?: number;
 }
 
 /**
@@ -55,7 +56,8 @@ export function calculateBookingPricing({
   selectedExtras,
   tip = 0,
   promoDiscount = 0,
-  giftCardBalance = 0
+  giftCardBalance = 0,
+  completedMassagesCount = 0
 }: BookingPricingInput): BookingPricingResult {
   // If selectedExtras array is provided, sum its prices
   let extrasTotal = rawExtrasTotal;
@@ -118,9 +120,33 @@ export function calculateBookingPricing({
   }
 
   const durationAdjustment = Math.max(0, durationPrice - base);
-  const subtotal = durationPrice + (extrasTotal || 0);
-  const discountAmount = Math.min(subtotal, Math.max(0, promoDiscount || 0));
-  const afterDiscount = Math.max(0, subtotal - discountAmount);
+  const subtotalBeforeDiscount = durationPrice + (extrasTotal || 0);
+
+  // Membership Discount Logic (Aura Essenya Rewards)
+  // Platino (1-4): 0%
+  // Gold (5-8): 10% on first 2 (massages 5 and 6)
+  // Diamond (9-10): 15% on both (massages 9 and 10)
+  // Black Diamond (11-15): 15% always
+  // Imperial VIP (16+): 20% always
+  const nextMassageNumber = (completedMassagesCount || 0) + 1;
+  let membershipDiscountPercent = 0;
+  
+  if (nextMassageNumber >= 16) {
+    membershipDiscountPercent = 20;
+  } else if (nextMassageNumber >= 11) {
+    membershipDiscountPercent = 15;
+  } else if (nextMassageNumber >= 9) {
+    membershipDiscountPercent = 15;
+  } else if (nextMassageNumber >= 5) {
+    if (nextMassageNumber === 5 || nextMassageNumber === 6) {
+      membershipDiscountPercent = 10;
+    }
+  }
+
+  const membershipDiscountAmount = Math.round(subtotalBeforeDiscount * (membershipDiscountPercent / 100));
+  const totalDiscountAmount = Math.min(subtotalBeforeDiscount, Math.max(0, promoDiscount || 0, membershipDiscountAmount));
+  
+  const afterDiscount = Math.max(0, subtotalBeforeDiscount - totalDiscountAmount);
   const giftCardDeduction = Math.min(giftCardBalance || 0, afterDiscount);
   const afterGiftCard = Math.max(0, afterDiscount - giftCardDeduction);
   const tipAmount = Math.max(0, tip || 0);
@@ -131,8 +157,8 @@ export function calculateBookingPricing({
     durationPrice,
     durationAdjustment,
     extrasTotal: extrasTotal || 0,
-    subtotal,
-    discountAmount,
+    subtotal: subtotalBeforeDiscount,
+    discountAmount: totalDiscountAmount,
     giftCardDeduction,
     tip: tipAmount,
     total,

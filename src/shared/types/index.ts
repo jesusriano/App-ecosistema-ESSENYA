@@ -3,7 +3,7 @@ export type PortalType = 'client' | 'therapist' | 'admin' | 'website';
 export type PressureLevel = 'Suave' | 'Media' | 'Firme' | 'Profunda';
 export type EssentialOil = 'Aceite de olor' | 'Aceite neutro' | 'Lavanda Francesa' | 'Eucalipto Silvestre' | 'Ylang Ylang Dorado' | 'Menta & Romero';
 export type MusicStyle = 'Sonido de la naturaleza' | 'Un mantra' | 'Otra música' | 'Acoustic Zen' | 'Ambient Gold' | 'Frecuencias 432Hz' | 'Silencio Absoluto';
-export type MembershipTier = 'Platino' | 'Gold' | 'Diamond' | string;
+export type MembershipTier = 'Platino' | 'Gold' | 'Diamond' | 'Black Diamond' | 'Imperial VIP' | string;
 
 export type BookingState = 
   | 'pendiente' 

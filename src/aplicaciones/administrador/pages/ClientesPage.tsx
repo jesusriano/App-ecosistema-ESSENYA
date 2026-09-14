@@ -216,7 +216,8 @@ export const ClientesPage: React.FC = () => {
       {/* Clients Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredClients.map((c, index) => {
-          const clientBookings = bookings.filter(b => b.clientId === c.id);
+          const clientBookings = (bookings || []).filter(b => b && b.clientId === c.id);
+          const finishedCount = clientBookings.filter(b => b.state === 'servicio_finalizado' && (b.paymentStatus === 'pagado' || b.paid === true)).length;
           const effectiveTier = getEffectiveTier(c);
 
           return (
@@ -244,6 +245,9 @@ export const ClientesPage: React.FC = () => {
                   <div className="flex flex-col items-end gap-1">
                     <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${getTierBadgeStyle(effectiveTier)}`}>
                       {effectiveTier} VIP
+                    </span>
+                    <span className="text-[9px] bg-[#C9A55B]/10 text-[#806020] dark:text-[#C9A55B] px-2 py-0.5 rounded-full border border-[#C9A55B]/20 font-bold">
+                      {finishedCount} Masajes
                     </span>
                     {c.isBlocked && (
                       <span className="bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/40 text-[9px] font-bold px-2 py-0.5 rounded-full">

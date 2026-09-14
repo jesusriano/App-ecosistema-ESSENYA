@@ -19,36 +19,68 @@ export interface TierInfo {
 }
 
 export const calculateMembershipTier = (completedMassages: number): TierInfo => {
-  if (completedMassages >= 5) {
+  if (completedMassages >= 16) {
+    return {
+      tierName: 'Imperial VIP',
+      fullLabel: 'Socio Imperial VIP',
+      level: 5,
+      badgeStyle: 'bg-rose-950 text-amber-300 border border-amber-400/30',
+      iconType: 'crown',
+      accentColor: '#fbbf24',
+      nextTier: 'Rango Supremo Alcanzado',
+      neededForNext: 0,
+      progressPercent: 100,
+      incentiveMessage: 'Has alcanzado el estatus Imperial. Disfrutas de 20% OFF siempre.',
+      perk: '20% de descuento automático permanente',
+      perks: ['20% de descuento siempre', 'Terapeuta Master asignado', 'Lencería de seda'],
+      isDiamondOrHigher: true
+    };
+  } else if (completedMassages >= 11) {
+    return {
+      tierName: 'Black Diamond',
+      fullLabel: 'Socio Black Diamond',
+      level: 4,
+      badgeStyle: 'bg-zinc-900 text-amber-400 border border-slate-700',
+      iconType: 'sparkles',
+      accentColor: '#fbbf24',
+      nextTier: 'Imperial VIP',
+      neededForNext: 16 - completedMassages,
+      progressPercent: (completedMassages / 16) * 100,
+      incentiveMessage: `Te faltan ${16 - completedMassages} masajes para el rango Imperial.`,
+      perk: '15% de descuento automático permanente',
+      perks: ['15% de descuento siempre', 'Concierge Privado 24/7', 'Toallas de algodón egipcio'],
+      isDiamondOrHigher: true
+    };
+  } else if (completedMassages >= 9) {
     return {
       tierName: 'Diamond',
       fullLabel: 'Socio Diamond',
       level: 3,
-      badgeStyle: 'bg-emerald-500 text-white',
-      iconType: 'sparkles',
-      accentColor: '#10B981',
-      nextTier: 'Nivel Máximo',
-      neededForNext: 0,
-      progressPercent: 100,
-      incentiveMessage: 'Has alcanzado el máximo nivel de beneficios.',
-      perk: '15% de descuento (VIP15)',
-      perks: ['15% de descuento permanente', 'Prioridad en reservas'],
+      badgeStyle: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-400/50',
+      iconType: 'gem',
+      accentColor: '#94a3b8',
+      nextTier: 'Black Diamond',
+      neededForNext: 11 - completedMassages,
+      progressPercent: (completedMassages / 11) * 100,
+      incentiveMessage: `Te faltan ${11 - completedMassages} masajes para Black Diamond.`,
+      perk: '15% de descuento en tus 2 servicios de este nivel',
+      perks: ['15% de descuento en masajes 9 y 10', 'Terapeuta preferido'],
       isDiamondOrHigher: true
     };
-  } else if (completedMassages >= 3) {
+  } else if (completedMassages >= 5) {
     return {
       tierName: 'Gold',
       fullLabel: 'Socio Gold',
       level: 2,
-      badgeStyle: 'bg-yellow-500 text-white',
-      iconType: 'star',
-      accentColor: '#EAB308',
+      badgeStyle: 'bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-500/30',
+      iconType: 'sparkles',
+      accentColor: '#fbbf24',
       nextTier: 'Diamond',
-      neededForNext: 5 - completedMassages,
-      progressPercent: (completedMassages / 5) * 100,
-      incentiveMessage: `Te faltan ${5 - completedMassages} masajes para ser Diamond.`,
-      perk: 'Descuento especial',
-      perks: ['Descuento ocasional'],
+      neededForNext: 9 - completedMassages,
+      progressPercent: (completedMassages / 9) * 100,
+      incentiveMessage: `Te faltan ${9 - completedMassages} masajes para ser Diamond.`,
+      perk: '10% de descuento en tus primeros 2 servicios de este nivel',
+      perks: ['10% de descuento en masajes 5 y 6', 'Aromaterapia Premium'],
       isDiamondOrHigher: false
     };
   } else {
@@ -56,15 +88,15 @@ export const calculateMembershipTier = (completedMassages: number): TierInfo => 
       tierName: 'Platino',
       fullLabel: 'Socio Platino',
       level: 1,
-      badgeStyle: 'bg-slate-300 text-black',
+      badgeStyle: 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700',
       iconType: 'shield',
-      accentColor: '#94A3B8',
+      accentColor: '#94a3b8',
       nextTier: 'Gold',
-      neededForNext: 3 - completedMassages,
-      progressPercent: (completedMassages / 3) * 100,
-      incentiveMessage: `Te faltan ${3 - completedMassages} masajes para ser Gold.`,
-      perk: 'Bienvenida',
-      perks: ['Bienvenida'],
+      neededForNext: 5 - completedMassages,
+      progressPercent: (completedMassages / 5) * 100,
+      incentiveMessage: `Te faltan ${5 - completedMassages} masajes para ascender a Gold.`,
+      perk: 'Acceso a rituales exclusivos de bienestar',
+      perks: ['Acceso a reservas 24/7', 'Atención estándar'],
       isDiamondOrHigher: false
     };
   }

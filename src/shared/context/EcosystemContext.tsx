@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
-import { collection, onSnapshot, doc, getDoc, setDoc, updateDoc, deleteDoc, query, where, runTransaction, arrayUnion } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, runTransaction, arrayUnion } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { db, auth } from '../../lib/firebase';
 import { useAuth } from './AuthContext';
@@ -61,10 +61,13 @@ interface EcosystemContextType {
   handleCancelBooking: (bookingId: string, reason: string) => void;
   handleConfirmPayment: (bookingId: string) => void;
   handleRejectPayment: (bookingId: string, reason: string) => void;
+  handleDataCleanup: () => Promise<boolean | void>;
+  handleUpdateLiveLocation: (bookingId: string, lat: number, lng: number) => Promise<void>;
   handleResolvePanicAlert: (alertId: string, adminName?: string) => Promise<void>;
   handleAttendPanicAlert: (alertId: string, adminName?: string) => Promise<void>;
-  
+  completedServicesCount: number;
   activeBookingCount: number;
+  pendingSyncCount: number;
 }
 
 const EcosystemContext = createContext<EcosystemContextType | undefined>(undefined);
@@ -154,6 +157,144 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Selected Invoice Modal State
   const [activeInvoice, setActiveInvoice] = useState<Invoice | null>(null);
 
+  const [completedServicesCount, setCompletedServicesCount] = useState(0);
+
+  // Data Cleanup Logic (Temporary Maintenance Utility)
+  const handleDataCleanup = async () => {
+    try {
+      console.log('Iniciando limpieza total de datos de prueba...');
+      
+      // 1. Reservas
+      const bookingsSnap = await getDocs(collection(db, 'reservas'));
+      for (const bDoc of bookingsSnap.docs) {
+        await deleteDoc(doc(db, 'reservas', bDoc.id));
+      }
+      setBookings([]);
+
+      // 2. Facturas
+      const invoicesSnap = await getDocs(collection(db, 'facturas'));
+      for (const iDoc of invoicesSnap.docs) {
+        await deleteDoc(doc(db, 'facturas', iDoc.id));
+      }
+      setInvoices([]);
+
+      // 3. Pánico y Logs
+      const panicSnap = await getDocs(collection(db, 'panic_alerts'));
+      for (const pDoc of panicSnap.docs) {
+        await deleteDoc(doc(db, 'panic_alerts', pDoc.id));
+      }
+      setPanicAlerts([]);
+
+      const logsSnap = await getDocs(collection(db, 'audit_logs'));
+      for (const lDoc of logsSnap.docs) {
+        await deleteDoc(doc(db, 'audit_logs', lDoc.id));
+      }
+      setAuditLogs([]);
+
+      // 4. Clientes (Nelson Riaño, Socio VIP, Nelson Cárdenas)
+      const clientsSnap = await getDocs(collection(db, 'clientes'));
+      for (const cDoc of clientsSnap.docs) {
+        const data = cDoc.data();
+        const name = (data.name || data.nombre || '').toLowerCase();
+        
+        if (name.includes('nelson riaño') || name.includes('socio vip') || name.includes('prueba')) {
+          await deleteDoc(doc(db, 'clientes', cDoc.id));
+        } else if (name.includes('nelson cárdenas')) {
+          await updateDoc(doc(db, 'clientes', cDoc.id), {
+            totalBookings: 0,
+            spentTotal: 0,
+            rewardsPoints: 0,
+            membershipTier: 'Platino'
+          });
+        }
+      }
+
+      // 5. Terapeutas (Solo queda Jesús María Riaño)
+      const therapistsSnap = await getDocs(collection(db, 'terapeutas_publicos'));
+      for (const tDoc of therapistsSnap.docs) {
+        const data = tDoc.data();
+        const name = (data.name || data.nombre || '').toLowerCase();
+        if (!name.includes('jesús maría riaño')) {
+          await deleteDoc(doc(db, 'terapeutas_publicos', tDoc.id));
+        }
+      }
+
+      console.log('Limpieza completada exitosamente.');
+      return true;
+    } catch (err) {
+      console.error('Error en limpieza:', err);
+      throw err;
+    }
+  };
+
+  // Offline Sync Queue
+  const [pendingQueue, setPendingQueue] = useState<any[]>([]);
+
+  // Initialize Queue from localStorage
+  useEffect(() => {
+    const savedQueue = localStorage.getItem('essenya_sync_queue');
+    if (savedQueue) {
+      try {
+        setPendingQueue(JSON.parse(savedQueue));
+      } catch (e) {
+        console.error('Error parsing sync queue:', e);
+      }
+    }
+  }, []);
+
+  // Save Queue to localStorage
+  useEffect(() => {
+    localStorage.setItem('essenya_sync_queue', JSON.stringify(pendingQueue));
+  }, [pendingQueue]);
+
+  // Sync Logic
+  const syncPendingItems = async () => {
+    if (!navigator.onLine || pendingQueue.length === 0) return;
+
+    console.log(`Intentando sincronizar ${pendingQueue.length} elementos pendientes...`);
+    const queueCopy = [...pendingQueue];
+    const failedItems: any[] = [];
+
+    for (const item of queueCopy) {
+      try {
+        if (item.type === 'BOOKING_STATE') {
+          await updateDoc(doc(db, 'reservas', item.targetId), cleanForFirestore(item.payload));
+        } else if (item.type === 'LIVE_LOCATION') {
+          await updateDoc(doc(db, 'reservas', item.targetId), cleanForFirestore(item.payload));
+        }
+        // Success: item will be removed from queue
+      } catch (err) {
+        console.error('Error sincronizando item:', item, err);
+        failedItems.push(item);
+      }
+    }
+
+    setPendingQueue(failedItems);
+    if (failedItems.length === 0) {
+      console.log('Sincronización completa con éxito.');
+    }
+  };
+
+  // Listen for online status
+  useEffect(() => {
+    const handleOnline = () => {
+      syncPendingItems();
+    };
+    window.addEventListener('online', handleOnline);
+    // Also try sync on mount
+    syncPendingItems();
+    return () => window.removeEventListener('online', handleOnline);
+  }, [pendingQueue.length]);
+
+  const addToSyncQueue = (item: { type: string, targetId: string, payload: any }) => {
+    const newItem = {
+      id: `sync-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: new Date().toISOString(),
+      ...item
+    };
+    setPendingQueue(prev => [...prev, newItem]);
+  };
+
   // Sincronizar nivel de membresía según masajes concluidos y pagados
   useEffect(() => {
     if (!client?.id) return;
@@ -166,11 +307,13 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       return isClient && isFinished && isPaid;
     }).length;
 
+    setCompletedServicesCount(finishedAndPaid);
+
     let computedTier: MembershipTier = 'Platino';
-    if (finishedAndPaid >= 5) computedTier = 'Diamond';
-    
-    else if (finishedAndPaid >= 3) computedTier = 'Gold';
-    
+    if (finishedAndPaid >= 16) computedTier = 'Imperial VIP';
+    else if (finishedAndPaid >= 11) computedTier = 'Black Diamond';
+    else if (finishedAndPaid >= 9) computedTier = 'Diamond';
+    else if (finishedAndPaid >= 5) computedTier = 'Gold';
     else computedTier = 'Platino';
 
     if (client.membershipTier !== computedTier) {
@@ -738,9 +881,14 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     const updatePayload = { state: newState, updatedAt: nowIso };
 
     try {
-      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
+      if (!navigator.onLine) {
+        addToSyncQueue({ type: 'BOOKING_STATE', targetId: bookingId, payload: updatePayload });
+      } else {
+        await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
+      addToSyncQueue({ type: 'BOOKING_STATE', targetId: bookingId, payload: updatePayload });
     }
 
     const bk = bookings.find(b => b.id === bookingId);
@@ -768,6 +916,34 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       `Reserva ${bk?.code || bookingId} actualizada al estado "${newState}".`
     );
   };
+
+  const handleUpdateLiveLocation = async (bookingId: string, lat: number, lng: number) => {
+    if (!db) return;
+    const nowIso = new Date().toISOString();
+    const updatePayload = {
+      liveLat: lat,
+      liveLng: lng,
+      updatedAt: nowIso
+    };
+
+    try {
+      if (!navigator.onLine) {
+        addToSyncQueue({ type: 'LIVE_LOCATION', targetId: bookingId, payload: updatePayload });
+      } else {
+        await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
+      }
+      setBookings(prev => prev.map(b => {
+        if (b.id === bookingId) {
+          return { ...b, liveLat: lat, liveLng: lng, updatedAt: nowIso };
+        }
+        return b;
+      }));
+    } catch (err) {
+      console.error('Error updating live location:', err);
+      addToSyncQueue({ type: 'LIVE_LOCATION', targetId: bookingId, payload: updatePayload });
+    }
+  };
+
 
   const handleReassignTherapist = async (bookingId: string, therapistId: string) => {
     let newTher = therapists.find(t => t.id === therapistId);
@@ -1388,9 +1564,13 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       handleCancelBooking,
       handleConfirmPayment,
       handleRejectPayment,
+      handleDataCleanup,
+      handleUpdateLiveLocation,
       handleResolvePanicAlert,
       handleAttendPanicAlert,
-      activeBookingCount
+      completedServicesCount,
+      activeBookingCount,
+      pendingSyncCount: pendingQueue.length
     }}>
       {children}
     </EcosystemContext.Provider>
