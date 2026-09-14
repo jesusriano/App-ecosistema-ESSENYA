@@ -187,7 +187,7 @@ export const PerfilPage: React.FC = () => {
         );
       });
 
-      const downloadUrl = storagePath;
+      const downloadUrl = await getDownloadURL(storageRef);
       setFotografia(downloadUrl);
       
       const res = await updateSelfProfile(activeTherapist.id, {

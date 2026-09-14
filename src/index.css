@@ -116,4 +116,54 @@
   animation: shimmer 4s infinite linear;
 }
 
+/* ESSENYA Logo Adaptive Theme Styling */
+.essenya-logo-auto-primary {
+  fill: #806020;
+  color: #806020;
+}
+.essenya-logo-auto-secondary {
+  fill: #A37B2C;
+}
+
+.dark .essenya-logo-auto-primary {
+  fill: #E6CA65 !important;
+  color: #E6CA65 !important;
+}
+.dark .essenya-logo-auto-secondary {
+  fill: #C9A55B !important;
+}
+
+.essenya-logo-dark-primary {
+  fill: #1C1917;
+  color: #1C1917;
+}
+.essenya-logo-dark-secondary {
+  fill: #3A3530;
+}
+
+.dark .essenya-logo-dark-primary {
+  fill: #E6CA65 !important;
+  color: #E6CA65 !important;
+}
+.dark .essenya-logo-dark-secondary {
+  fill: #C9A55B !important;
+}
+
+.essenya-logo-gold-primary {
+  fill: #C9A55B;
+  color: #C9A55B;
+}
+.essenya-logo-gold-secondary {
+  fill: #9A7B38;
+}
+
+.essenya-logo-light-primary {
+  fill: #FAF8F5;
+  color: #FAF8F5;
+}
+.essenya-logo-light-secondary {
+  fill: rgba(255, 255, 255, 0.8);
+}
+
+
 

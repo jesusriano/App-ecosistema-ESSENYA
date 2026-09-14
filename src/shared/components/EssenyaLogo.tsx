@@ -26,18 +26,18 @@ export const EssenyaLogo: React.FC<EssenyaLogoProps> = ({
 
   // Dynamic color classes based on variant & theme
   const getFillClass = () => {
-    if (variant === 'gold') return 'fill-[#C9A55B] text-[#C9A55B]';
-    if (variant === 'light') return 'fill-[#FAF8F5] text-[#FAF8F5]';
-    if (variant === 'dark') return 'fill-[#1C1917] text-[#1C1917]';
-    // 'auto': Deep gold in light mode, luminous radiant gold in dark mode
-    return 'fill-[#806020] dark:fill-[#C9A55B] text-[#806020] dark:text-[#C9A55B]';
+    if (variant === 'gold') return 'essenya-logo-gold-primary fill-[#C9A55B] text-[#C9A55B]';
+    if (variant === 'light') return 'essenya-logo-light-primary fill-[#FAF8F5] text-[#FAF8F5]';
+    if (variant === 'dark') return 'essenya-logo-dark-primary fill-[#1C1917] text-[#1C1917]';
+    // 'auto': Deep warm gold in light mode, luminous radiant gold in dark mode
+    return 'essenya-logo-auto-primary fill-[#806020] text-[#806020]';
   };
 
   const getSecondaryFillClass = () => {
-    if (variant === 'gold') return 'fill-[#9A7B38]';
-    if (variant === 'light') return 'fill-white/80';
-    if (variant === 'dark') return 'fill-[#3A3530]';
-    return 'fill-[#A37B2C] dark:fill-[#E6CA65]';
+    if (variant === 'gold') return 'essenya-logo-gold-secondary fill-[#9A7B38]';
+    if (variant === 'light') return 'essenya-logo-light-secondary fill-white/80';
+    if (variant === 'dark') return 'essenya-logo-dark-secondary fill-[#3A3530]';
+    return 'essenya-logo-auto-secondary fill-[#A37B2C]';
   };
 
   return (
@@ -54,7 +54,7 @@ export const EssenyaLogo: React.FC<EssenyaLogoProps> = ({
         xmlns="http://www.w3.org/2000/svg"
         aria-label="ESSENYA Logo"
       >
-        <g transform="translate(20, 5)">
+        <g transform="translate(20, 5)" className={getFillClass()}>
           {/* ----- LETTER E ----- */}
           {/* Vertical Main Stem of E */}
           <path d="M 58 25 L 72 25 L 72 105 L 58 105 Z" />
@@ -100,7 +100,7 @@ export const EssenyaLogo: React.FC<EssenyaLogoProps> = ({
               x="100"
               y="152"
               textAnchor="middle"
-              className="font-serif font-bold transition-colors duration-300"
+              className={`font-serif font-bold transition-colors duration-300 ${getFillClass()}`}
               style={{
                 fontSize: '31px',
                 letterSpacing: '0.38em',
@@ -116,10 +116,11 @@ export const EssenyaLogo: React.FC<EssenyaLogoProps> = ({
   );
 };
 
-export const EssenyaMonogram: React.FC<{ className?: string; size?: number }> = ({ 
+export const EssenyaMonogram: React.FC<{ className?: string; size?: number; variant?: 'auto' | 'gold' | 'dark' | 'light' }> = ({ 
   className = '', 
+  variant = 'auto',
 }) => {
   return (
-    <EssenyaLogo size="sm" showText={false} className={className} />
+    <EssenyaLogo size="sm" showText={false} className={className} variant={variant} />
   );
 };

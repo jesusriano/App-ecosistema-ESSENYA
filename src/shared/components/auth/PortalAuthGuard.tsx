@@ -617,7 +617,7 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
         {/* Header Logo & Title */}
         <div className="text-center space-y-3 pt-2">
           <div className="flex justify-center">
-            <EssenyaLogo variant="dark" />
+            <EssenyaLogo variant="auto" />
           </div>
 
           <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-[#C9A55B]/10 border border-[#C9A55B]/30 text-[#806020] dark:text-[#C9A55B] text-xs font-semibold uppercase tracking-widest">

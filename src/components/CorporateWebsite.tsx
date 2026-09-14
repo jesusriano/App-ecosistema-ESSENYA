@@ -21,7 +21,7 @@ export const CorporateWebsite: React.FC<CorporateWebsiteProps> = ({
         <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-[#C9A55B]/10 rounded-full blur-3xl"></div>
 
         <div className="flex justify-center">
-          <EssenyaLogo size="lg" showText={true} />
+          <EssenyaLogo size="lg" showText={true} variant="gold" />
         </div>
 
         <div className="space-y-2">

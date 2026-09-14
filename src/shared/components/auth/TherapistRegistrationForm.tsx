@@ -79,7 +79,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
   // Terms Acceptance
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [uploadedDocuments, setUploadedDocuments] = useState<Array<{ id: string; tipo: string; nombre: string; url: string; estado: string }>>([]);
-  const [rawFiles, setRawFiles] = useState<{ ine?: File; cert?: File }>({});
+  const [rawFiles, setRawFiles] = useState<{ ine?: File; cert?: File; photo?: File }>({});
   const [showTermsModal, setShowTermsModal] = useState(false);
 
   // UI state
@@ -197,9 +197,16 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
         createdAt: new Date().toISOString()
       }, { merge: true });
 
-      // 4. Subir documentos a Firebase Cloud Storage si fueron seleccionados
+      {/* 4. Subir foto de perfil y documentos a Firebase Cloud Storage si fueron seleccionados */}
+      let finalFotografia = registrationPayload.fotografia;
       let finalDocuments = [...(registrationPayload.documentos || [])];
       try {
+        if (rawFiles.photo) {
+          const safeName = rawFiles.photo.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const photoRef = ref(storage, `terapeutas/${uid}/perfil/foto-perfil_${Date.now()}_${safeName}`);
+          await uploadBytes(photoRef, rawFiles.photo);
+          finalFotografia = await getDownloadURL(photoRef);
+        }
         if (rawFiles.ine) {
           const safeName = rawFiles.ine.name.replace(/[^a-zA-Z0-9._-]/g, '_');
           const ineRef = ref(storage, `terapeutas/${uid}/documentos/INE_${Date.now()}_${safeName}`);
@@ -215,7 +222,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
           finalDocuments = finalDocuments.map(d => d.tipo === 'Certificado' ? { ...d, url: certDownloadUrl } : d);
         }
       } catch (storageErr) {
-        console.warn('[Storage] Fallback para documentos de registro:', storageErr);
+        console.warn('[Storage] Fallback para archivos de registro:', storageErr);
       }
 
       // 5. Guardar expediente profesional completo en colección 'terapeutas'
@@ -228,7 +235,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
         nombreCompleto: `${registrationPayload.nombre} ${registrationPayload.apellidos}`,
         correo: registrationPayload.correo,
         telefono: registrationPayload.telefono,
-        fotografia: registrationPayload.fotografia,
+        fotografia: finalFotografia,
         fechaNacimiento: registrationPayload.fechaNacimiento,
         direccion: registrationPayload.direccion,
         curp: registrationPayload.curp,
@@ -440,6 +447,36 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
                 placeholder="Calle, Número, Colonia, Alcaldía, C.P., CDMX"
                 className="w-full px-3 py-2 text-xs rounded-xl border border-[#E5DFD3] dark:border-[#333333] bg-white dark:bg-[#0D0D0D] text-[#1C1917] dark:text-white focus:border-[#C9A55B]"
               />
+            </div>
+
+            {/* Profile Photo Upload */}
+            <div className="space-y-1.5 bg-[#FAF8F5] dark:bg-[#0D0D0D] p-3 rounded-2xl border border-dashed border-[#C9A55B]/40">
+              <label className="text-[11px] font-bold text-[#806020] dark:text-[#C9A55B] uppercase flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5" />
+                <span>Fotografía de Perfil / Retrato Profesional *</span>
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setRawFiles(prev => ({ ...prev, photo: file }));
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      setFotografia(reader.result as string);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                className="w-full text-[11px] text-[#6B655F] file:mr-2 file:py-1 file:px-2 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-[#C9A55B]/10 file:text-[#C9A55B] hover:file:bg-[#C9A55B]/20 cursor-pointer"
+              />
+              {fotografia && (
+                <div className="flex items-center gap-2 pt-1">
+                  <img src={fotografia} alt="Vista previa" className="w-10 h-10 rounded-full object-cover border border-[#C9A55B]" />
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">✓ Foto de perfil cargada correctamente</span>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end pt-2">
