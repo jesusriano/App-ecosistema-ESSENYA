@@ -1,7 +1,8 @@
 import React from 'react';
 import { 
   LayoutDashboard, Calendar, UserCheck, Users, 
-  Sparkles, CreditCard, BarChart2, Settings, FileCheck
+  Sparkles, CreditCard, BarChart2, Settings, FileCheck,
+  Code
 } from 'lucide-react';
 import { useTherapistContext } from '../../../shared/context/TherapistContext';
 
@@ -13,7 +14,8 @@ export type AdminRoutePath =
   | '/servicios' 
   | '/pagos' 
   | '/reportes' 
-  | '/configuracion';
+  | '/configuracion'
+  | '/developer';
 
 interface AdminSidebarProps {
   currentRoute: AdminRoutePath;
@@ -23,6 +25,8 @@ interface AdminSidebarProps {
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({ currentRoute, onNavigate }) => {
   const { therapists } = useTherapistContext();
   const pendingCount = (therapists || []).filter(t => t && t.estado === 'pendiente').length;
+
+  const isDevMode = import.meta.env.VITE_DEVELOPER_MODE === 'true';
 
   const menuItems = [
     { path: '/dashboard' as AdminRoutePath, label: 'Dashboard Live', icon: LayoutDashboard },
@@ -34,6 +38,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ currentRoute, onNavi
     { path: '/reportes' as AdminRoutePath, label: 'Reportes & Métricas', icon: BarChart2 },
     { path: '/configuracion' as AdminRoutePath, label: 'Zonas & Seguridad', icon: Settings },
   ];
+
+  if (isDevMode) {
+    menuItems.push({ path: '/developer' as AdminRoutePath, label: 'Developer Portal', icon: Code });
+  }
 
   return (
     <aside className="w-full h-full p-4 flex flex-col justify-between shrink-0 overflow-y-auto">
