@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { 
   Users, Search, ShieldCheck, Mail, Phone, MapPin, 
-  Award, Lock, Unlock, Clock, DollarSign, Edit, Plus, X, Heart, AlertTriangle
+  Award, Lock, Unlock, Clock, DollarSign, Edit, Plus, X, Heart, AlertTriangle, Trash2
 } from 'lucide-react';
 import { useAdmin } from '../hooks/useAdmin';
 import { useToast } from '../../../shared/context/ToastContext';
@@ -53,7 +53,7 @@ export const sanitizeClientUser = (raw: any): ClientUser => {
 };
 
 export const ClientesPage: React.FC = () => {
-  const { clients, bookings, handleEditClient, handleToggleBlockClient } = useAdmin();
+  const { clients, bookings, handleEditClient, handleToggleBlockClient, handleDeleteClient } = useAdmin();
   const { showToast } = useToast();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -309,6 +309,19 @@ export const ClientesPage: React.FC = () => {
                     title={c.isBlocked ? 'Reactivar Cliente' : 'Suspender Cliente'}
                   >
                     {c.isBlocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (window.confirm(`¿Estás seguro de que deseas eliminar permanentemente el expediente de ${c.name}? Esta acción no se puede deshacer.`)) {
+                        handleDeleteClient(c.id);
+                        showToast(`Socio VIP ${c.name} eliminado.`);
+                      }
+                    }}
+                    className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30 rounded-xl cursor-pointer"
+                    title="Eliminar Cliente"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>

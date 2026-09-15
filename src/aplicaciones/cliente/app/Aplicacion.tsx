@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from '../../../context/ToastContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
@@ -96,11 +96,11 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   };
 
   const { showToast } = useToast();
-  const [prevPaymentStatus, setPrevPaymentStatus] = useState<Record<string, string>>({});
+  const prevPaymentStatusRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     bookings.forEach(b => {
-      const prevStatus = prevPaymentStatus[b.id];
+      const prevStatus = prevPaymentStatusRef.current[b.id];
       if (prevStatus && prevStatus !== b.paymentStatus) {
         if (b.paymentStatus === 'pagado') {
           showToast('Pago Acreditado', `Tu pago para la reserva ${b.code} ha sido validado correctamente. ¡Disfruta tu sesión!`, 'success');
@@ -110,11 +110,12 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       }
     });
 
+    // Update ref with current statuses
     const currentStatuses: Record<string, string> = {};
     bookings.forEach(b => {
       currentStatuses[b.id] = b.paymentStatus;
     });
-    setPrevPaymentStatus(currentStatuses);
+    prevPaymentStatusRef.current = currentStatuses;
   }, [bookings, showToast]);
   const { lat, lng, loading: geolocLoading, error: geolocError, getPosition } = useGeolocation();
   const [activeTab, setActiveTab] = useState<'book' | 'tracking' | 'history' | 'membership'>('book');

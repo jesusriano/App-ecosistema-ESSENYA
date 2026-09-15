@@ -20,21 +20,23 @@ const ToastContext = createContext<ToastContextType | undefined>(undefined);
 export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  const showToast = (title: string, description?: string, type: ToastType = 'success') => {
+  const showToast = React.useCallback((title: string, description?: string, type: ToastType = 'success') => {
     const id = `toast-${Date.now()}-${Math.random()}`;
     setToasts(prev => [...prev.slice(-3), { id, title, description, type }]); // Keep max 4
 
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 4500);
-  };
+  }, []);
 
-  const removeToast = (id: string) => {
+  const removeToast = React.useCallback((id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
-  };
+  }, []);
+
+  const value = React.useMemo(() => ({ showToast }), [showToast]);
 
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={value}>
       {children}
 
       {/* Floating Toast Container */}

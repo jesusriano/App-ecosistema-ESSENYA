@@ -30,6 +30,7 @@ export const useAdmin = () => {
     handleAddClient: ecosystem.handleAddClient,
     handleEditClient: ecosystem.handleEditClient,
     handleToggleBlockClient: ecosystem.handleToggleBlockClient,
+    handleDeleteClient: ecosystem.handleDeleteClient,
     handleRescheduleBooking: ecosystem.handleRescheduleBooking,
     handleCancelBooking: ecosystem.handleCancelBooking,
     handleConfirmPayment: ecosystem.handleConfirmPayment,

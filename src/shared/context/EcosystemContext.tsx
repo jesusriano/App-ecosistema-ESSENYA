@@ -56,6 +56,7 @@ interface EcosystemContextType {
   handleAddClient: (newClient: ClientUser) => void;
   handleEditClient: (updatedClient: ClientUser) => void;
   handleToggleBlockClient: (clientId: string) => void;
+  handleDeleteClient: (clientId: string) => Promise<void>;
   
   handleRescheduleBooking: (bookingId: string, newDate: string, newTime: string) => void;
   handleCancelBooking: (bookingId: string, reason: string) => void;
@@ -160,7 +161,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [completedServicesCount, setCompletedServicesCount] = useState(0);
 
   // Data Cleanup Logic (Temporary Maintenance Utility)
-  const handleDataCleanup = async () => {
+  const handleDataCleanup = React.useCallback(async () => {
     try {
       console.log('Iniciando limpieza total de datos de prueba...');
       
@@ -171,17 +172,17 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
       setBookings([]);
 
-      // 2. Facturas
-      const invoicesSnap = await getDocs(collection(db, 'facturas'));
+      // 2. Facturas (Using 'invoices' collection)
+      const invoicesSnap = await getDocs(collection(db, 'invoices'));
       for (const iDoc of invoicesSnap.docs) {
-        await deleteDoc(doc(db, 'facturas', iDoc.id));
+        await deleteDoc(doc(db, 'invoices', iDoc.id));
       }
       setInvoices([]);
 
       // 3. Pánico y Logs
-      const panicSnap = await getDocs(collection(db, 'panic_alerts'));
+      const panicSnap = await getDocs(collection(db, 'alertas_panico'));
       for (const pDoc of panicSnap.docs) {
-        await deleteDoc(doc(db, 'panic_alerts', pDoc.id));
+        await deleteDoc(doc(db, 'alertas_panico', pDoc.id));
       }
       setPanicAlerts([]);
 
@@ -191,30 +192,34 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
       setAuditLogs([]);
 
-      // 4. Clientes (Nelson Riaño, Socio VIP, Nelson Cárdenas)
+      // 4. Clientes (Preserve Nelson Cárdenas, delete Nelson Riaño, Socio VIP, etc.)
       const clientsSnap = await getDocs(collection(db, 'clientes'));
       for (const cDoc of clientsSnap.docs) {
         const data = cDoc.data();
         const name = (data.name || data.nombre || '').toLowerCase();
         
-        if (name.includes('nelson riaño') || name.includes('socio vip') || name.includes('prueba')) {
-          await deleteDoc(doc(db, 'clientes', cDoc.id));
-        } else if (name.includes('nelson cárdenas')) {
+        if (name.includes('nelson cárdenas')) {
+          // Reset statistics for the main client
           await updateDoc(doc(db, 'clientes', cDoc.id), {
             totalBookings: 0,
             spentTotal: 0,
             rewardsPoints: 0,
-            membershipTier: 'Platino'
+            membershipTier: 'Platino',
+            history: []
           });
+        } else if (name.includes('nelson riaño') || name.includes('socio vip') || name.includes('prueba')) {
+          await deleteDoc(doc(db, 'clientes', cDoc.id));
         }
       }
 
-      // 5. Terapeutas (Solo queda Jesús María Riaño)
+      // 5. Terapeutas (Preserve Jesús María Riaño and Martha Lucia Gomez)
       const therapistsSnap = await getDocs(collection(db, 'terapeutas_publicos'));
       for (const tDoc of therapistsSnap.docs) {
         const data = tDoc.data();
         const name = (data.name || data.nombre || '').toLowerCase();
-        if (!name.includes('jesús maría riaño')) {
+        const shouldPreserve = name.includes('jesús maría riaño') || name.includes('martha lucia gomez');
+        
+        if (!shouldPreserve) {
           await deleteDoc(doc(db, 'terapeutas_publicos', tDoc.id));
         }
       }
@@ -225,7 +230,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.error('Error en limpieza:', err);
       throw err;
     }
-  };
+  }, [setBookings, setInvoices, setPanicAlerts, setAuditLogs, setClients]);
 
   // Offline Sync Queue
   const [pendingQueue, setPendingQueue] = useState<any[]>([]);
@@ -1361,6 +1366,26 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
+  const handleDeleteClient = async (clientId: string) => {
+    const clientToDelete = clients.find(c => c.id === clientId);
+    if (!clientToDelete) return;
+
+    setClients(prev => prev.filter(c => c.id !== clientId));
+
+    try {
+      await deleteDoc(doc(db, 'clientes', clientId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `clientes/${clientId}`);
+    }
+
+    addLog(
+      'Administrador',
+      'Panel Admin',
+      'Eliminación de Cliente VIP',
+      `Expediente del socio VIP ${clientToDelete.name} eliminado del sistema.`
+    );
+  };
+
   // Booking Operational Handlers
   const handleRescheduleBooking = async (bookingId: string, newDate: string, newTime: string) => {
     setBookings(prev => prev.map(b => {
@@ -1520,58 +1545,76 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
   const activeBookingCount = bookings.filter(b => b.state !== 'servicio_finalizado' && b.state !== 'cancelado').length;
   const activePanicAlertsCount = panicAlerts.filter(a => a.status === 'activa' || a.status === 'en_atencion').length;
 
+  const value = useMemo(() => ({
+    currentPortal,
+    setCurrentPortal,
+    services,
+    therapists,
+    activeTherapist,
+    client,
+    clients,
+    bookings,
+    invoices,
+    zones,
+    auditLogs,
+    panicAlerts,
+    activePanicAlertsCount,
+    activeInvoice,
+    setActiveInvoice,
+    handleViewInvoice,
+    handleNewBooking,
+    handleAcceptBooking,
+    handleRejectBooking,
+    handleAdminAcceptBooking,
+    handleAdminRejectBooking,
+    handleUpdateBookingState,
+    handleReassignTherapist,
+    handleToggleZoneSurge,
+    handleAddTherapist,
+    handleEditTherapist,
+    handleDeleteTherapist,
+    handleAddZone,
+    handleEditZone,
+    handleDeleteZone,
+    handleSendMessage,
+    handleRateBooking,
+    handleAddService,
+    handleEditService,
+    handleDeleteService,
+    handleAddClient,
+    handleEditClient,
+    handleToggleBlockClient,
+    handleDeleteClient,
+    handleRescheduleBooking,
+    handleCancelBooking,
+    handleConfirmPayment,
+    handleRejectPayment,
+    handleDataCleanup,
+    handleUpdateLiveLocation,
+    handleResolvePanicAlert,
+    handleAttendPanicAlert,
+    completedServicesCount,
+    activeBookingCount,
+    pendingSyncCount: pendingQueue.length
+  }), [
+    currentPortal, setCurrentPortal, services, therapists, activeTherapist,
+    client, clients, bookings, invoices, zones, auditLogs, panicAlerts,
+    activePanicAlertsCount, activeInvoice, setActiveInvoice, handleViewInvoice,
+    handleNewBooking, handleAcceptBooking, handleRejectBooking,
+    handleAdminAcceptBooking, handleAdminRejectBooking, handleUpdateBookingState,
+    handleReassignTherapist, handleToggleZoneSurge, handleAddTherapist,
+    handleEditTherapist, handleDeleteTherapist, handleAddZone,
+    handleEditZone, handleDeleteZone, handleSendMessage, handleRateBooking,
+    handleAddService, handleEditService, handleDeleteService,
+    handleAddClient, handleEditClient, handleToggleBlockClient, handleDeleteClient,
+    handleRescheduleBooking, handleCancelBooking, handleConfirmPayment,
+    handleRejectPayment, handleDataCleanup, handleUpdateLiveLocation,
+    handleResolvePanicAlert, handleAttendPanicAlert, completedServicesCount,
+    activeBookingCount, pendingQueue.length
+  ]);
+
   return (
-    <EcosystemContext.Provider value={{
-      currentPortal,
-      setCurrentPortal,
-      services,
-      therapists,
-      activeTherapist,
-      client,
-      clients,
-      bookings,
-      invoices,
-      zones,
-      auditLogs,
-      panicAlerts,
-      activePanicAlertsCount,
-      activeInvoice,
-      setActiveInvoice,
-      handleViewInvoice,
-      handleNewBooking,
-      handleAcceptBooking,
-      handleRejectBooking,
-      handleAdminAcceptBooking,
-      handleAdminRejectBooking,
-      handleUpdateBookingState,
-      handleReassignTherapist,
-      handleToggleZoneSurge,
-      handleAddTherapist,
-      handleEditTherapist,
-      handleDeleteTherapist,
-      handleAddZone,
-      handleEditZone,
-      handleDeleteZone,
-      handleSendMessage,
-      handleRateBooking,
-      handleAddService,
-      handleEditService,
-      handleDeleteService,
-      handleAddClient,
-      handleEditClient,
-      handleToggleBlockClient,
-      handleRescheduleBooking,
-      handleCancelBooking,
-      handleConfirmPayment,
-      handleRejectPayment,
-      handleDataCleanup,
-      handleUpdateLiveLocation,
-      handleResolvePanicAlert,
-      handleAttendPanicAlert,
-      completedServicesCount,
-      activeBookingCount,
-      pendingSyncCount: pendingQueue.length
-    }}>
+    <EcosystemContext.Provider value={value}>
       {children}
     </EcosystemContext.Provider>
   );
