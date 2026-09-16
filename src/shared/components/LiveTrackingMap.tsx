@@ -13,6 +13,7 @@ interface LiveTrackingMapProps {
   therapistLng?: number;
   clientLat?: number;
   clientLng?: number;
+  isTherapistView?: boolean;
 }
 
 const getEffectiveApiKey = (): string => {
@@ -196,6 +197,11 @@ function RouteAndMarkers({
         origin: therapistPos,
         destination: clientPos,
         travelMode: google.maps.TravelMode.DRIVING,
+        drivingOptions: {
+          departureTime: new Date(),
+          trafficModel: google.maps.TrafficModel.BEST_GUESS
+        },
+        provideRouteAlternatives: true
       },
       (result, status) => {
         if (status === google.maps.DirectionsStatus.OK && result) {
@@ -323,7 +329,7 @@ const VisualRouteProgressTracker: React.FC<{
             <span className="text-xs font-bold text-white">{distance}</span>
           </div>
           <div className="bg-[#0D0D0D] border border-[#C9A55B]/40 px-3 py-1.5 rounded-xl">
-            <span className="text-[9px] uppercase tracking-wider text-[#C9A55B] block font-semibold">Tiempo Estimado</span>
+            <span className="text-[9px] uppercase tracking-wider text-[#C9A55B] block font-semibold">Ruta más rápida • ETA</span>
             <span className="text-xs font-bold text-[#C9A55B] flex items-center gap-1">
               <Clock className="w-3 h-3 animate-spin" />
               <span>{duration}</span>
@@ -478,7 +484,8 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
   therapistLat,
   therapistLng,
   clientLat,
-  clientLng
+  clientLng,
+  isTherapistView
 }) => {
   const [activeApiKey, setActiveApiKey] = useState<string>(() => getEffectiveApiKey());
   const [inputKey, setInputKey] = useState<string>('');
@@ -565,7 +572,7 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
     }
   };
 
-  if (bookingState === 'aceptada') {
+  if (bookingState === 'aceptada' && !isTherapistView) {
     return (
       <div className="w-full h-96 bg-[#141414] rounded-2xl border border-[#C9A55B]/30 overflow-hidden relative shadow-2xl flex flex-col items-center justify-center text-center p-8">
         <div className="w-16 h-16 rounded-full bg-[#1A1A1A] border border-[#C9A55B]/30 flex items-center justify-center mb-4">
@@ -748,9 +755,23 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
                     <strong className="text-white">Traslado Ejecutivo:</strong> Vehículo verificado ESSENYA en trayecto hacia {cityZone || 'tu domicilio'}.
                   </span>
                 </div>
-                <span className="text-[10px] bg-[#C9A55B]/20 text-[#C9A55B] px-2 py-0.5 rounded font-mono font-bold uppercase border border-[#C9A55B]/30 shrink-0">
-                  {bookingState === 'llegue' ? '¡Arribo a Domicilio!' : bookingState === 'en_camino' ? 'En Tránsito' : 'Asignado'}
-                </span>
+                
+                <div className="flex items-center gap-2">
+                  {isTherapistView && (
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&origin=${therapistLat},${therapistLng}&destination=${encodeURIComponent(clientAddress + ', ' + cityZone)}&travelmode=driving`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-gradient-to-r from-[#E6CA65] to-[#C9A55B] text-black px-3 py-1.5 rounded-lg text-[10px] font-black uppercase flex items-center gap-1.5 shadow-lg hover:scale-105 transition-transform"
+                    >
+                      <Navigation className="w-3 h-3" />
+                      <span>Navegar Ahora</span>
+                    </a>
+                  )}
+                  <span className="text-[10px] bg-[#C9A55B]/20 text-[#C9A55B] px-2 py-0.5 rounded font-mono font-bold uppercase border border-[#C9A55B]/30 shrink-0">
+                    {bookingState === 'llegue' ? '¡Arribo a Domicilio!' : bookingState === 'en_camino' ? 'En Tránsito' : 'Asignado'}
+                  </span>
+                </div>
               </div>
             </div>
           </APIProvider>

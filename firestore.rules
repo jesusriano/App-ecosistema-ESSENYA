@@ -10,75 +10,70 @@ service cloud.firestore {
     // 1. PUBLIC CATALOGS (Accessible to guests and users)
     // ========================================================
     match /servicios/{servicioId} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
     
     match /zonas/{zonaId} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
     
     match /zones/{zoneId} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
     
     match /terapeutas_publicos/{terapeutaId} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
     
     match /terapeutas/{terapeutaId} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
     
     // ========================================================
     // 2. USER, BOOKING, ADMIN & AUDIT COLLECTIONS
     // ========================================================
     match /administradores/{adminId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if true;
     }
     
     match /admins/{adminId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if true;
     }
     
     match /configuraciones/{configId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if true;
     }
     
     match /settings/{settingId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if true;
     }
     
     match /audit_logs/{logId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if true;
     }
     
     match /users/{userId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if true;
     }
     
     match /clientes/{clienteId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if true;
     }
     
     match /reservas/{reservaId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if true;
     }
     
     match /invoices/{invoiceId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if true;
     }
     
     match /pagos/{pagoId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if true;
     }
     
     match /alertas_panico/{alertaId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if true;
     }
   }
 }

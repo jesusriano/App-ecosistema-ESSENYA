@@ -312,6 +312,8 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
     }, 2500);
   };
 
+  const [etaInfo, setEtaInfo] = useState<{distance: string, duration: string} | null>(null);
+
   return (
     <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#0D0D0D] text-[#1C1917] dark:text-white pb-20 transition-colors duration-300">
       {!isOnline && (
@@ -589,9 +591,15 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                   </div>
                 </div>
 
-                <div className="text-right">
+                <div className="text-right flex flex-col items-end">
                   <span className="text-xs text-[#888888] block">Pago a Recibir</span>
                   <span className="text-xl font-bold text-gold-gradient">${(currentBooking?.total ?? 0).toLocaleString()} MXN</span>
+                  {etaInfo && (
+                    <div className="mt-1 flex items-center gap-1.5 text-[10px] bg-[#C9A55B]/10 text-[#C9A55B] px-2 py-0.5 rounded border border-[#C9A55B]/20 font-bold uppercase animate-pulse">
+                      <Clock className="w-3 h-3" />
+                      <span>Arribo en: {etaInfo.duration}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -619,6 +627,10 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                   therapistName={activeTherapist.name}
                   therapistPhoto={activeTherapist.photo}
                   bookingState={currentBooking.state}
+                  therapistLat={activeTherapist.lat}
+                  therapistLng={activeTherapist.lng}
+                  isTherapistView={true}
+                  onRouteCalculated={setEtaInfo}
                 />
               </div>
 
@@ -948,18 +960,24 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex md:flex-col items-end justify-between md:justify-center w-full md:w-auto border-t md:border-t-0 border-[#E5DFD3] dark:border-transparent pt-3.5 md:pt-0 shrink-0 gap-1.5">
-                    <div className="text-left md:text-right">
-                      <span className="text-[10px] text-[#6B655F] dark:text-[#888888] uppercase tracking-wider block">Servicio</span>
-                      <span className="text-sm font-semibold text-[#1C1917] dark:text-white">${bk.price.toLocaleString()} MXN</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[10px] text-[#6B655F] dark:text-[#888888] uppercase tracking-wider block">Propina Extra</span>
-                      <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">+${(bk.tip || 0).toLocaleString()} MXN</span>
-                    </div>
-                    <div className="text-right bg-[#C9A55B]/10 dark:bg-[#C9A55B]/5 px-3 py-1.5 rounded-xl border border-[#C9A55B]/20">
-                      <span className="text-[9px] text-[#806020] dark:text-[#C9A55B] uppercase tracking-wider block font-bold">Total Ganado</span>
-                      <span className="text-base font-bold text-[#806020] dark:text-[#C9A55B]">${bk.total.toLocaleString()} MXN</span>
+                  <div className="w-full md:w-56 shrink-0 border-t md:border-t-0 border-[#E5DFD3] dark:border-[#333333] pt-4 md:pt-0">
+                    <div className="bg-[#FAF8F5] dark:bg-[#0D0D0D] rounded-2xl border border-[#E5DFD3] dark:border-[#333333] overflow-hidden shadow-sm">
+                      <table className="w-full text-left border-collapse">
+                        <tbody className="divide-y divide-[#E5DFD3] dark:divide-[#333333]">
+                          <tr>
+                            <td className="px-4 py-2 text-[10px] text-[#6B655F] dark:text-[#888888] uppercase tracking-wider font-bold">Servicio</td>
+                            <td className="px-4 py-2 text-xs font-bold text-[#1C1917] dark:text-white text-right font-mono">${bk.price.toLocaleString()}</td>
+                          </tr>
+                          <tr>
+                            <td className="px-4 py-2 text-[10px] text-[#6B655F] dark:text-[#888888] uppercase tracking-wider font-bold">Propina</td>
+                            <td className="px-4 py-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 text-right font-mono">+${(bk.tip || 0).toLocaleString()}</td>
+                          </tr>
+                          <tr className="bg-[#C9A55B]/10 dark:bg-[#C9A55B]/5">
+                            <td className="px-4 py-2 text-[10px] text-[#806020] dark:text-[#C9A55B] uppercase tracking-wider font-black">Total</td>
+                            <td className="px-4 py-2 text-sm font-black text-[#806020] dark:text-[#C9A55B] text-right font-mono">${bk.total.toLocaleString()}</td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>

@@ -2424,149 +2424,161 @@ export const ClientApp: React.FC<ClientAppProps> = ({
             )}
 
             {activeBooking.state === 'servicio_finalizado' && (
-              <div className="bg-gradient-to-b from-[#FAF6EE] to-white dark:from-[#1C1A17] dark:to-[#141414] p-6 sm:p-8 rounded-2xl border-2 border-[#C9A55B]/60 space-y-6 shadow-xl text-left">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E5DFD3] dark:border-[#C9A55B]/20 pb-4">
-                  <div className="space-y-1">
-                    <span className="text-xs uppercase tracking-widest text-[#806020] dark:text-[#C9A55B] font-extrabold flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-[#C9A55B]" />
-                      <span>Sesión Concluida</span>
-                    </span>
-                    <h3 className="text-xl sm:text-2xl font-serif font-bold text-[#1C1917] dark:text-white">
-                      ¿Cómo estuvo tu experiencia con {activeBooking.therapistName || 'tu terapeuta'}?
-                    </h3>
-                  </div>
-                  <span className="text-xs text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 rounded-full self-start sm:self-auto">
-                    ✓ Servicio Finalizado
-                  </span>
-                </div>
-
-                {activeBooking.rating ? (
-                  <div className="bg-white dark:bg-[#181818] p-5 rounded-xl border border-[#E5DFD3] dark:border-[#333333] space-y-3">
-                    <div className="flex items-center space-x-2">
-                      <div className="flex items-center space-x-1 text-[#C9A55B]">
-                        {[1, 2, 3, 4, 5].map((s) => (
-                          <Star key={s} className={`w-5 h-5 ${s <= (activeBooking.rating || 5) ? 'fill-[#C9A55B] text-[#C9A55B]' : 'text-gray-300 dark:text-gray-600'}`} />
-                        ))}
-                      </div>
-                      <span className="font-bold text-[#1C1917] dark:text-white text-sm">
-                        {activeBooking.rating} de 5 Estrellas
-                      </span>
-                    </div>
-                    {activeBooking.reviewComment && (
-                      <div className="bg-[#FAF6EE] dark:bg-[#202020] p-3 rounded-lg border border-[#E5DFD3] dark:border-[#2C2C2C]">
-                        <span className="text-[11px] text-[#806020] dark:text-[#C9A55B] font-bold block mb-1">Tu mensaje dejado:</span>
-                        <p className="text-[#1C1917] dark:text-white text-xs italic">"{activeBooking.reviewComment}"</p>
-                      </div>
-                    )}
-                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
-                      <CheckCircle className="w-3.5 h-3.5" />
-                      <span>Calificación y mensaje enviados a {activeBooking.therapistName} y guardados en tu historial.</span>
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {/* Star selector */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white dark:bg-[#141414] rounded-3xl border border-[#E5DFD3] dark:border-[#C9A55B]/30 shadow-2xl relative"
+              >
+                {/* Decorative Accent */}
+                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#C9A55B] via-[#E6CA65] to-[#C9A55B]"></div>
+                
+                <div className="p-5 sm:p-10 space-y-6 sm:space-y-8">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5DFD3] dark:border-[#C9A55B]/10 pb-6">
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs uppercase tracking-wider text-[#6B655F] dark:text-[#AAAAAA] font-bold block">
-                          Calificación General
-                        </label>
-                        <span className="text-xs font-bold text-[#806020] dark:text-[#C9A55B]">
-                          {(() => {
-                            const val = pendingRating[activeBooking.id] || 5;
-                            if (val === 5) return '⭐⭐⭐⭐⭐ Extraordinario (5/5)';
-                            if (val === 4) return '⭐⭐⭐⭐ Muy Bueno (4/5)';
-                            if (val === 3) return '⭐⭐⭐ Bueno (3/5)';
-                            if (val === 2) return '⭐⭐ Regular (2/5)';
-                            return '⭐ A Mejorar (1/5)';
-                          })()}
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-[#C9A55B]/10 rounded-lg">
+                          <Sparkles className="w-5 h-5 text-[#C9A55B]" />
+                        </div>
+                        <span className="text-[10px] uppercase tracking-[0.2em] text-[#806020] dark:text-[#C9A55B] font-extrabold">
+                          Experiencia Finalizada
                         </span>
                       </div>
-                      <div className="flex items-center space-x-2 bg-white dark:bg-[#181818] p-3 rounded-xl border border-[#E5DFD3] dark:border-[#333333] justify-center sm:justify-start">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <button
-                            key={star}
-                            type="button"
-                            onClick={() => setPendingRating(prev => ({ ...prev, [activeBooking.id]: star }))}
-                            className="p-1 hover:scale-125 transition-transform cursor-pointer focus:outline-none"
-                            title={`${star} estrellas`}
-                          >
-                            <Star
-                              className={`w-7 h-7 sm:w-8 sm:h-8 transition-colors ${
-                                star <= (pendingRating[activeBooking.id] || 5)
-                                  ? 'text-[#C9A55B] fill-[#C9A55B] drop-shadow-sm'
-                                  : 'text-gray-300 dark:text-gray-600'
-                              }`}
-                            />
-                          </button>
-                        ))}
-                      </div>
+                      <h3 className="text-2xl sm:text-3xl font-serif font-bold text-[#1C1917] dark:text-white leading-tight">
+                        ¿Cómo fue tu sesión con {activeBooking.therapistName || 'tu terapeuta'}?
+                      </h3>
                     </div>
-
-                    {/* Quick Compliment Suggestions */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs text-[#6B655F] dark:text-[#AAAAAA] font-semibold block">
-                        Comentarios rápidos sugeridos:
-                      </label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {[
-                          'Excelente técnica y presión',
-                          'Muy puntual y profesional',
-                          'Aromaterapia y música relajante',
-                          'Alivio total de nudos y tensión',
-                          'Atención y trato impecable'
-                        ].map((tag) => (
-                          <button
-                            key={tag}
-                            type="button"
-                            onClick={() => {
-                              setPendingComment(prev => {
-                                const current = prev[activeBooking.id] || '';
-                                if (!current) return { ...prev, [activeBooking.id]: tag };
-                                if (current.includes(tag)) return prev;
-                                return { ...prev, [activeBooking.id]: `${current}. ${tag}` };
-                              });
-                            }}
-                            className="text-[11px] bg-white dark:bg-[#1F1F1F] border border-[#E5DFD3] dark:border-[#333333] hover:border-[#C9A55B] hover:text-[#806020] dark:hover:text-[#C9A55B] text-[#6B655F] dark:text-[#CCCCCC] px-2.5 py-1 rounded-full transition-colors"
-                          >
-                            + {tag}
-                          </button>
-                        ))}
-                      </div>
+                    <div className="flex items-center gap-2 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold text-[11px] px-4 py-2 rounded-full border border-emerald-500/20 w-fit">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>SERVICIADO</span>
                     </div>
-
-                    {/* Review Textarea */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs uppercase tracking-wider text-[#6B655F] dark:text-[#AAAAAA] font-bold block">
-                        Mensaje para tu Terapeuta ({activeBooking.therapistName})
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={pendingComment[activeBooking.id] || ''}
-                        onChange={(e) => setPendingComment(prev => ({ ...prev, [activeBooking.id]: e.target.value }))}
-                        placeholder={`Escribe un mensaje o felicitación para ${activeBooking.therapistName || 'tu masajista'}...`}
-                        className="w-full bg-white dark:bg-[#181818] border border-[#E5DFD3] dark:border-[#333333] rounded-xl p-3 text-xs sm:text-sm text-[#1C1917] dark:text-white focus:outline-none focus:border-[#C9A55B] focus:ring-1 focus:ring-[#C9A55B]"
-                      />
-                    </div>
-
-                    {/* Submit Button */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const r = pendingRating[activeBooking.id] || 5;
-                        const c = pendingComment[activeBooking.id] || 'Servicio excelente y altamente recomendado.';
-                        if (onRateBooking) {
-                          onRateBooking(activeBooking.id, r, c);
-                        }
-                      }}
-                      className="w-full py-3 bg-gradient-to-r from-[#C9A55B] to-[#B38F43] text-black font-bold text-sm rounded-xl hover:opacity-95 shadow-md shadow-[#C9A55B]/20 transition-all flex items-center justify-center space-x-2 cursor-pointer"
-                    >
-                      <Star className="w-4 h-4 fill-black" />
-                      <span>Enviar Calificación y Mensaje</span>
-                    </button>
                   </div>
-                )}
-              </div>
+
+                  {activeBooking.rating ? (
+                    <div className="bg-[#FAF8F5] dark:bg-[#0D0D0D] p-6 rounded-2xl border border-[#E5DFD3] dark:border-[#333333] space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <Star key={s} className={`w-6 h-6 ${s <= (activeBooking.rating || 5) ? 'fill-[#C9A55B] text-[#C9A55B]' : 'text-gray-300 dark:text-gray-700'}`} />
+                          ))}
+                        </div>
+                        <span className="font-bold text-[#1C1917] dark:text-white text-lg">
+                          {activeBooking.rating}/5
+                        </span>
+                      </div>
+                      {activeBooking.reviewComment && (
+                        <div className="relative">
+                          <span className="absolute -top-2 -left-1 text-4xl text-[#C9A55B]/20 font-serif">“</span>
+                          <p className="text-[#6B655F] dark:text-[#CCCCCC] text-sm italic pl-4 py-2 border-l-2 border-[#C9A55B]/30 leading-relaxed">
+                            {activeBooking.reviewComment}
+                          </p>
+                        </div>
+                      )}
+                      <div className="pt-2 flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-semibold text-xs">
+                        <CheckCircle className="w-4 h-4" />
+                        <span>Tu retroalimentación ha sido compartida con éxito.</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-8">
+                      {/* Star Rating Selector */}
+                      <div className="space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <label className="text-xs uppercase tracking-widest text-[#6B655F] dark:text-[#AAAAAA] font-bold">
+                            Tu Calificación
+                          </label>
+                          <span className="text-sm font-bold text-[#806020] dark:text-[#C9A55B] bg-[#C9A55B]/5 px-3 py-1 rounded-lg">
+                            {(() => {
+                              const val = pendingRating[activeBooking.id] || 5;
+                              if (val === 5) return 'Extraordinario (5/5)';
+                              if (val === 4) return 'Muy Bueno (4/5)';
+                              if (val === 3) return 'Bueno (3/5)';
+                              if (val === 2) return 'Regular (2/5)';
+                              return 'A Mejorar (1/5)';
+                            })()}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-center sm:justify-start gap-2.5 sm:gap-4 bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 sm:p-6 rounded-2xl border border-[#E5DFD3] dark:border-[#333333]">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() => setPendingRating(prev => ({ ...prev, [activeBooking.id]: star }))}
+                              className="group transition-all duration-300 hover:scale-125 active:scale-95 focus:outline-none"
+                            >
+                              <Star
+                                className={`w-8 h-8 sm:w-12 sm:h-12 transition-all duration-300 ${
+                                  star <= (pendingRating[activeBooking.id] || 5)
+                                    ? 'text-[#C9A55B] fill-[#C9A55B] drop-shadow-[0_0_10px_rgba(201,165,91,0.3)]'
+                                    : 'text-gray-300 dark:text-gray-700 group-hover:text-[#C9A55B]/40'
+                                }`}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Comment Section */}
+                      <div className="space-y-6">
+                        <div className="space-y-3">
+                          <label className="text-xs uppercase tracking-widest text-[#6B655F] dark:text-[#AAAAAA] font-bold">
+                            Compartir Comentarios
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            {[
+                              'Excelente técnica',
+                              'Puntualidad impecable',
+                              'Profesionalismo total',
+                              'Aromaterapia relajante',
+                              'Alivio de tensión'
+                            ].map((tag) => (
+                              <button
+                                key={tag}
+                                type="button"
+                                onClick={() => {
+                                  setPendingComment(prev => {
+                                    const current = prev[activeBooking.id] || '';
+                                    if (current.includes(tag)) return prev;
+                                    return { ...prev, [activeBooking.id]: current ? `${current}. ${tag}` : tag };
+                                  });
+                                }}
+                                className="text-[10px] sm:text-[11px] font-bold bg-white dark:bg-[#1F1F1F] border border-[#E5DFD3] dark:border-[#333333] hover:border-[#C9A55B] hover:bg-[#C9A55B]/5 hover:text-[#806020] dark:hover:text-[#C9A55B] text-[#6B655F] dark:text-[#CCCCCC] px-3 py-1.5 sm:px-4 sm:py-2 rounded-full transition-all active:scale-95 shadow-sm"
+                              >
+                                + {tag}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <textarea
+                            rows={4}
+                            value={pendingComment[activeBooking.id] || ''}
+                            onChange={(e) => setPendingComment(prev => ({ ...prev, [activeBooking.id]: e.target.value }))}
+                            placeholder={`Escribe un mensaje para ${activeBooking.therapistName || 'tu masajista'}...`}
+                            className="w-full bg-[#FAF8F5] dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#333333] rounded-2xl p-4 text-sm text-[#1C1917] dark:text-white placeholder:text-[#AAAAAA] focus:outline-none focus:border-[#C9A55B] focus:ring-2 focus:ring-[#C9A55B]/10 transition-all resize-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Submit Action */}
+                        <button
+                        type="button"
+                        onClick={() => {
+                          const r = pendingRating[activeBooking.id] || 5;
+                          const c = pendingComment[activeBooking.id] || 'Servicio excelente y altamente recomendado.';
+                          if (onRateBooking) {
+                            onRateBooking(activeBooking.id, r, c);
+                          }
+                        }}
+                        className="w-full py-3.5 sm:py-4.5 bg-gradient-to-r from-[#C9A55B] to-[#B38F43] text-black font-extrabold text-sm uppercase tracking-widest rounded-2xl hover:opacity-95 active:scale-[0.98] transition-all shadow-xl shadow-[#C9A55B]/20 flex items-center justify-center gap-3 group"
+                      >
+                        <Star className="w-5 h-5 fill-black group-hover:rotate-12 transition-transform" />
+                        <span>Enviar Calificación</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
             )}
           </div>
         )}
@@ -2727,7 +2739,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
         {/* TAB 4: MEMBERSHIP CLUB */}
         {activeTab === 'membership' && (
-          <div className="space-y-8 max-w-5xl mx-auto">
+          <div className="space-y-8 max-w-5xl mx-auto pl-6 pb-[-20px] pt-[-32px]">
             <div className="text-center max-w-2xl mx-auto space-y-2">
               <span className="text-xs text-[#806020] dark:text-[#C9A55B] uppercase font-bold tracking-widest">Club Privado ESSENYA</span>
               <h3 className="text-3xl font-serif font-bold text-[#1C1917] dark:text-white">Membresías Exclusivas de Bienestar</h3>
