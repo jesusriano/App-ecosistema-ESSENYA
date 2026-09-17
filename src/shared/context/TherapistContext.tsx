@@ -263,7 +263,9 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       return;
     }
 
-    const isAdminSession = !!sessions.administrador;
+    const isAdminSession = !!sessions.administrador ||
+      firebaseUser.email === 'essenya222@gmail.com' ||
+      firebaseUser.email === 'graphixglow.2024@gmail.com';
     const isTherapistSession = !!sessions.terapeuta;
 
     setLoading(true);

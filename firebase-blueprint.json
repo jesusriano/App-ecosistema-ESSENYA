@@ -164,6 +164,19 @@
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "action", "userName", "timestamp"]
+    },
+    "GiftCard": {
+      "title": "Gift Card",
+      "description": "Client digital gift card voucher and credit balance",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "title": { "type": "string" },
+        "currentBalance": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "code", "currentBalance", "status"]
     }
   },
   "firestore": {
@@ -178,6 +191,10 @@
     "clientes/{clienteId}": {
       "schema": "ClientProfile",
       "description": "Detailed client data"
+    },
+    "clientes/{clienteId}/billetera/{cardId}": {
+      "schema": "GiftCard",
+      "description": "Client wallet balance gift cards and vouchers"
     },
     "terapeutas/{terapeutaId}": {
       "schema": "TherapistProfile",

@@ -3,6 +3,7 @@ import { TherapistHeader } from './TherapistHeader';
 import { TherapistNavigation, TherapistRoutePath } from './TherapistNavigation';
 import { Therapist } from '../../../shared/types/index';
 import { PanicModal } from '../../../shared/components/PanicModal';
+import { TechSupportWhatsAppButton } from '../../../shared/components/TechSupportWhatsAppButton';
 
 interface TherapistLayoutProps {
   children: React.ReactNode;
@@ -45,6 +46,13 @@ export const TherapistLayout: React.FC<TherapistLayoutProps> = ({
         userType="terapeuta"
         userName={therapist?.name || 'Elena Rostova'}
         userLocation={therapist?.coverageZones?.[0] || 'Polanco / Lomas CDMX'}
+      />
+
+      {/* Botón Flotante de Soporte Técnico Exclusivo vía WhatsApp */}
+      <TechSupportWhatsAppButton 
+        role="terapeuta" 
+        variant="floating" 
+        className="bottom-20 right-4 sm:bottom-6 sm:right-6"
       />
     </div>
   );

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { PanicModal } from '../../../shared/components/PanicModal';
 import { WhatsAppButton } from '../../../shared/components/WhatsAppButton';
+import { TechSupportWhatsAppButton } from '../../../shared/components/TechSupportWhatsAppButton';
 import { LiveTrackingMap } from '../../../shared/components/LiveTrackingMap';
 import { useGeolocation } from '../../../shared/hooks/useGeolocation';
 import { fetchAiConciergeRecommendation } from '../../../shared/services/api';
@@ -2854,6 +2855,11 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                 </div>
               ))}
             </div>
+
+            {/* Soporte Técnico Oficial de la Plataforma */}
+            <div className="pt-6">
+              <TechSupportWhatsAppButton role="cliente" variant="card" />
+            </div>
           </div>
         )}
       </main>
@@ -3041,6 +3047,13 @@ export const ClientApp: React.FC<ClientAppProps> = ({
         isOpen={showPanicModal}
         onClose={() => setShowPanicModal(false)}
         userType="client"
+      />
+
+      {/* Botón Flotante de Soporte Técnico Exclusivo vía WhatsApp */}
+      <TechSupportWhatsAppButton 
+        role="cliente" 
+        variant="floating" 
+        className="bottom-20 right-4 sm:bottom-6 sm:right-6"
       />
     </div>
   );

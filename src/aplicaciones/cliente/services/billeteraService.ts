@@ -53,9 +53,11 @@ async function getAuthHeaders() {
 }
 
 export async function getGiftCards(clientId: string): Promise<GiftCard[]> {
-  if (!clientId) return [];
+  const currentUid = auth.currentUser?.uid;
+  const effectiveId = clientId || currentUid;
+  if (!effectiveId) return [];
   try {
-    const billeteraRef = collection(db, 'clientes', clientId, 'billetera');
+    const billeteraRef = collection(db, 'clientes', effectiveId, 'billetera');
     const snap = await getDocs(billeteraRef);
     const cards = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as GiftCard));
     return cards.filter(c => c.id !== 'gc-demo-comprada-01' && c.code !== 'REGALO-ESS-1400');

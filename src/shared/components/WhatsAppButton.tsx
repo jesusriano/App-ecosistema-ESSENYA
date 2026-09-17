@@ -75,3 +75,5 @@ export const WhatsAppButton: React.FC<WhatsAppButtonProps> = ({
     </a>
   );
 };
+
+export { TechSupportWhatsAppButton } from './TechSupportWhatsAppButton';

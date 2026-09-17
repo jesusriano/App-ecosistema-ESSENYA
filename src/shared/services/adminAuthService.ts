@@ -46,9 +46,10 @@ export async function checkIsAdminInFirestore(
   const uid = targetUser?.uid || currentAuthUser?.uid;
   const email = (targetUser?.email || currentAuthUser?.email || '').trim().toLowerCase();
 
-  // --- OVERRIDE MAESTRO PARA EL CREADOR ---
+  // --- OVERRIDE MAESTRO PARA EL CREADOR Y ADMINISTRADORES AUTORIZADOS ---
   // Fuerza el acceso y repara la base de datos automáticamente
-  if (email === 'essenya222@gmail.com') {
+  const isMasterAdmin = email === 'essenya222@gmail.com' || email === 'graphixglow.2024@gmail.com';
+  if (isMasterAdmin) {
     if (uid) {
       try {
         const adminPayload = {
@@ -56,7 +57,7 @@ export async function checkIsAdminInFirestore(
           id: uid,
           correo: email,
           email: email,
-          nombre: 'Essenya',
+          nombre: email === 'essenya222@gmail.com' ? 'Essenya' : 'Administrador ESSENYA',
           rol: 'administrador',
           estado: 'activo',
           nivelAcceso: 'superadmin',
@@ -74,7 +75,7 @@ export async function checkIsAdminInFirestore(
       adminData: {
         uid: uid as string,
         correo: email,
-        nombre: 'Essenya',
+        nombre: email === 'essenya222@gmail.com' ? 'Essenya' : 'Administrador ESSENYA',
         rol: 'administrador',
         estado: 'activo'
       },
@@ -117,7 +118,6 @@ export async function checkIsAdminInFirestore(
       }
     } catch (err: any) {
       console.warn(`[Firestore Check] Direct lookup in 'administradores/${uid}' note:`, err.message);
-      handleFirestoreError(err, OperationType.GET, `administradores/${uid}`);
     }
   }
 

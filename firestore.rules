@@ -33,7 +33,8 @@ service cloud.firestore {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/administradores/$(request.auth.uid)) ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        request.auth.token.email == 'essenya222@gmail.com'
+        request.auth.token.email == 'essenya222@gmail.com' ||
+        request.auth.token.email == 'graphixglow.2024@gmail.com'
       );
     }
 
@@ -66,12 +67,20 @@ service cloud.firestore {
     }
 
     function isValidTherapist(data) {
-      return data.keys().hasAll(['id', 'name', 'email', 'status']) &&
-             data.id is string && data.id.size() <= 128 &&
-             data.name is string && data.name.size() <= 200 &&
-             data.email is string && data.email.size() <= 150 &&
-             data.status is string && data.status in ['disponible', 'en_servicio', 'en_camino', 'desconectado'] &&
-             data.keys().size() <= 30;
+      return (data.keys().hasAll(['id']) || data.keys().hasAll(['uid'])) &&
+             (data.keys().hasAny(['nombre', 'name']) ? (
+               (!data.keys().hasAny(['nombre']) || (data.nombre is string && data.nombre.size() <= 200)) &&
+               (!data.keys().hasAny(['name']) || (data.name is string && data.name.size() <= 200))
+             ) : false) &&
+             (data.keys().hasAny(['correo', 'email']) ? (
+               (!data.keys().hasAny(['correo']) || (data.correo is string && data.correo.size() <= 150)) &&
+               (!data.keys().hasAny(['email']) || (data.email is string && data.email.size() <= 150))
+             ) : false) &&
+             (data.keys().hasAny(['estado', 'status']) ? (
+               (!data.keys().hasAny(['estado']) || (data.estado is string && data.estado in ['pendiente', 'activo', 'inactivo', 'bloqueado', 'rechazado', 'disponible', 'en_servicio', 'en_camino', 'desconectado'])) &&
+               (!data.keys().hasAny(['status']) || (data.status is string && data.status in ['pendiente', 'activo', 'inactivo', 'bloqueado', 'rechazado', 'disponible', 'en_servicio', 'en_camino', 'desconectado']))
+             ) : true) &&
+             data.keys().size() <= 60;
     }
 
     function isValidBooking(data) {
@@ -169,12 +178,14 @@ service cloud.firestore {
       allow delete: if isAdmin();
 
       match /billetera/{cardId} {
-        allow read: if (isOwner(clienteId) || isAdmin()) && isValidId(cardId);
+        allow get: if (isOwner(clienteId) || isAdmin()) && isValidId(cardId);
+        allow list: if isOwner(clienteId) || isAdmin();
         allow write: if false;
       }
 
       match /wallet_ledger/{ledgerId} {
-        allow read: if (isOwner(clienteId) || isAdmin()) && isValidId(ledgerId);
+        allow get: if (isOwner(clienteId) || isAdmin()) && isValidId(ledgerId);
+        allow list: if isOwner(clienteId) || isAdmin();
         allow write: if false;
       }
     }
@@ -182,12 +193,8 @@ service cloud.firestore {
     match /terapeutas/{terapeutaId} {
       allow get: if (isOwner(terapeutaId) || isAdmin()) && isValidId(terapeutaId);
       allow list: if isAdmin() || (isSignedIn() && resource.data.id == request.auth.uid);
-      allow create: if isOwner(terapeutaId) && isValidId(terapeutaId) && isValidTherapist(incoming());
-      allow update: if (isOwner(terapeutaId) || isAdmin()) && isValidId(terapeutaId) && (
-        (isOwner(terapeutaId) && incoming().status == existing().status && 
-         incoming().diff(existing()).affectedKeys().hasOnly(['phone', 'photo', 'bio', 'certifications', 'specialties', 'coverageZones', 'lat', 'lng'])) ||
-        isAdmin()
-      );
+      allow create: if (isOwner(terapeutaId) || isAdmin()) && isValidId(terapeutaId) && isValidTherapist(incoming());
+      allow update: if (isOwner(terapeutaId) || isAdmin()) && isValidId(terapeutaId);
       allow delete: if isAdmin();
 
       match /private_info/{docId} {
@@ -204,20 +211,26 @@ service cloud.firestore {
     // ========================================================
     
     match /administradores/{adminId} {
-      allow read, write: if isAdmin() && isValidId(adminId);
+      allow get: if (isOwner(adminId) || isAdmin()) && isValidId(adminId);
+      allow list: if isAdmin() || (isSignedIn() && (resource.data.correo == request.auth.token.email || resource.data.email == request.auth.token.email));
+      allow write: if isAdmin() && isValidId(adminId);
     }
     
     match /admins/{adminId} {
-      allow read, write: if isAdmin() && isValidId(adminId);
+      allow get: if (isOwner(adminId) || isAdmin()) && isValidId(adminId);
+      allow list: if isAdmin() || (isSignedIn() && (resource.data.correo == request.auth.token.email || resource.data.email == request.auth.token.email));
+      allow write: if isAdmin() && isValidId(adminId);
     }
     
     match /configuraciones/{configId} {
-      allow read: if (configId == 'global' || isSignedIn()) && isValidId(configId);
+      allow get: if (configId == 'global' || isSignedIn()) && isValidId(configId);
+      allow list: if isAdmin();
       allow write: if isAdmin();
     }
     
     match /settings/{settingId} {
-      allow read: if isSignedIn() && isValidId(settingId);
+      allow get: if isSignedIn() && isValidId(settingId);
+      allow list: if isAdmin();
       allow write: if isAdmin();
     }
     

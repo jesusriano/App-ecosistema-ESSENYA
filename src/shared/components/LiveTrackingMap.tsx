@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { Navigation, MapPin, Key, Compass, ShieldCheck, Car, Clock, CheckCircle2, Activity, LocateFixed } from 'lucide-react';
 
@@ -17,6 +17,36 @@ interface LiveTrackingMapProps {
   clientLng?: number;
   isTherapistView?: boolean;
   onRouteCalculated?: (info: { distance: string; duration: string }) => void;
+}
+
+// In-memory cache for geocoded addresses to prevent redundant Geocoding API calls
+const geocodeAddressCache: Record<string, google.maps.LatLngLiteral> = {};
+
+// Significant distance threshold in meters: only update state and trigger re-route if moved >= 25m
+const SIGNIFICANT_GPS_DISTANCE_THRESHOLD_METERS = 25;
+
+// Minimum interval between full Google Directions API requests (20 seconds)
+const MIN_DIRECTIONS_REQUEST_INTERVAL_MS = 20000;
+
+/**
+ * Haversine formula to compute great-circle distance between two GPS coordinates in meters.
+ */
+function calculateDistanceMeters(
+  pos1: google.maps.LatLngLiteral,
+  pos2: google.maps.LatLngLiteral
+): number {
+  const R = 6371e3; // Earth radius in meters
+  const lat1Rad = (pos1.lat * Math.PI) / 180;
+  const lat2Rad = (pos2.lat * Math.PI) / 180;
+  const deltaLat = ((pos2.lat - pos1.lat) * Math.PI) / 180;
+  const deltaLng = ((pos2.lng - pos1.lng) * Math.PI) / 180;
+
+  const a =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
 }
 
 // Elegant Dark Gold Theme Map Styles
@@ -67,7 +97,7 @@ const darkGoldMapStyle = [
 ];
 
 // Inner Route Renderer Component (runs inside <APIProvider> and <Map>)
-function RouteAndMarkers({
+const RouteAndMarkers = React.memo(function RouteAndMarkers({
   clientAddress,
   cityZone,
   therapistName,
@@ -94,45 +124,80 @@ function RouteAndMarkers({
   const routesLib = useMapsLibrary('routes');
   const geocodingLib = useMapsLibrary('geocoding');
 
-  const polylinesRef = useRef<google.maps.Polyline[]>([]);
-
   // Default initial locations in CDMX
-  const [therapistPos, setTherapistPos] = useState<google.maps.LatLngLiteral>(() => (
+  const initialTherapistPos = useMemo<google.maps.LatLngLiteral>(() => (
     therapistLat && therapistLng ? { lat: therapistLat, lng: therapistLng } : { lat: 19.4326, lng: -99.1900 }
-  ));
-  const [clientPos, setClientPos] = useState<google.maps.LatLngLiteral>(() => (
-    clientLat && clientLng ? { lat: clientLat, lng: clientLng } : { lat: 19.3620, lng: -99.2650 }
-  ));
-  const [, setGeocodedSuccess] = useState<boolean>(false);
+  ), []);
 
-  // Update positions if real-time coordinates change
+  const initialClientPos = useMemo<google.maps.LatLngLiteral>(() => (
+    clientLat && clientLng ? { lat: clientLat, lng: clientLng } : { lat: 19.3620, lng: -99.2650 }
+  ), []);
+
+  const [therapistPos, setTherapistPos] = useState<google.maps.LatLngLiteral>(initialTherapistPos);
+  const [clientPos, setClientPos] = useState<google.maps.LatLngLiteral>(initialClientPos);
+
+  // References to track previous coordinates and avoid state updates on insignificant jitter
+  const lastRecordedTherapistPosRef = useRef<google.maps.LatLngLiteral>(initialTherapistPos);
+  const lastRecordedClientPosRef = useRef<google.maps.LatLngLiteral>(initialClientPos);
+
+  // Persistent DirectionsRenderer instance
+  const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
+
+  // Throttling telemetry cache for directions requests
+  const lastRouteCalculationRef = useRef<{
+    therapistPos: google.maps.LatLngLiteral;
+    clientPos: google.maps.LatLngLiteral;
+    timestamp: number;
+    bookingState: string;
+  } | null>(null);
+
+  // Update positions ONLY if real-time GPS coordinates change significantly (>= 25m threshold)
   useEffect(() => {
-    if (therapistLat && therapistLng) {
-      setTherapistPos({ lat: therapistLat, lng: therapistLng });
+    if (therapistLat == null || therapistLng == null) return;
+    const incomingPos: google.maps.LatLngLiteral = { lat: therapistLat, lng: therapistLng };
+
+    const distanceMoved = calculateDistanceMeters(lastRecordedTherapistPosRef.current, incomingPos);
+    if (distanceMoved >= SIGNIFICANT_GPS_DISTANCE_THRESHOLD_METERS) {
+      lastRecordedTherapistPosRef.current = incomingPos;
+      setTherapistPos(incomingPos);
     }
   }, [therapistLat, therapistLng]);
 
   useEffect(() => {
-    if (clientLat && clientLng) {
-      setClientPos({ lat: clientLat, lng: clientLng });
+    if (clientLat == null || clientLng == null) return;
+    const incomingPos: google.maps.LatLngLiteral = { lat: clientLat, lng: clientLng };
+
+    const distanceMoved = calculateDistanceMeters(lastRecordedClientPosRef.current, incomingPos);
+    if (distanceMoved >= SIGNIFICANT_GPS_DISTANCE_THRESHOLD_METERS) {
+      lastRecordedClientPosRef.current = incomingPos;
+      setClientPos(incomingPos);
     }
   }, [clientLat, clientLng]);
 
-  // Geocode destination address only if real-time client position is NOT provided
+  // Geocode destination address only if real-time client position is NOT provided, with in-memory caching
   useEffect(() => {
     if (!geocodingLib || !clientAddress || (clientLat && clientLng)) return;
 
-    const geocoder = new geocodingLib.Geocoder();
-    const query = `${clientAddress}, ${cityZone || 'Ciudad de México'}, México`;
+    const query = `${clientAddress.trim()}, ${cityZone || 'Ciudad de México'}, México`;
 
-    
+    // 1. Check in-memory cache to avoid duplicate API requests
+    const cached = geocodeAddressCache[query];
+    if (cached) {
+      setClientPos(cached);
+      lastRecordedClientPosRef.current = cached;
+      return;
+    }
+
+    const geocoder = new geocodingLib.Geocoder();
+
     try {
       geocoder.geocode({ address: query }, (results, status) => {
         if (status === 'OK' && results && results[0]?.geometry?.location) {
           const loc = results[0].geometry.location;
           const newClientPos = { lat: loc.lat(), lng: loc.lng() };
+          geocodeAddressCache[query] = newClientPos;
           setClientPos(newClientPos);
-          setGeocodedSuccess(true);
+          lastRecordedClientPosRef.current = newClientPos;
 
           let offsetLat = 0.035;
           let offsetLng = 0.025;
@@ -145,38 +210,76 @@ function RouteAndMarkers({
             offsetLng = 0.008;
           }
 
-          setTherapistPos({
+          const offsetTherapistPos = {
             lat: newClientPos.lat + offsetLat,
             lng: newClientPos.lng + offsetLng
-          });
+          };
+          setTherapistPos(offsetTherapistPos);
+          lastRecordedTherapistPosRef.current = offsetTherapistPos;
         } else {
-          console.warn("Geocoding failed:", status);
+          console.warn("Geocoding notice:", status);
         }
-      }).catch((err: any) => console.warn("Geocoding promise caught:", err));
+      }).catch((err: any) => console.warn("Geocoding caught:", err));
     } catch (err) {
-      console.warn("Geocoding try-catch caught:", err);
+      console.warn("Geocoding exception:", err);
     }
-  }, [geocodingLib, clientAddress, cityZone, bookingState]);
+  }, [geocodingLib, clientAddress, cityZone, bookingState, clientLat, clientLng]);
 
-  // Compute driving routes using Google Maps DirectionsService
+  // Setup DirectionsRenderer once per map instance
   useEffect(() => {
-    if (!routesLib || !map || !therapistPos || !clientPos) return;
+    if (!routesLib || !map) return;
 
-    // Clear existing polylines
-    polylinesRef.current.forEach(p => p.setMap(null));
-    polylinesRef.current = [];
+    if (!directionsRendererRef.current) {
+      directionsRendererRef.current = new routesLib.DirectionsRenderer({
+        map,
+        suppressMarkers: true,
+        preserveViewport: false,
+        polylineOptions: {
+          strokeColor: '#C9A55B',
+          strokeOpacity: 0.85,
+          strokeWeight: 4,
+        }
+      });
+    } else {
+      directionsRendererRef.current.setMap(map);
+    }
+
+    return () => {
+      if (directionsRendererRef.current) {
+        directionsRendererRef.current.setMap(null);
+      }
+    };
+  }, [routesLib, map]);
+
+  // Compute driving routes using Google Maps DirectionsService with intelligent throttling & memoization
+  useEffect(() => {
+    if (!routesLib || !map || !therapistPos || !clientPos || !directionsRendererRef.current) return;
+
+    const now = Date.now();
+    const lastCalc = lastRouteCalculationRef.current;
+
+    // Check if re-routing is actually necessary
+    if (lastCalc) {
+      const therapistMovedDist = calculateDistanceMeters(lastCalc.therapistPos, therapistPos);
+      const clientMovedDist = calculateDistanceMeters(lastCalc.clientPos, clientPos);
+      const timeElapsed = now - lastCalc.timestamp;
+      const stateChanged = lastCalc.bookingState !== bookingState;
+
+      // Skip API request if:
+      // - Booking state has not changed AND
+      // - Therapist moved < 50m AND client moved < 25m AND
+      // - Less than 20 seconds have elapsed since previous calculation
+      if (
+        !stateChanged &&
+        therapistMovedDist < 50 &&
+        clientMovedDist < SIGNIFICANT_GPS_DISTANCE_THRESHOLD_METERS &&
+        timeElapsed < MIN_DIRECTIONS_REQUEST_INTERVAL_MS
+      ) {
+        return;
+      }
+    }
 
     const directionsService = new routesLib.DirectionsService();
-    const directionsRenderer = new routesLib.DirectionsRenderer({
-      map,
-      suppressMarkers: true,
-      preserveViewport: false,
-      polylineOptions: {
-        strokeColor: '#C9A55B',
-        strokeOpacity: 0.8,
-        strokeWeight: 4,
-      }
-    });
 
     directionsService.route(
       {
@@ -187,11 +290,17 @@ function RouteAndMarkers({
           departureTime: new Date(),
           trafficModel: google.maps.TrafficModel.BEST_GUESS
         },
-        provideRouteAlternatives: true
+        provideRouteAlternatives: false // Reduces API response overhead
       },
       (result, status) => {
-        if (status === google.maps.DirectionsStatus.OK && result) {
-          directionsRenderer.setDirections(result);
+        if (status === google.maps.DirectionsStatus.OK && result && directionsRendererRef.current) {
+          directionsRendererRef.current.setDirections(result);
+          lastRouteCalculationRef.current = {
+            therapistPos,
+            clientPos,
+            timestamp: Date.now(),
+            bookingState
+          };
           const leg = result.routes[0]?.legs[0];
           if (leg) {
             onRouteCalculated({
@@ -200,16 +309,11 @@ function RouteAndMarkers({
             });
           }
         } else {
-          console.warn('DirectionsService request status:', status);
+          console.warn('DirectionsService status notice:', status);
         }
       }
     );
-
-    return () => {
-      directionsRenderer.setMap(null);
-      polylinesRef.current.forEach(p => p.setMap(null));
-    };
-  }, [routesLib, map, therapistPos, clientPos, onRouteCalculated]);
+  }, [routesLib, map, therapistPos, clientPos, bookingState, onRouteCalculated]);
 
   return (
     <>
@@ -243,17 +347,24 @@ function RouteAndMarkers({
       </AdvancedMarker>
     </>
   );
-}
+});
 
 // Visual Route Progress Tracker Component
-const VisualRouteProgressTracker: React.FC<{
+const VisualRouteProgressTracker = React.memo(function VisualRouteProgressTracker({
+  bookingState,
+  therapistName,
+  clientAddress,
+  cityZone,
+  distance,
+  duration
+}: {
   bookingState: string;
   therapistName: string;
   clientAddress: string;
   cityZone: string;
   distance: string;
   duration: string;
-}> = ({ bookingState, therapistName, clientAddress, cityZone, distance, duration }) => {
+}) {
   const steps = [
     {
       id: 'confirmada',
@@ -405,9 +516,9 @@ const VisualRouteProgressTracker: React.FC<{
       </div>
     </div>
   );
-};
+});
 
-export const LiveTrackingMapSkeleton: React.FC = () => {
+export const LiveTrackingMapSkeleton: React.FC = React.memo(function LiveTrackingMapSkeleton() {
   return (
     <div className="w-full bg-[#121212] rounded-2xl border border-[#C9A55B]/20 p-5 space-y-5 animate-pulse shadow-2xl relative overflow-hidden">
       {/* Golden Shimmer effect */}
@@ -459,9 +570,9 @@ export const LiveTrackingMapSkeleton: React.FC = () => {
       </div>
     </div>
   );
-};
+});
 
-export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
+export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = React.memo(function LiveTrackingMap({
   clientAddress,
   cityZone,
   therapistName,
@@ -473,10 +584,9 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
   clientLng,
   isTherapistView,
   onRouteCalculated
-}) => {
+}: LiveTrackingMapProps) {
   const { systemConfig } = useEcosystem();
   const [activeApiKey, setActiveApiKey] = useState<string>('');
-  const [inputKey, setInputKey] = useState<string>('');
 
   useEffect(() => {
     if (systemConfig.googleMapsKey) {
@@ -491,6 +601,21 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
     distance: '-- km',
     duration: '-- min'
   });
+
+  const memoizedDefaultCenter = useMemo<google.maps.LatLngLiteral>(() => ({ lat: 19.3800, lng: -99.2000 }), []);
+
+  // Memoized route calculated handler to prevent re-renders when route distance and duration haven't changed
+  const handleRouteCalculated = useCallback((info: { distance: string; duration: string }) => {
+    setRouteInfo(prev => {
+      if (prev.distance === info.distance && prev.duration === info.duration) {
+        return prev;
+      }
+      return info;
+    });
+    if (onRouteCalculated) {
+      onRouteCalculated(info);
+    }
+  }, [onRouteCalculated]);
 
   // Manage loading timer when coordinates/details are loaded
   useEffect(() => {
@@ -695,7 +820,7 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
               <Map
                 gestureHandling={"none"}
                 disableDefaultUI={true}
-                defaultCenter={{ lat: 19.3800, lng: -99.2000 }}
+                defaultCenter={memoizedDefaultCenter}
                 defaultZoom={12}
                 mapId="DEMO_MAP_ID"
                 internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
@@ -712,10 +837,7 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
                   therapistLng={therapistLng}
                   clientLat={clientLat}
                   clientLng={clientLng}
-                  onRouteCalculated={(info) => {
-                    setRouteInfo(info);
-                    if (onRouteCalculated) onRouteCalculated(info);
-                  }}
+                  onRouteCalculated={handleRouteCalculated}
                 />
               </Map>
 
@@ -765,4 +887,4 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
       )}
     </div>
   );
-};
+});

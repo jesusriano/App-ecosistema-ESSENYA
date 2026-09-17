@@ -9,6 +9,7 @@ import { useTherapistContext } from '../../../shared/context/TherapistContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { TherapistDocument, TherapistFullProfile } from '../../../shared/types/auth';
 import { DocumentVerificationSection } from '../components/DocumentVerificationSection';
+import { TechSupportWhatsAppButton } from '../../../shared/components/TechSupportWhatsAppButton';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../../lib/firebase';
 
@@ -656,6 +657,11 @@ export const PerfilPage: React.FC = () => {
             showToast={showToast}
           />
         )}
+
+        {/* Soporte Técnico Oficial para Terapeutas */}
+        <div className="pt-4">
+          <TechSupportWhatsAppButton role="terapeuta" variant="card" />
+        </div>
       </div>
 
       {/* Image Cropping & Preview Modal */}

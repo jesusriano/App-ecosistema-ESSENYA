@@ -1164,6 +1164,19 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       'Envío de Mensaje',
       `Mensaje enviado en chat de reserva ${bookingId}.`
     );
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('essenya_chat_message', {
+          detail: {
+            bookingId,
+            sender: client.name || 'Cliente VIP',
+            text,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        })
+      );
+    }
   };
 
   const handleRateBooking = async (bookingId: string, rating: number, comment: string) => {

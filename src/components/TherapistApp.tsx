@@ -6,13 +6,17 @@ import { Therapist, Booking, BookingState } from '../types';
 import { 
   Calendar, Clock, MapPin, Navigation, MessageSquare, DollarSign, 
   CheckCircle2, XCircle, Play, Shield, Award, Star, Bot, Send, UserCheck, Check, CheckCheck,
-  AlertTriangle, X
+  AlertTriangle, X, Volume2, VolumeX, Vibrate, BellRing, Sparkles, Smartphone
 } from 'lucide-react';
 import { PanicModal } from './PanicModal';
 import { WhatsAppButton } from './WhatsAppButton';
 import { fetchPostCareProtocol } from '../shared/services/api';
 import { LiveTrackingMap } from '../shared/components/LiveTrackingMap';
 import { ServiceCompletionModal } from '../aplicaciones/terapeuta/components/ServiceCompletionModal';
+import { 
+  notifyTherapistNewMessage, 
+  isUrgentChatMessage 
+} from '../shared/utils/notificationAudio';
 
 
 interface TherapistAppProps {
@@ -236,6 +240,165 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
     { sender: activeTherapist.name, text: 'Hola Don Alejandro. Estoy a 12 minutos. El chofer ejecutivo ya está estacionando.', time: '10:20 AM', read: true }
   ]);
 
+  // Subtle Audio & Tactile Vibration Notification States
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('essenya_therapist_sound_enabled') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  const [vibrationEnabled, setVibrationEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('essenya_therapist_vibration_enabled') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
+  const [recentMessageAlert, setRecentMessageAlert] = useState<{
+    sender: string;
+    text: string;
+    time: string;
+    isUrgent: boolean;
+  } | null>(null);
+  const [isNotifyingPulse, setIsNotifyingPulse] = useState<boolean>(false);
+
+  // Auto-dismiss floating notification banner after 6 seconds
+  useEffect(() => {
+    if (!recentMessageAlert) return;
+    const timer = setTimeout(() => {
+      setRecentMessageAlert(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [recentMessageAlert]);
+
+  // Real-time listener for incoming messages from active booking client
+  useEffect(() => {
+    const handleRemoteMessage = (event: any) => {
+      const { bookingId, text, sender } = event?.detail || {};
+      if (text) {
+        // If it belongs to current active booking or any active booking
+        if (!bookingId || !currentBooking?.id || bookingId === currentBooking.id) {
+          handleIncomingMessage(text, sender || currentBooking?.clientName || 'Cliente');
+        }
+      }
+    };
+
+    window.addEventListener('essenya_chat_message', handleRemoteMessage);
+    return () => {
+      window.removeEventListener('essenya_chat_message', handleRemoteMessage);
+    };
+  }, [currentBooking?.id, currentBooking?.clientName, activeTab, soundEnabled, vibrationEnabled]);
+
+  const handleToggleSound = () => {
+    const nextState = !soundEnabled;
+    setSoundEnabled(nextState);
+    try {
+      localStorage.setItem('essenya_therapist_sound_enabled', String(nextState));
+    } catch {}
+
+    if (nextState) {
+      notifyTherapistNewMessage({ soundEnabled: true, vibrationEnabled: false, isUrgent: false });
+      showToast('Notificación Sonora Activada', 'Campanilla sutil activada para nuevos mensajes.', 'gold');
+    } else {
+      showToast('Sonido Silenciado', 'Los mensajes se recibirán en modo silencioso.', 'info');
+    }
+  };
+
+  const handleToggleVibration = () => {
+    const nextState = !vibrationEnabled;
+    setVibrationEnabled(nextState);
+    try {
+      localStorage.setItem('essenya_therapist_vibration_enabled', String(nextState));
+    } catch {}
+
+    if (nextState) {
+      notifyTherapistNewMessage({ soundEnabled: false, vibrationEnabled: true, isUrgent: false });
+      showToast('Vibración Táctil Activada', 'Respuesta háptica habilitada para el terapeuta.', 'gold');
+    } else {
+      showToast('Vibración Desactivada', 'Vibración táctil deshabilitada.', 'info');
+    }
+  };
+
+  const handleTestAlert = (urgent: boolean = false) => {
+    setIsNotifyingPulse(true);
+    setTimeout(() => setIsNotifyingPulse(false), 1200);
+
+    notifyTherapistNewMessage({
+      soundEnabled: true,
+      vibrationEnabled: true,
+      isUrgent: urgent
+    });
+
+    showToast(
+      urgent ? '⚠️ Petición Urgente (Prueba)' : '🔔 Notificación Spa (Prueba)',
+      urgent 
+        ? 'Campanilla distintiva de 3 armónicos y vibración háptica triple ejecutadas.'
+        : 'Campanilla armónica sutil de 2 tonos y vibración táctil suave ejecutadas.',
+      urgent ? 'error' : 'gold'
+    );
+  };
+
+  const handleIncomingMessage = (text: string, senderName?: string) => {
+    setIsClientTyping(false);
+    const resolvedSender = senderName || currentBooking?.clientName || 'Don Alejandro';
+    const isUrgent = isUrgentChatMessage(text);
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const newMsg = {
+      sender: resolvedSender,
+      text,
+      time: timeStr,
+      read: activeTab === 'active'
+    };
+
+    setMessages(prev => [...prev, newMsg]);
+
+    // Trigger subtle audio chime & tactile vibration
+    setIsNotifyingPulse(true);
+    setTimeout(() => setIsNotifyingPulse(false), 1500);
+
+    notifyTherapistNewMessage({
+      soundEnabled,
+      vibrationEnabled,
+      isUrgent
+    });
+
+    // Provide immediate visual notification
+    setRecentMessageAlert({
+      sender: resolvedSender,
+      text,
+      time: timeStr,
+      isUrgent
+    });
+
+    if (activeTab !== 'active') {
+      setUnreadChatCount(prev => prev + 1);
+    }
+
+    showToast(
+      isUrgent ? '⚠️ Petición Urgente del Cliente' : '💬 Mensaje de la Cita Activa',
+      `${resolvedSender}: "${text.length > 55 ? text.substring(0, 52) + '...' : text}"`,
+      isUrgent ? 'error' : 'gold'
+    );
+  };
+
+  const handleSimulateClientMessage = (type: 'urgent' | 'access' | 'routine') => {
+    setIsClientTyping(true);
+    setTimeout(() => {
+      let msg = '';
+      if (type === 'urgent') {
+        msg = 'Por favor tomen nota: tengo alergia al aceite de almendras y ligera molestia en cervicales, requiero toallas adicionales tibias.';
+      } else if (type === 'access') {
+        msg = 'El timbre principal no funciona, por favor toca el interfón 4B o avísame al llegar para abrir el portón.';
+      } else {
+        msg = 'Hola Elena, ¿podrías confirmarme si traen el difusor aromático de lavanda? Muchas gracias.';
+      }
+      handleIncomingMessage(msg);
+    }, 1000);
+  };
+
   const handleUpdateStatus = (bookingId: string, newState: BookingState, label: string) => {
     onUpdateBookingState(bookingId, newState);
     showToast('Estado de Servicio Actualizado', `Servicio marcado como "${label}". Notificado al cliente y a central dispatch.`, 'gold');
@@ -301,16 +464,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
 
     // Client reply after 2500ms
     setTimeout(() => {
-      setIsClientTyping(false);
-      setMessages(prev => [
-        ...prev,
-        {
-          sender: 'Don Alejandro',
-          text: 'Perfecto Elena, aquí te esperamos en la recepción con gusto.',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          read: true
-        }
-      ]);
+      handleIncomingMessage('Perfecto Elena, aquí te esperamos en la recepción con gusto.');
     }, 2500);
   };
 
@@ -324,6 +478,87 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
           <span>Modo Sin Conexión Activo: Tu agenda y servicios programados se sincronizarán automáticamente al recuperar la conexión.</span>
         </div>
       )}
+
+      {/* Floating Immediate Alert Banner for Incoming Client Messages */}
+      <AnimatePresence>
+        {recentMessageAlert && (
+          <motion.aside
+            aria-label="Alerta de mensaje del cliente"
+            initial={{ opacity: 0, y: -24, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -24, scale: 0.95 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+            className={`fixed top-5 right-5 z-50 max-w-md w-[calc(100%-2.5rem)] sm:w-auto p-4 rounded-2xl shadow-2xl border backdrop-blur-xl flex items-start space-x-3.5 ${
+              recentMessageAlert.isUrgent
+                ? 'bg-[#1F1206]/95 border-amber-500/60 text-amber-100 shadow-amber-950/40'
+                : 'bg-[#141414]/95 border-[#C9A55B]/40 text-white shadow-black/60'
+            }`}
+          >
+            <div className={`p-2.5 rounded-xl shrink-0 ${
+              recentMessageAlert.isUrgent
+                ? 'bg-amber-500/25 text-amber-300 ring-2 ring-amber-500/40 animate-pulse'
+                : 'bg-[#C9A55B]/20 text-[#C9A55B]'
+            }`}>
+              {recentMessageAlert.isUrgent ? (
+                <AlertTriangle className="w-5 h-5 text-amber-400" />
+              ) : (
+                <MessageSquare className="w-5 h-5 text-[#C9A55B]" />
+              )}
+            </div>
+
+            <div className="flex-1 min-w-0 pr-1">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center space-x-1.5 min-w-0">
+                  <span className="text-xs font-bold text-[#C9A55B] truncate">
+                    {recentMessageAlert.sender}
+                  </span>
+                  {recentMessageAlert.isUrgent && (
+                    <span className="text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-amber-500/30 text-amber-300 border border-amber-500/50">
+                      Urgente
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] text-stone-400 shrink-0">{recentMessageAlert.time}</span>
+              </div>
+
+              <p className="text-xs text-stone-200 mt-1 line-clamp-2 leading-relaxed">
+                {recentMessageAlert.text}
+              </p>
+
+              <div className="flex items-center space-x-2 mt-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('active');
+                    setUnreadChatCount(0);
+                    setRecentMessageAlert(null);
+                  }}
+                  className="text-[11px] font-bold px-3 py-1 bg-[#C9A55B] text-black rounded-lg hover:bg-[#E6CA65] transition-colors flex items-center space-x-1 shadow-xs"
+                >
+                  <MessageSquare className="w-3 h-3 text-black" />
+                  <span>Responder en Chat</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecentMessageAlert(null)}
+                  className="text-[11px] text-stone-400 hover:text-white px-2 py-1 transition-colors"
+                >
+                  Descartar
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setRecentMessageAlert(null)}
+              className="text-stone-400 hover:text-white p-1 -mr-1 -mt-1 rounded-lg"
+              title="Cerrar notificación"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </motion.aside>
+        )}
+      </AnimatePresence>
 
       {/* Top Professional Strip */}
       <section className="bg-[#F5F1EA] dark:bg-gradient-to-b dark:from-[#141414] dark:to-[#0D0D0D] border-b border-[#E5DFD3] dark:border-[#C9A55B]/20 py-6 px-4 sm:px-6 lg:px-8 shadow-xs">
@@ -405,7 +640,11 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
         <div className="max-w-7xl mx-auto flex items-center space-x-2 mt-6 border-t border-[#E5DFD3] dark:border-[#C9A55B]/10 pt-4 overflow-x-auto no-scrollbar">
           <motion.button
             whileTap={{ scale: 0.97 }}
-            onClick={() => setActiveTab('active')}
+            onClick={() => {
+              setActiveTab('active');
+              setUnreadChatCount(0);
+              setRecentMessageAlert(null);
+            }}
             id="therapist-tab-active"
             className={`relative flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 whitespace-nowrap cursor-pointer ${
               activeTab === 'active'
@@ -422,8 +661,14 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
             )}
             <Navigation className="w-4 h-4 relative z-10" />
             <span className="relative z-10">Servicio en Curso</span>
-            {currentBooking && currentBooking.state !== 'servicio_finalizado' && (
-              <span className="relative z-10 w-2 h-2 rounded-full bg-[#C9A55B] animate-ping"></span>
+            {unreadChatCount > 0 ? (
+              <span className="relative z-10 px-1.5 py-0.5 rounded-full bg-amber-500 text-black text-[10px] font-extrabold shadow-xs animate-pulse">
+                {unreadChatCount}
+              </span>
+            ) : (
+              currentBooking && currentBooking.state !== 'servicio_finalizado' && (
+                <span className="relative z-10 w-2 h-2 rounded-full bg-[#C9A55B] animate-ping"></span>
+              )
             )}
           </motion.button>
 
@@ -742,60 +987,183 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
               </div>
             </div>
 
-            {/* Chat with Client */}
-            <div className="bg-[#141414] p-6 rounded-2xl border border-[#C9A55B]/20 space-y-4">
-              <h4 className="text-xs uppercase text-[#AAAAAA] tracking-wider font-semibold flex items-center space-x-1.5">
-                <MessageSquare className="w-4 h-4 text-[#C9A55B]" />
-                <span>Chat Directo con Don Alejandro</span>
-              </h4>
-
-              <div className="bg-[#1A1A1A] p-4 rounded-xl border border-[#333333] h-48 overflow-y-auto space-y-3 text-xs">
-                {messages.map((m, idx) => (
-                  <div key={idx} className={`flex flex-col ${m.sender === activeTherapist.name ? 'items-end' : 'items-start'}`}>
-                    <div className={`p-2.5 rounded-xl max-w-[80%] ${
-                      m.sender === activeTherapist.name ? 'bg-[#C9A55B] text-black font-semibold' : 'bg-[#222222] text-white'
+            {/* Chat with Client with Subtle Audio & Tactile Vibration Controls */}
+            <div className={`bg-[#141414] p-5 sm:p-6 rounded-2xl border transition-all duration-500 space-y-4 shadow-xl ${
+              isNotifyingPulse ? 'border-[#C9A55B] ring-2 ring-[#C9A55B]/40 shadow-[#C9A55B]/10' : 'border-[#C9A55B]/20'
+            }`}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#2A2A2A] pb-3.5">
+                <div className="flex items-center space-x-2.5">
+                  <div className="relative">
+                    <div className={`p-2 rounded-xl transition-colors ${
+                      isNotifyingPulse ? 'bg-[#C9A55B] text-black animate-bounce' : 'bg-[#1E1E1E] text-[#C9A55B]'
                     }`}>
-                      <p>{m.text}</p>
+                      <MessageSquare className="w-4 h-4" />
                     </div>
-                    <div className="flex items-center space-x-1.5 mt-0.5">
-                      <span className="text-[9px] text-[#666666]">{m.sender} • {m.time}</span>
-                      {m.sender === activeTherapist.name && (
-                        <span className="flex items-center text-[9px] text-[#C9A55B]">
-                          {m.read ? (
-                            <span className="flex items-center space-x-0.5 font-semibold text-[#C9A55B]">
-                              <CheckCheck className="w-3 h-3 text-[#C9A55B] inline" />
-                              <span className="text-[8px]">Visto</span>
-                            </span>
-                          ) : (
-                            <Check className="w-3 h-3 text-[#666666] inline" />
-                          )}
-                        </span>
-                      )}
+                    {isNotifyingPulse && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#C9A55B] animate-ping" />
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="text-xs uppercase text-[#CCCCCC] tracking-wider font-semibold flex items-center gap-1.5">
+                      <span>Chat Directo con {currentBooking?.clientName || 'Don Alejandro'}</span>
+                    </h4>
+                    <div className="flex items-center space-x-2 mt-0.5">
+                      <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Cita activa en curso
+                      </span>
+                      <span className="text-[10px] text-[#555555]">•</span>
+                      <span className="text-[10px] text-[#888888] flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-[#C9A55B]" />
+                        Alertas auditivas y hápticas
+                      </span>
                     </div>
                   </div>
-                ))}
+                </div>
+
+                {/* Audio & Tactile Notification Controls */}
+                <div className="flex items-center gap-1.5 self-start sm:self-auto bg-[#1A1A1A] p-1 rounded-xl border border-[#333333] shadow-inner">
+                  {/* Subtle Sound Toggle */}
+                  <button
+                    type="button"
+                    onClick={handleToggleSound}
+                    title={soundEnabled ? "Notificación sonora activa (Campanilla spa sutil). Clic para silenciar." : "Sonido silenciado. Clic para activar campanilla spa."}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center space-x-1.5 transition-all cursor-pointer ${
+                      soundEnabled 
+                        ? 'bg-[#C9A55B]/20 text-[#C9A55B] border border-[#C9A55B]/40 shadow-xs' 
+                        : 'text-[#666666] hover:text-[#AAAAAA]'
+                    }`}
+                  >
+                    {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+                    <span className="hidden xs:inline">{soundEnabled ? 'Sonido ON' : 'Mute'}</span>
+                  </button>
+
+                  {/* Tactile Vibration Toggle */}
+                  <button
+                    type="button"
+                    onClick={handleToggleVibration}
+                    title={vibrationEnabled ? "Vibración táctil activa. Clic para desactivar." : "Vibración táctil desactivada. Clic para activar respuesta háptica."}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center space-x-1.5 transition-all cursor-pointer ${
+                      vibrationEnabled 
+                        ? 'bg-[#C9A55B]/20 text-[#C9A55B] border border-[#C9A55B]/40 shadow-xs' 
+                        : 'text-[#666666] hover:text-[#AAAAAA]'
+                    }`}
+                  >
+                    <Vibrate className="w-3.5 h-3.5" />
+                    <span className="hidden xs:inline">{vibrationEnabled ? 'Vibración ON' : 'Sin vibrar'}</span>
+                  </button>
+
+                  {/* Test Chime & Vibration */}
+                  <button
+                    type="button"
+                    onClick={() => handleTestAlert(false)}
+                    title="Probar sonido de campanilla spa y vibración táctil"
+                    className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-[#AAAAAA] hover:text-white hover:bg-[#252525] transition-all flex items-center space-x-1 cursor-pointer border border-transparent hover:border-[#444444]"
+                  >
+                    <BellRing className="w-3.5 h-3.5 text-[#C9A55B]" />
+                    <span>Probar</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Message List */}
+              <div className="bg-[#181818] p-4 rounded-xl border border-[#2A2A2A] h-52 overflow-y-auto space-y-3.5 text-xs scroll-smooth">
+                {messages.map((m, idx) => {
+                  const isFromTherapist = m.sender === activeTherapist.name;
+                  const isUrgent = !isFromTherapist && isUrgentChatMessage(m.text);
+
+                  return (
+                    <div key={idx} className={`flex flex-col ${isFromTherapist ? 'items-end' : 'items-start'}`}>
+                      {isUrgent && (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-wider text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-md border border-amber-500/40 mb-1 shadow-xs animate-pulse">
+                          <AlertTriangle className="w-3 h-3 text-amber-400" />
+                          Petición Prioritaria del Cliente
+                        </span>
+                      )}
+                      <div className={`p-3 rounded-xl max-w-[85%] leading-relaxed ${
+                        isFromTherapist 
+                          ? 'bg-[#C9A55B] text-black font-semibold shadow-xs' 
+                          : isUrgent
+                            ? 'bg-[#261506] border border-amber-500/60 text-amber-100 shadow-md shadow-amber-950/30'
+                            : 'bg-[#242424] text-stone-100 border border-[#333333]'
+                      }`}>
+                        <p>{m.text}</p>
+                      </div>
+                      <div className="flex items-center space-x-1.5 mt-1">
+                        <span className="text-[9px] text-[#666666]">{m.sender} • {m.time}</span>
+                        {isFromTherapist && (
+                          <span className="flex items-center text-[9px] text-[#C9A55B]">
+                            {m.read ? (
+                              <span className="flex items-center space-x-0.5 font-semibold text-[#C9A55B]">
+                                <CheckCheck className="w-3 h-3 text-[#C9A55B] inline" />
+                                <span className="text-[8px]">Visto</span>
+                              </span>
+                            ) : (
+                              <Check className="w-3 h-3 text-[#666666] inline" />
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
                 {isClientTyping && (
-                  <div className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#222222] rounded-xl w-fit text-[10px] text-[#C9A55B] italic border border-[#C9A55B]/20">
+                  <div className="flex items-center space-x-2 px-3 py-2 bg-[#222222] rounded-xl w-fit text-[11px] text-[#C9A55B] border border-[#C9A55B]/30 shadow-xs">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#C9A55B] animate-bounce" style={{ animationDelay: '0ms' }}></span>
                     <span className="w-1.5 h-1.5 rounded-full bg-[#C9A55B] animate-bounce" style={{ animationDelay: '150ms' }}></span>
                     <span className="w-1.5 h-1.5 rounded-full bg-[#C9A55B] animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                    <span>Don Alejandro está escribiendo...</span>
+                    <span className="font-medium">{currentBooking?.clientName || 'El cliente'} está escribiendo...</span>
                   </div>
                 )}
               </div>
 
+              {/* Simulation triggers for instant testing */}
+              <div className="pt-2 border-t border-[#222222] flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[10px] text-[#888888] font-medium flex items-center gap-1.5">
+                  <Smartphone className="w-3.5 h-3.5 text-[#C9A55B]" />
+                  Simular peticiones del cliente (Prueba de Alertas):
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleSimulateClientMessage('urgent')}
+                    className="text-[10px] px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 transition-colors flex items-center gap-1 font-semibold cursor-pointer"
+                  >
+                    <AlertTriangle className="w-3 h-3 text-amber-400" />
+                    <span>⚠️ Petición Urgente (Alergia / Toallas)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSimulateClientMessage('access')}
+                    className="text-[10px] px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/40 transition-colors flex items-center gap-1 font-semibold cursor-pointer"
+                  >
+                    <span>🚪 Acceso / Interfón</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSimulateClientMessage('routine')}
+                    className="text-[10px] px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-stone-300 border border-white/10 transition-colors flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>💬 Consulta Rutinaria</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Input Area */}
               <div className="flex space-x-2">
                 <input 
                   type="text"
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-                  placeholder="Enviar actualización o pregunta al cliente..."
-                  className="flex-1 bg-[#1A1A1A] border border-[#333333] rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#C9A55B]"
+                  placeholder="Enviar actualización o respuesta al cliente..."
+                  className="flex-1 bg-[#1A1A1A] border border-[#333333] rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#C9A55B] placeholder:text-[#666666]"
                 />
                 <button
+                  type="button"
                   onClick={handleSendChat}
-                  className="px-5 py-2.5 bg-[#C9A55B] text-black font-bold text-xs rounded-xl hover:bg-[#E6CA65]"
+                  className="px-5 py-2.5 bg-[#C9A55B] text-black font-bold text-xs rounded-xl hover:bg-[#E6CA65] transition-colors flex items-center justify-center space-x-1 cursor-pointer shadow-md"
                 >
                   <Send className="w-4 h-4" />
                 </button>

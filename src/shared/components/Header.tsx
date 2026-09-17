@@ -5,6 +5,7 @@ import { User, Shield, Globe, Sparkles, Activity, Award, Sun, Moon, Laptop, Exte
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { EssenyaLogo } from './EssenyaLogo';
+import { TechSupportWhatsAppButton } from './TechSupportWhatsAppButton';
 
 interface HeaderProps {
   currentPortal: PortalType;
@@ -91,6 +92,13 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           <span className="text-[#D8D2C6] dark:text-[#333333] hidden sm:inline">|</span>
+
+          {/* Botón directo de Soporte Técnico Oficial */}
+          <TechSupportWhatsAppButton 
+            role={currentPortal === 'therapist' ? 'terapeuta' : currentPortal === 'client' ? 'cliente' : 'general'} 
+            variant="compact" 
+            label="Soporte Técnico"
+          />
 
           <a
             href="https://essenyamexico.com"
