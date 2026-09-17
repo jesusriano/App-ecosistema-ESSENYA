@@ -621,7 +621,9 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         body: JSON.stringify({
           ...newBooking,
           clientName: resolvedClientName,
-          clientPhone: resolvedClientPhone
+          clientPhone: resolvedClientPhone,
+          expectedWalletDeduction: (newBooking as any).expectedWalletDeduction ?? (newBooking.applyGiftCard ? (newBooking as any).walletDeduction || 0 : 0),
+          expectedFinalTotal: (newBooking as any).expectedFinalTotal ?? newBooking.total
         })
       });
       
@@ -1414,25 +1416,49 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const handleCancelBooking = async (bookingId: string, reason: string) => {
-    setBookings(prev => prev.map(b => {
-      if (b.id === bookingId) {
-        return { ...b, state: 'cancelado', cancellationReason: reason };
-      }
-      return b;
-    }));
-
     try {
-      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore({ state: 'cancelado', cancellationReason: reason }));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, { state: 'cancelado', cancellationReason: reason });
-    }
+      const auth = getAuth();
+      const token = await auth.currentUser?.getIdToken();
 
-    addLog(
-      'Administrador',
-      'Panel Operaciones',
-      'Cancelación de Servicio',
-      `Reserva ${bookingId} cancelada por el administrador. Motivo: "${reason}".`
-    );
+      const response = await fetch('/api/bookings/cancel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ bookingId, reason })
+      });
+
+      let data: any;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        throw new Error(text || `Error ${response.status} al cancelar la reserva`);
+      }
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'No fue posible cancelar la reserva.');
+      }
+
+      setBookings(prev => prev.map(b => {
+        if (b.id === bookingId) {
+          return { ...b, state: 'cancelado', cancellationReason: reason, refundedAmount: data.refundedAmount };
+        }
+        return b;
+      }));
+
+      addLog(
+        'Usuario/Admin',
+        'Panel Operaciones',
+        'Cancelación de Servicio',
+        `Reserva ${bookingId} cancelada atómicamente. Motivo: "${reason}". Saldo reembolsado: $${data.refundedAmount || 0} MXN.`
+      );
+    } catch (err: any) {
+      console.error("Error al cancelar reserva mediante endpoint:", err);
+      throw err;
+    }
   };
 
   const handleConfirmPayment = async (bookingId: string) => {

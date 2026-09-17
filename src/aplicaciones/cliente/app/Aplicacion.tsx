@@ -525,6 +525,8 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       createdAt: new Date().toISOString(),
       invoiceId: `inv-${Math.floor(1000 + Math.random() * 9000)}`,
       applyGiftCard: !!appliedGiftCard,
+      expectedWalletDeduction: appliedGiftCard ? giftCardDeduction : 0,
+      expectedFinalTotal: totalPrice,
       applyCourtesy: appliedPromo?.type === 'VIP15'
     };
 

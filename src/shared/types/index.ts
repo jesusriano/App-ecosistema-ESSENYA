@@ -124,6 +124,8 @@ export interface Booking {
   paymentMethod: 'Tarjeta de Crédito / Débito' | 'Tarjeta Crédito VIP' | 'Transferencia Interbancaria (SPEI)' | 'Transferencia Bank VIP' | 'Efectivo (Pago al Recibir)' | 'Tarjeta de Regalo (Saldo Billetera)';
   paymentStatus: 'pagado' | 'pendiente' | 'reembolsado' | 'rechazado';
   applyGiftCard?: boolean;
+  expectedWalletDeduction?: number;
+  expectedFinalTotal?: number;
   applyCourtesy?: boolean;
   paid?: boolean;
   updatedAt?: string;

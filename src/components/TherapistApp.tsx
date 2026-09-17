@@ -12,6 +12,7 @@ import { PanicModal } from './PanicModal';
 import { WhatsAppButton } from './WhatsAppButton';
 import { fetchPostCareProtocol } from '../shared/services/api';
 import { LiveTrackingMap } from '../shared/components/LiveTrackingMap';
+import { ServiceCompletionModal } from '../aplicaciones/terapeuta/components/ServiceCompletionModal';
 
 
 interface TherapistAppProps {
@@ -57,6 +58,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
   const [activeTab, setActiveTab] = useState<'schedule' | 'active' | 'earnings' | 'postcare' | 'history'>('active');
   const [availability, setAvailability] = useState<'disponible' | 'desconectado'>('disponible');
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+  const [completedCelebrationBooking, setCompletedCelebrationBooking] = useState<Booking | null>(null);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -401,73 +403,113 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
 
         {/* Therapist Navigation Tabs */}
         <div className="max-w-7xl mx-auto flex items-center space-x-2 mt-6 border-t border-[#E5DFD3] dark:border-[#C9A55B]/10 pt-4 overflow-x-auto no-scrollbar">
-          <button
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             onClick={() => setActiveTab('active')}
             id="therapist-tab-active"
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all shrink-0 whitespace-nowrap ${
+            className={`relative flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 whitespace-nowrap cursor-pointer ${
               activeTab === 'active'
-                ? 'bg-[#C9A55B]/20 text-[#806020] dark:text-[#C9A55B] border border-[#C9A55B]/50'
+                ? 'text-[#806020] dark:text-[#C9A55B]'
                 : 'text-[#6B655F] dark:text-white/60 hover:text-[#1C1917] dark:hover:text-white'
             }`}
           >
-            <Navigation className="w-4 h-4" />
-            <span>Servicio en Curso</span>
-            {currentBooking && currentBooking.state !== 'servicio_finalizado' && (
-              <span className="w-2 h-2 rounded-full bg-[#C9A55B] animate-ping"></span>
+            {activeTab === 'active' && (
+              <motion.div
+                layoutId="therapistInnerTabIndicator"
+                className="absolute inset-0 bg-[#C9A55B]/20 border border-[#C9A55B]/50 rounded-lg shadow-xs"
+                transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+              />
             )}
-          </button>
+            <Navigation className="w-4 h-4 relative z-10" />
+            <span className="relative z-10">Servicio en Curso</span>
+            {currentBooking && currentBooking.state !== 'servicio_finalizado' && (
+              <span className="relative z-10 w-2 h-2 rounded-full bg-[#C9A55B] animate-ping"></span>
+            )}
+          </motion.button>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             onClick={() => setActiveTab('schedule')}
             id="therapist-tab-schedule"
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all shrink-0 whitespace-nowrap ${
+            className={`relative flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 whitespace-nowrap cursor-pointer ${
               activeTab === 'schedule'
-                ? 'bg-[#C9A55B]/20 text-[#806020] dark:text-[#C9A55B] border border-[#C9A55B]/50'
-                : 'text-white/60 hover:text-white'
+                ? 'text-[#806020] dark:text-[#C9A55B]'
+                : 'text-[#6B655F] dark:text-white/60 hover:text-[#1C1917] dark:hover:text-white'
             }`}
           >
-            <Calendar className="w-4 h-4" />
-            <span>Mi Agenda Hoy</span>
-          </button>
+            {activeTab === 'schedule' && (
+              <motion.div
+                layoutId="therapistInnerTabIndicator"
+                className="absolute inset-0 bg-[#C9A55B]/20 border border-[#C9A55B]/50 rounded-lg shadow-xs"
+                transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+              />
+            )}
+            <Calendar className="w-4 h-4 relative z-10" />
+            <span className="relative z-10">Mi Agenda Hoy</span>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             onClick={() => setActiveTab('earnings')}
             id="therapist-tab-earnings"
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-medium transition-all shrink-0 whitespace-nowrap ${
+            className={`relative flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-medium transition-colors shrink-0 whitespace-nowrap cursor-pointer ${
               activeTab === 'earnings'
-                ? 'bg-[#C9A55B]/20 text-[#C9A55B] border border-[#C9A55B]/40'
-                : 'text-white/60 hover:text-white'
+                ? 'text-[#806020] dark:text-[#C9A55B] font-bold'
+                : 'text-[#6B655F] dark:text-white/60 hover:text-[#1C1917] dark:hover:text-white'
             }`}
           >
-            <DollarSign className="w-4 h-4" />
-            <span>Mis Ganancias</span>
-          </button>
+            {activeTab === 'earnings' && (
+              <motion.div
+                layoutId="therapistInnerTabIndicator"
+                className="absolute inset-0 bg-[#C9A55B]/20 border border-[#C9A55B]/50 rounded-lg shadow-xs"
+                transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+              />
+            )}
+            <DollarSign className="w-4 h-4 relative z-10" />
+            <span className="relative z-10">Mis Ganancias</span>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             onClick={() => setActiveTab('history')}
             id="therapist-tab-history"
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-medium transition-all shrink-0 whitespace-nowrap ${
+            className={`relative flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-medium transition-colors shrink-0 whitespace-nowrap cursor-pointer ${
               activeTab === 'history'
-                ? 'bg-[#C9A55B]/20 text-[#C9A55B] border border-[#C9A55B]/40'
-                : 'text-white/60 hover:text-white'
+                ? 'text-[#806020] dark:text-[#C9A55B] font-bold'
+                : 'text-[#6B655F] dark:text-white/60 hover:text-[#1C1917] dark:hover:text-white'
             }`}
           >
-            <Clock className="w-4 h-4" />
-            <span>Historial de Servicios</span>
-          </button>
+            {activeTab === 'history' && (
+              <motion.div
+                layoutId="therapistInnerTabIndicator"
+                className="absolute inset-0 bg-[#C9A55B]/20 border border-[#C9A55B]/50 rounded-lg shadow-xs"
+                transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+              />
+            )}
+            <Clock className="w-4 h-4 relative z-10" />
+            <span className="relative z-10">Historial de Servicios</span>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             onClick={() => setActiveTab('postcare')}
             id="therapist-tab-postcare"
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-medium transition-all shrink-0 whitespace-nowrap ${
+            className={`relative flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-medium transition-colors shrink-0 whitespace-nowrap cursor-pointer ${
               activeTab === 'postcare'
-                ? 'bg-[#C9A55B]/20 text-[#C9A55B] border border-[#C9A55B]/40'
-                : 'text-white/60 hover:text-white'
+                ? 'text-[#806020] dark:text-[#C9A55B] font-bold'
+                : 'text-[#6B655F] dark:text-white/60 hover:text-[#1C1917] dark:hover:text-white'
             }`}
           >
-            <Bot className="w-4 h-4" />
-            <span>Generador Post-Care AI</span>
-          </button>
+            {activeTab === 'postcare' && (
+              <motion.div
+                layoutId="therapistInnerTabIndicator"
+                className="absolute inset-0 bg-[#C9A55B]/20 border border-[#C9A55B]/50 rounded-lg shadow-xs"
+                transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+              />
+            )}
+            <Bot className="w-4 h-4 relative z-10" />
+            <span className="relative z-10">Generador Post-Care AI</span>
+          </motion.button>
         </div>
       </section>
 
@@ -565,9 +607,20 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
           </motion.div>
         )}
 
+        {/* TAB CONTENTS WITH SMOOTH ANIMATIONS */}
+        <AnimatePresence mode="wait">
         {/* TAB: ACTIVE SERVICE & STATE STEPPER */}
-        {activeTab === 'active' && currentBooking && (
-          <div className="space-y-8 max-w-4xl mx-auto">
+        {activeTab === 'active' && (
+          <motion.div
+            key="tab-active-content"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.22 }}
+            className="space-y-8 max-w-4xl mx-auto"
+          >
+            {currentBooking ? (
+              <div className="space-y-8">
             {/* Active Service Banner */}
             <div className="bg-[#141414] p-6 rounded-2xl border border-[#C9A55B]/30 space-y-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[#222222] pb-4">
@@ -666,14 +719,22 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                       }
 
                       return (
-                        <button
+                        <motion.button
                           key={st.key}
-                          onClick={() => onUpdateBookingState(currentBooking.id, st.key as any)}
-                          className={`p-3 rounded-xl text-[11px] lg:text-xs font-bold transition-all duration-500 flex items-center justify-center space-x-1.5 sm:space-x-2 ${btnClasses}`}
+                          whileTap={{ scale: 0.96 }}
+                          whileHover={{ scale: isNext ? 1.04 : 1.01 }}
+                          onClick={() => {
+                            onUpdateBookingState(currentBooking.id, st.key as any);
+                            if (st.key === 'servicio_finalizado') {
+                              setCompletedCelebrationBooking(currentBooking);
+                              showToast('¡Servicio Finalizado!', 'Has completado la sesión con éxito. Ganancia registrada en tu balance.', 'success');
+                            }
+                          }}
+                          className={`p-3 rounded-xl text-[11px] lg:text-xs font-bold transition-all duration-300 flex items-center justify-center space-x-1.5 sm:space-x-2 cursor-pointer ${btnClasses}`}
                         >
                           <st.icon className={`w-4 h-4 shrink-0 ${isCompleted ? 'text-white' : isNext ? 'text-black' : 'text-[#666666]'}`} />
                           <span className="whitespace-nowrap">{st.label}</span>
-                        </button>
+                        </motion.button>
                       );
                     });
                   })()}
@@ -741,6 +802,24 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
               </div>
             </div>
           </div>
+            ) : (
+              <div className="bg-[#141414] p-10 rounded-2xl border border-[#C9A55B]/20 text-center space-y-4">
+                <Navigation className="w-10 h-10 text-[#C9A55B]/40 mx-auto" />
+                <div className="space-y-1">
+                  <h4 className="text-lg font-bold text-white font-serif">No Hay Servicio en Curso</h4>
+                  <p className="text-xs text-[#888888] max-w-md mx-auto">
+                    No tienes una sesión activa en este momento. Consulta tu agenda para ver las próximas citas asignadas o confirmar solicitudes.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTab('schedule')}
+                  className="px-5 py-2.5 rounded-xl bg-[#C9A55B] text-black font-bold text-xs hover:bg-[#E6CA65] transition-colors cursor-pointer"
+                >
+                  Ver Mi Agenda Hoy
+                </button>
+              </div>
+            )}
+          </motion.div>
         )}
 
         {/* TAB: SCHEDULE */}
@@ -854,7 +933,14 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
 
         {/* TAB: EARNINGS */}
         {activeTab === 'earnings' && (
-          <div className="space-y-6 max-w-4xl mx-auto">
+          <motion.div
+            key="tab-earnings-content"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.22 }}
+            className="space-y-6 max-w-4xl mx-auto"
+          >
             <h3 className="text-2xl font-serif font-bold text-white">Reporte de Ganancias y Comisiones</h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -873,7 +959,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                 <span className="text-2xl font-bold text-white">12 Sesiones</span>
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
 
         {/* TAB: HISTORY */}
@@ -995,7 +1081,14 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
 
         {/* TAB: POST CARE GENERATOR */}
         {activeTab === 'postcare' && (
-          <div className="max-w-2xl mx-auto bg-[#141414] p-6 sm:p-8 rounded-2xl border border-[#C9A55B]/30 space-y-6">
+          <motion.div
+            key="tab-postcare-content"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.22 }}
+            className="max-w-2xl mx-auto bg-[#141414] p-6 sm:p-8 rounded-2xl border border-[#C9A55B]/30 space-y-6"
+          >
             <div className="space-y-1 border-b border-[#C9A55B]/20 pb-4">
               <span className="text-xs text-[#C9A55B] uppercase font-bold tracking-widest">Herramienta Terapeuta AI</span>
               <h3 className="text-2xl font-serif font-bold text-white">Generador de Protocolo Post-Masaje</h3>
@@ -1028,7 +1121,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
               <button
                 onClick={handleGeneratePostCare}
                 disabled={postCareLoading || therapistNotes.trim().length < 20}
-                className={`w-full py-3 font-bold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all ${
+                className={`w-full py-3 font-bold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer ${
                   therapistNotes.trim().length >= 20 && !postCareLoading
                     ? 'bg-gradient-to-r from-[#C9A55B] via-[#E6CA65] to-[#C9A55B] text-black gold-button-hover'
                     : 'bg-[#222222] text-[#666666] border border-[#333333] cursor-not-allowed opacity-60'
@@ -1055,9 +1148,19 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                 </div>
               </div>
             )}
-          </div>
+          </motion.div>
         )}
+        </AnimatePresence>
       </main>
+
+      {/* Celebration Modal when service is marked completed */}
+      <ServiceCompletionModal
+        isOpen={!!completedCelebrationBooking}
+        onClose={() => setCompletedCelebrationBooking(null)}
+        booking={completedCelebrationBooking}
+        onViewHistory={() => setActiveTab('history')}
+        onSendPostCare={() => setActiveTab('postcare')}
+      />
 
       {/* Global Safety Emergency Panic Modal */}
       <PanicModal 

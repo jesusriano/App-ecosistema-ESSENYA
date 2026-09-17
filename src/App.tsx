@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { InvoiceModal } from './components/InvoiceModal';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
@@ -8,6 +8,8 @@ import { AuthProvider } from './shared/context/AuthContext';
 import { TherapistProvider } from './shared/context/TherapistContext';
 import { PortalAuthGuard } from './shared/components/auth/PortalAuthGuard';
 import { ThemeToggle } from './shared/components/ThemeToggle';
+import { Header } from './shared/components/Header';
+import { PortalType } from './shared/types';
 
 import { ConfigValidator } from './shared/components/ConfigValidator';
 import { ErrorBoundary } from './shared/components/ErrorBoundary';
@@ -32,11 +34,36 @@ function MainAppContent() {
   const {
     activeInvoice,
     setActiveInvoice,
+    bookings,
   } = useEcosystem();
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const currentPortal: PortalType = location.pathname.startsWith('/admin')
+    ? 'admin'
+    : location.pathname.startsWith('/terapeuta')
+    ? 'therapist'
+    : 'client';
+
+  const handleSelectPortal = (portal: PortalType) => {
+    if (portal === 'admin') navigate('/admin');
+    else if (portal === 'therapist') navigate('/terapeuta');
+    else if (portal === 'client') navigate('/cliente');
+  };
+
+  const activeBookingCount = bookings.filter(b => b.state === 'pendiente' || b.state === 'aceptada' || b.state === 'en_camino' || b.state === 'llegue' || b.state === 'servicio_iniciado').length;
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#0D0D0D] text-[#1C1917] dark:text-white flex flex-col font-sans transition-colors duration-300 selection:bg-[#C9A55B] selection:text-black">
-      {/* Independent Application Modules on dedicated URLs - NO global header */}
+      {/* Ecosystem Unified Portal Navigation Header */}
+      <Header 
+        currentPortal={currentPortal}
+        onSelectPortal={handleSelectPortal}
+        activeBookingCount={activeBookingCount}
+      />
+
+      {/* Independent Application Modules on dedicated URLs */}
       <div className="flex-1">
         <Routes>
           {/* 1. App de Clientes (URL dedicada: /cliente) */}

@@ -254,10 +254,18 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
                 <p className="text-[#6B655F] dark:text-[#AAAAAA]"><strong>Teléfono:</strong> {currentUser.telefono}</p>
               </div>
 
-              <div className="pt-2 flex justify-center">
+              <div className="pt-2 flex flex-col items-center space-y-2.5">
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin')}
+                  className="w-full py-2.5 px-4 bg-[#C9A55B] hover:bg-[#D8B46B] text-black text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Shield className="w-4 h-4" />
+                  <span>Abrir Panel de Administrador (/admin)</span>
+                </button>
                 <button
                   onClick={() => logout('terapeuta')}
-                  className="text-xs text-[#888888] hover:text-red-400 font-semibold underline"
+                  className="text-xs text-[#888888] hover:text-red-400 font-semibold underline cursor-pointer"
                 >
                   Cerrar sesión de seguridad
                 </button>
@@ -493,17 +501,32 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
           {/* Action Options */}
           <div className="space-y-3 pt-2">
             <LuxuryButton
-              onClick={() => navigate(destinationPath)}
+              onClick={() => {
+                if (role === 'administrador') {
+                  setForceShowLogin(true);
+                } else {
+                  navigate(destinationPath);
+                }
+              }}
               variant="gold"
-              className="w-full py-3 text-xs tracking-wider font-bold shadow-lg flex items-center justify-center space-x-2"
+              className="w-full py-3 text-xs tracking-wider font-bold shadow-lg flex items-center justify-center space-x-2 cursor-pointer"
             >
-              <span>Ir a mi Portal ({loggedRoleName})</span>
-              <ExternalLink className="w-4 h-4" />
+              {role === 'administrador' ? (
+                <>
+                  <Shield className="w-4 h-4" />
+                  <span>Acceder como Administrador</span>
+                </>
+              ) : (
+                <>
+                  <span>Ir a mi Portal ({loggedRoleName})</span>
+                  <ExternalLink className="w-4 h-4" />
+                </>
+              )}
             </LuxuryButton>
 
             <button
               onClick={() => setForceShowLogin(true)}
-              className="w-full py-2.5 px-4 text-xs font-bold rounded-xl border border-[#E5DFD3] dark:border-[#333333] hover:border-[#C9A55B] text-[#1C1917] dark:text-white bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-all text-center"
+              className="w-full py-2.5 px-4 text-xs font-bold rounded-xl border border-[#E5DFD3] dark:border-[#333333] hover:border-[#C9A55B] text-[#1C1917] dark:text-white bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-all text-center cursor-pointer"
             >
               Iniciar sesión con cuenta de {requiredRoleName}
             </button>
@@ -681,9 +704,21 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
 
         {/* Success Banner */}
         {successMessage && (
-          <div className="bg-emerald-500/10 border border-emerald-500/30 p-3.5 rounded-2xl flex items-start space-x-3 text-emerald-600 dark:text-emerald-400 text-xs">
-            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-            <span className="leading-relaxed font-medium">{successMessage}</span>
+          <div className="bg-emerald-500/10 border border-emerald-500/30 p-3.5 rounded-2xl flex flex-col space-y-2.5 text-emerald-700 dark:text-emerald-300 text-xs">
+            <div className="flex items-start space-x-3">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+              <span className="leading-relaxed font-medium">{successMessage}</span>
+            </div>
+            {role === 'terapeuta' && (
+              <button
+                type="button"
+                onClick={() => navigate('/admin')}
+                className="w-full py-2 px-3 bg-[#C9A55B] hover:bg-[#D8B46B] text-black font-bold text-xs rounded-xl transition-all shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer"
+              >
+                <Shield className="w-3.5 h-3.5" />
+                <span>Abrir Panel de Administrador para Evaluar Solicitud</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -924,6 +959,24 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
               </>
             )}
           </LuxuryButton>
+
+          {/* Demo Admin Quick Access Helper */}
+          {role === 'administrador' && mode === 'login' && (
+            <div className="pt-2 border-t border-[#E5DFD3]/60 dark:border-[#262626]">
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('essenya222@gmail.com');
+                  setPassword('admin123456');
+                  setIsCaptchaVerified(true);
+                }}
+                className="w-full py-2 px-3 rounded-xl border border-dashed border-[#C9A55B]/50 hover:border-[#C9A55B] bg-[#C9A55B]/5 hover:bg-[#C9A55B]/10 text-[#806020] dark:text-[#C9A55B] text-[11px] font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Shield className="w-3.5 h-3.5" />
+                <span>Rellenar credenciales maestras de administrador (Demo)</span>
+              </button>
+            </div>
+          )}
         </form>
         )}
       </motion.div>

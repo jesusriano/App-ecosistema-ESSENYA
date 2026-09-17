@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
-import { Layers, Clock, MapPin, CheckCircle2, User, Bell, Check, X, AlertCircle, Sparkles, BookOpen } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Layers, Clock, MapPin, CheckCircle2, User, Bell, Sparkles, BookOpen, AlertCircle, Check, X } from 'lucide-react';
 import { useTerapeuta } from '../hooks/useTerapeuta';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { useToast } from '../../../shared/context/ToastContext';
 import { getServiceImage, getStaticServiceImageFallback } from '../../../shared/utils/serviceImage';
+import { ServiceCompletionModal } from '../components/ServiceCompletionModal';
+import { Booking } from '../../../shared/types';
 
 export const ServiciosPage: React.FC = () => {
   const { therapist, bookings, services, handleUpdateBookingState, handleAcceptBooking, handleRejectBooking } = useTerapeuta();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'citas' | 'catalogo'>('citas');
+  const [completedCelebrationBooking, setCompletedCelebrationBooking] = useState<Booking | null>(null);
 
   const pendingBookings = bookings.filter(b => b.state === 'pendiente');
   const activeAndCompletedBookings = bookings.filter(b => b.state !== 'pendiente');
@@ -21,6 +25,12 @@ export const ServiciosPage: React.FC = () => {
   const onDecline = (bookingId: string) => {
     handleRejectBooking(bookingId, 'Terapeuta no disponible en este horario');
     showToast('Solicitud Declinada', 'La solicitud se ha enviado de vuelta a la central para reasignación.', 'gold');
+  };
+
+  const onMarkCompleted = (booking: Booking) => {
+    handleUpdateBookingState(booking.id, 'servicio_finalizado');
+    setCompletedCelebrationBooking(booking);
+    showToast('¡Servicio Completado!', 'Has finalizado la sesión. Ganancia registrada con éxito.', 'success');
   };
 
   return (
@@ -36,38 +46,62 @@ export const ServiciosPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Tab switch */}
+        {/* Tab switch with Framer Motion layoutId */}
         <div className="flex items-center bg-[#FAF8F5] dark:bg-[#1A1A1A] p-1 rounded-xl border border-[#E5DFD3] dark:border-[#333333]">
-          <button
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             onClick={() => setActiveTab('citas')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`relative px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'citas'
-                ? 'bg-[#C9A55B] text-black font-bold shadow-xs'
+                ? 'text-black font-bold'
                 : 'text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white'
             }`}
           >
-            <Clock className="w-3.5 h-3.5" />
-            <span>Mis Citas ({bookings.length})</span>
-            {pendingBookings.length > 0 && (
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+            {activeTab === 'citas' && (
+              <motion.div
+                layoutId="serviciosSubTabIndicator"
+                className="absolute inset-0 bg-[#C9A55B] rounded-lg shadow-xs"
+                transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+              />
             )}
-          </button>
-          <button
+            <Clock className="w-3.5 h-3.5 relative z-10" />
+            <span className="relative z-10">Mis Citas ({bookings.length})</span>
+            {pendingBookings.length > 0 && (
+              <span className="relative z-10 w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+            )}
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             onClick={() => setActiveTab('catalogo')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`relative px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'catalogo'
-                ? 'bg-[#C9A55B] text-black font-bold shadow-xs'
+                ? 'text-black font-bold'
                 : 'text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white'
             }`}
           >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>Catálogo ({services.length})</span>
-          </button>
+            {activeTab === 'catalogo' && (
+              <motion.div
+                layoutId="serviciosSubTabIndicator"
+                className="absolute inset-0 bg-[#C9A55B] rounded-lg shadow-xs"
+                transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+              />
+            )}
+            <BookOpen className="w-3.5 h-3.5 relative z-10" />
+            <span className="relative z-10">Catálogo ({services.length})</span>
+          </motion.button>
         </div>
       </div>
 
-      {activeTab === 'citas' ? (
-        <div className="space-y-6">
+      <AnimatePresence mode="wait">
+        {activeTab === 'citas' ? (
+          <motion.div
+            key="tab-citas"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.22 }}
+            className="space-y-6"
+          >
           {/* SOLICITUDES PENDIENTES DE ACEPTACIÓN */}
           {pendingBookings.length > 0 && (
             <div className="space-y-3">
@@ -221,7 +255,7 @@ export const ServiciosPage: React.FC = () => {
                           <LuxuryButton
                             variant="gold"
                             size="sm"
-                            onClick={() => handleUpdateBookingState(booking.id, 'servicio_finalizado')}
+                            onClick={() => onMarkCompleted(booking)}
                           >
                             <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                             <span>Marcar Finalizado</span>
@@ -234,10 +268,17 @@ export const ServiciosPage: React.FC = () => {
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
       ) : (
         /* CATÁLOGO OFICIAL DE SERVICIOS */
-        <div className="space-y-4">
+        <motion.div
+          key="tab-catalogo"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.22 }}
+          className="space-y-4"
+        >
           <div className="flex justify-between items-center">
             <h2 className="text-sm font-bold text-[#1C1917] dark:text-white flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-[#C9A55B]" />
@@ -314,8 +355,16 @@ export const ServiciosPage: React.FC = () => {
               );
             })}
           </div>
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
+
+      {/* Celebration Modal when service is marked completed */}
+      <ServiceCompletionModal
+        isOpen={!!completedCelebrationBooking}
+        onClose={() => setCompletedCelebrationBooking(null)}
+        booking={completedCelebrationBooking}
+      />
     </div>
   );
 };

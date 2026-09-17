@@ -24,8 +24,7 @@ export const Header: React.FC<HeaderProps> = ({
   const portals = [
     { id: 'client' as PortalType, label: 'App Clientes', icon: User, badge: activeBookingCount > 0 },
     { id: 'therapist' as PortalType, label: 'App Terapeutas', icon: Sparkles },
-    // Only show admin if already in admin portal or if specifically logged in as admin
-    ...(isAdminSession || currentPortal === 'admin' ? [{ id: 'admin' as PortalType, label: 'Panel Admin', icon: Shield }] : []),
+    { id: 'admin' as PortalType, label: 'Panel Admin', icon: Shield },
     { id: 'website' as PortalType, label: 'essenyamexico.com', icon: Globe },
   ];
 

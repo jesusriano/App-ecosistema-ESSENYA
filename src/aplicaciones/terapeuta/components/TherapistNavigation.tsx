@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { Calendar, Layers, DollarSign, Star, User } from 'lucide-react';
 
 export type TherapistRoutePath = '/agenda' | '/servicios' | '/ganancias' | '/calificaciones' | '/perfil';
@@ -28,18 +29,27 @@ export const TherapistNavigation: React.FC<TherapistNavigationProps> = ({
           const isActive = currentRoute === item.path;
 
           return (
-            <button
+            <motion.button
               key={item.path}
+              whileTap={{ scale: 0.97 }}
               onClick={() => onNavigate(item.path)}
-              className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              className={`relative flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
                 isActive
-                  ? 'text-[#806020] dark:text-[#C9A55B] font-bold bg-[#C9A55B]/10 border border-[#C9A55B]/30'
+                  ? 'text-[#806020] dark:text-[#C9A55B] font-bold'
                   : 'text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white hover:bg-[#FAF8F5] dark:hover:bg-[#1A1A1A]'
               }`}
             >
-              <Icon className={`w-4 h-4 ${isActive ? 'text-[#C9A55B]' : ''}`} />
-              <span>{item.label}</span>
-            </button>
+              {/* Active Tab Animated Background Pill */}
+              {isActive && (
+                <motion.div
+                  layoutId="activeTherapistNavTab"
+                  className="absolute inset-0 bg-[#C9A55B]/15 border border-[#C9A55B]/40 rounded-xl shadow-xs"
+                  transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+                />
+              )}
+              <Icon className={`w-4 h-4 relative z-10 transition-colors ${isActive ? 'text-[#C9A55B]' : ''}`} />
+              <span className="relative z-10">{item.label}</span>
+            </motion.button>
           );
         })}
       </div>
