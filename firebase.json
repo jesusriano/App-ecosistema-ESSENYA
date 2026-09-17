@@ -8,6 +8,7 @@
     },
     "hub": {
       "port": 4401
-    }
+    },
+    "singleProjectMode": false
   }
 }

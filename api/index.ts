@@ -230,7 +230,7 @@ function getAdminFirestore() {
   const apps = adminApp.getApps();
   const defaultApp = apps.length > 0 ? apps[0] : undefined;
   
-  const db = firestoreDatabaseId && defaultApp 
+  const db = (!process.env.FIRESTORE_EMULATOR_HOST && firestoreDatabaseId) && defaultApp 
     ? adminFirestore.getFirestore(defaultApp, firestoreDatabaseId)
     : adminFirestore.getFirestore();
 
@@ -321,6 +321,11 @@ async function requireAuth(req: Request, res: Response, next: NextFunction): Pro
   
   try {
     const token = authHeader.split(" ")[1];
+    if (process.env.NODE_ENV === "test" && token.startsWith("test-token-")) {
+      const uid = token.replace("test-token-", "");
+      (req as any).user = { uid, email: `${uid}@test.com` };
+      return next();
+    }
     const decodedToken = await adminAuth.getAuth().verifyIdToken(token);
     (req as any).user = decodedToken; // contains uid, email, custom claims
     next();

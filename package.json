@@ -14,7 +14,8 @@
     "test:rules": "firebase emulators:exec \"node test-rules.js\" --only firestore",
     "test:api": "tsx tests/api.test.js",
     "test:security": "npm audit --omit=dev",
-    "verify:production": "npm ci && npm run typecheck && npm run test:rules && npm run test:api && npm run test:security && npm run build"
+    "verify:production": "npm ci && npm run typecheck && npm run test:rules && npm run test:api && npm run test:fraud && npm run test:security && npm run build",
+    "test:fraud": "firebase emulators:exec \"tsx tests/fraud.test.ts\" --only firestore"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
