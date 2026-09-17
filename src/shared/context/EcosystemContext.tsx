@@ -612,7 +612,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       const resolvedClientName = newBooking.clientName || client?.name || (firebaseUser?.displayName || 'Cliente VIP');
       const resolvedClientPhone = newBooking.clientPhone || client?.phone || '';
 
-      const response = await fetch('/api/bookings', {
+      const response = await fetch('/api/bookings/atomic', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -523,7 +523,9 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       painPoints: preferences.painPoints || '',
       arrivalInstructions: preferences.arrivalInstructions || '',
       createdAt: new Date().toISOString(),
-      invoiceId: `inv-${Math.floor(1000 + Math.random() * 9000)}`
+      invoiceId: `inv-${Math.floor(1000 + Math.random() * 9000)}`,
+      applyGiftCard: !!appliedGiftCard,
+      applyCourtesy: appliedPromo?.type === 'VIP15'
     };
 
     try {
@@ -538,21 +540,9 @@ export const ClientApp: React.FC<ClientAppProps> = ({
         );
       }
 
-      // Consume VIP15 courtesy benefit if applied (single-use)
-      if (appliedPromo?.type === 'VIP15') {
-        await markVipCourtesyAsUsed(client.id);
-      }
+      
 
-      // Deduct Gift Card balance if applied
-      if (appliedGiftCard && giftCardDeduction > 0) {
-        await applyGiftCardToBooking(
-          client.id,
-          appliedGiftCard.code,
-          giftCardDeduction,
-          newBk.code,
-          selectedService?.name || 'Masaje ESSENYA'
-        );
-      }
+      
 
       showToast(
         'Reserva Confirmada',

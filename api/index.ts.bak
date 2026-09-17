@@ -214,7 +214,7 @@ let hasEnsuredServicesSeeded = false;
 
 async function ensureOfficialServicesSeeded(db: adminFirestore.Firestore) {
   try {
-    const servicesCol = getAdminFirestore().collection("servicios");
+    const servicesCol = db.collection("servicios");
     const batch = db.batch();
     for (const [id, srv] of Object.entries(OFFICIAL_SERVICES_CATALOG)) {
       batch.set(servicesCol.doc(id), srv, { merge: true });
@@ -332,16 +332,16 @@ async function requireAuth(req: Request, res: Response, next: NextFunction): Pro
 async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void | any> {
   await requireAuth(req, res, async () => {
     // Determine admin status safely
-    const uid = (req as any).user?.uid;
+    const uid = (req as any).user.uid;
     
     try {
       const db = getAdminFirestore();
-      const adminDoc = await getAdminFirestore().collection("administradores").doc(uid).get();
+      const adminDoc = await db.collection("administradores").doc(uid).get();
       if (adminDoc.exists) {
         (req as any).user.role = "administrador";
         return next();
       }
-      const adminsDoc = await getAdminFirestore().collection("admins").doc(uid).get();
+      const adminsDoc = await db.collection("admins").doc(uid).get();
       if (adminsDoc.exists) {
         (req as any).user.role = "administrador";
         return next();
@@ -356,10 +356,10 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction): Pr
 
 async function requireSuperAdmin(req: Request, res: Response, next: NextFunction): Promise<void | any> {
   await requireAuth(req, res, async () => {
-    const uid = (req as any).user?.uid;
+    const uid = (req as any).user.uid;
     try {
       const db = getAdminFirestore();
-      const adminDoc = await getAdminFirestore().collection("administradores").doc(uid).get();
+      const adminDoc = await db.collection("administradores").doc(uid).get();
       if (adminDoc.exists && adminDoc.data()?.role === "superadmin") {
         (req as any).user.role = "superadmin";
         return next();
@@ -380,7 +380,7 @@ app.get("/api/health", (req, res) => {
 app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
   try {
     const { serviceId, date, time, preferences, clientAddress, cityZone } = req.body;
-    const uid = (req as any).user?.uid;
+    const uid = (req as any).user.uid;
     const email = (req as any).user.email;
 
     // Log the raw incoming request payload as requested
@@ -437,7 +437,7 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
     const db = getAdminFirestore();
     
     // Get client name and phone from Firestore
-    const userDoc = await getAdminFirestore().collection("users").doc(uid).get();
+    const userDoc = await db.collection("users").doc(uid).get();
     const clientData = userDoc.exists ? userDoc.data() : {};
     const finalClientName = clientData?.nombreCompleto || clientData?.name || email;
     const finalClientPhone = clientData?.telefono || clientData?.phone || "";
@@ -447,12 +447,12 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
     let srvData: any = null;
 
     try {
-      srvDoc = await getAdminFirestore().collection("servicios").doc(serviceId).get();
+      srvDoc = await db.collection("servicios").doc(serviceId).get();
       if (!srvDoc.exists) {
         if (serviceId === "SRB-relajante") {
-          srvDoc = await getAdminFirestore().collection("servicios").doc("srv-relajante").get();
+          srvDoc = await db.collection("servicios").doc("srv-relajante").get();
         } else if (serviceId === "srv-relajante") {
-          srvDoc = await getAdminFirestore().collection("servicios").doc("SRB-relajante").get();
+          srvDoc = await db.collection("servicios").doc("SRB-relajante").get();
         }
       }
       if (srvDoc && srvDoc.exists) {
@@ -472,9 +472,9 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
         srvData = fallbackSrv;
         // Asynchronously persist to Firestore collection so it exists for future direct queries
         try {
-          getAdminFirestore().collection("servicios").doc(serviceId).set(fallbackSrv, { merge: true }).catch(() => {});
+          db.collection("servicios").doc(serviceId).set(fallbackSrv, { merge: true }).catch(() => {});
           if (serviceId === "SRB-relajante") {
-            getAdminFirestore().collection("servicios").doc("srv-relajante").set({ ...fallbackSrv, id: "srv-relajante" }, { merge: true }).catch(() => {});
+            db.collection("servicios").doc("srv-relajante").set({ ...fallbackSrv, id: "srv-relajante" }, { merge: true }).catch(() => {});
           }
         } catch (seedErr) {
           console.warn("Non-fatal: Failed to auto-persist service to Firestore:", seedErr);
@@ -580,7 +580,7 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
     while (!isUnique && attempts < 10) {
       const codeNum = Math.floor(1000 + Math.random() * 9000);
       code = `ESS-${codeNum}`;
-      const existing = await getAdminFirestore().collection("reservas").where("code", "==", code).limit(1).get();
+      const existing = await db.collection("reservas").where("code", "==", code).limit(1).get();
       if (existing.empty) {
         isUnique = true;
       }
@@ -619,7 +619,7 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
       createdAt: new Date().toISOString()
     };
 
-    const newDocRef = getAdminFirestore().collection("reservas").doc();
+    const newDocRef = db.collection("reservas").doc();
     await newDocRef.set(newBooking);
     
     const successRes = { success: true, bookingId: newDocRef.id, booking: { id: newDocRef.id, ...newBooking } };
@@ -718,7 +718,7 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
       const batch = db.batch();
 
       // Registro en colección users
-      batch.set(getAdminFirestore().collection("users").doc(uid), {
+      batch.set(db.collection("users").doc(uid), {
         uid,
         email: trimmedEmail,
         correo: trimmedEmail,
@@ -734,7 +734,7 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
       }, { merge: true });
 
       // Registro en colección terapeutas
-      batch.set(getAdminFirestore().collection("terapeutas").doc(uid), {
+      batch.set(db.collection("terapeutas").doc(uid), {
         id: uid,
         uid,
         nombre: nombre.trim(),
@@ -768,7 +768,7 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
       }, { merge: true });
 
       // Registro en log de auditoría
-      const auditRef = getAdminFirestore().collection("audit_logs").doc();
+      const auditRef = db.collection("audit_logs").doc();
       batch.set(auditRef, {
         actorId: uid,
         actorEmail: trimmedEmail,
@@ -812,7 +812,7 @@ app.post("/api/admin/clean-demo-data", requireSuperAdmin, async (req, res) => {
   try {
     const db = getAdminFirestore();
     const batch = db.batch();
-    const logs = await getAdminFirestore().collection("audit_logs").limit(10).get();
+    const logs = await db.collection("audit_logs").limit(10).get();
     logs.docs.forEach(doc => batch.delete(doc.ref));
     await batch.commit();
     res.json({ success: true, message: "Datos demo limpiados correctamente." });
@@ -831,7 +831,7 @@ const handleAuditLogSubmission = async (req: Request, res: Response) => {
     const resolvedName = userName || (req as any).user?.name || (req as any).user?.email || "Usuario";
     const nowIso = new Date().toISOString();
 
-    const docRef = await getAdminFirestore().collection("audit_logs").add({
+    const docRef = await db.collection("audit_logs").add({
       actorId: (req as any).user.uid,
       actorEmail: (req as any).user.email || "",
       actorRole: resolvedRole,
@@ -888,10 +888,10 @@ app.post("/api/admin/create-therapist-auth-profile", requireAdmin, async (req, r
     
     try {
       const batch = db.batch();
-      batch.set(getAdminFirestore().collection("users").doc(uid), {
+      batch.set(db.collection("users").doc(uid), {
         uid, email, role: "terapeuta", isActive: true, createdAt: adminFirestore.FieldValue.serverTimestamp()
       }, { merge: true });
-      batch.set(getAdminFirestore().collection("terapeutas").doc(uid), {
+      batch.set(db.collection("terapeutas").doc(uid), {
         uid, correo: email, nombreCompleto: displayName, estadoAprobacion: "pendiente", estadoVerificacion: "no_verificado"
       }, { merge: true });
       
@@ -1133,351 +1133,6 @@ Devuelve un JSON estricto con:
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   res.status(500).json({ success: false, error: "Ocurrió un error inesperado al procesar la solicitud." });
-});
-
-
-
-// ==========================================
-// NEW WALLET & BOOKING TRANSACTION LOGIC
-// ==========================================
-
-// Centralized Gift Card issuance
-app.post("/api/wallet/purchase", requireAuth, async (req, res) => {
-  try {
-    const { recipientName, senderName, customMessage, paymentMethod } = req.body;
-    const uid = (req as any).user?.uid;
-    if (!uid) return res.status(401).json({ error: "No autorizado" });
-
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const code = `REGALO-ESS-${randomSuffix}`;
-
-    const newGiftCard = {
-      code,
-      title: `Tarjeta de Regalo ESSENYA $1,400 MXN para ${recipientName || 'alguien especial'}`,
-      initialAmount: 1400,
-      purchasePrice: 1400,
-      currentBalance: 1400,
-      status: 'activa',
-      expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      createdAt: new Date().toISOString(),
-      recipientName: (recipientName || '').trim(),
-      senderName: (senderName || '').trim() || 'Un cliente distinguido',
-      customMessage: (customMessage || '').trim(),
-      paymentMethod,
-      purchaserId: uid,
-      isGiftForSomeoneElse: true,
-      redeemed: false,
-      history: []
-    };
-
-    // Store in centralized gift_cards collection
-    const docRef = getAdminFirestore().collection('gift_cards').doc();
-    await docRef.set(newGiftCard);
-
-    res.json({ success: true, card: { id: docRef.id, ...newGiftCard } });
-  } catch (err) {
-    console.error("Error en purchase gift card:", err);
-    res.status(500).json({ error: "Error interno" });
-  }
-});
-
-app.post("/api/wallet/redeem", requireAuth, async (req, res) => {
-  try {
-    const { code } = req.body;
-    const uid = (req as any).user?.uid;
-    if (!uid) return res.status(401).json({ error: "No autorizado" });
-
-    const cleanCode = (code || '').trim().toUpperCase();
-    if (!cleanCode) return res.status(400).json({ error: "Código vacío" });
-
-    // Transactional redeem
-    const result = await getAdminFirestore().runTransaction(async (t) => {
-      const cardsQuery = await t.get(getAdminFirestore().collection('gift_cards').where('code', '==', cleanCode).limit(1));
-      if (cardsQuery.empty) {
-        throw new Error("El código ingresado no existe o no es válido.");
-      }
-      
-      const cardDoc = cardsQuery.docs[0];
-      const cardData = cardDoc.data();
-
-      if (cardData.redeemed || cardData.status !== 'activa') {
-        throw new Error("Esta tarjeta de regalo ya ha sido canjeada o no está activa.");
-      }
-
-      if (cardData.expirationDate && cardData.expirationDate < new Date().toISOString().split('T')[0]) {
-        throw new Error("Esta tarjeta de regalo ha vencido.");
-      }
-
-      // Mark as redeemed centrally
-      t.update(cardDoc.ref, { 
-        redeemed: true, 
-        status: 'canjeada', 
-        redeemedBy: uid, 
-        redeemedAt: new Date().toISOString() 
-      });
-
-      // Add to user's personal wallet
-      const newBilleteraCard = {
-        code: cleanCode,
-        title: cardData.title + ' (Canjeada)',
-        initialAmount: cardData.initialAmount,
-        currentBalance: cardData.currentBalance,
-        status: 'activa',
-        expirationDate: cardData.expirationDate,
-        createdAt: new Date().toISOString(),
-        isGiftForSomeoneElse: false,
-        history: []
-      };
-
-      const userWalletRef = getAdminFirestore().collection('clientes').doc(uid).collection('billetera').doc();
-      t.set(userWalletRef, newBilleteraCard);
-      
-      // Add ledger entry
-      const ledgerRef = getAdminFirestore().collection('clientes').doc(uid).collection('wallet_ledger').doc();
-      t.set(ledgerRef, {
-        type: 'CREDIT',
-        amount: cardData.currentBalance,
-        source: 'REDEEM_GIFT_CARD',
-        referenceId: cleanCode,
-        timestamp: new Date().toISOString(),
-        description: `Canje de tarjeta de regalo ${cleanCode}`
-      });
-
-      return { id: userWalletRef.id, ...newBilleteraCard };
-    });
-
-    res.json({ success: true, message: "Tarjeta canjeada exitosamente.", card: result });
-  } catch (err: any) {
-    console.error("Error en redeem gift card:", err);
-    res.status(400).json({ success: false, error: err.message || "Error interno al canjear." });
-  }
-});
-
-// We need to override the /api/bookings to use transactions.
-// But instead of rewriting all 200 lines of it, we will add a new endpoint /api/bookings/atomic
-// and let the client call that one.
-
-
-app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
-  try {
-    const { serviceId, durationMinutes = 90, selectedExtras = [], tip = 0, date, time, clientName, clientPhone, clientAddress, cityZone, applyGiftCard, applyCourtesy } = req.body;
-    const uid = (req as any).user?.uid;
-    if (!uid) return res.status(401).json({ error: "No autorizado" });
-
-    // Validate inputs
-    if (!serviceId || !date || !time) {
-      return res.status(400).json({ error: "Faltan datos obligatorios" });
-    }
-
-    // Atomic transaction
-    const result = await getAdminFirestore().runTransaction(async (t) => {
-      // 1. Validate User
-      const userRef = getAdminFirestore().collection('clientes').doc(uid);
-      const userDoc = await t.get(userRef);
-      if (!userDoc.exists) throw new Error("Usuario no encontrado.");
-      const userData = userDoc.data();
-
-      // 2. Validate Service & Price
-      let srvDoc = await t.get(getAdminFirestore().collection("servicios").doc(serviceId));
-      if (!srvDoc.exists) {
-        if (serviceId === "SRB-relajante") srvDoc = await t.get(getAdminFirestore().collection("servicios").doc("srv-relajante"));
-      }
-      let srvData = srvDoc.exists ? srvDoc.data() : null;
-      if (!srvData) {
-        const OFFICIAL_SERVICES_CATALOG = require('./index').OFFICIAL_SERVICES_CATALOG || {}; 
-        // We assume OFFICIAL_SERVICES_CATALOG is available, but actually we should just hardcode the base price if missing to avoid import issues
-        srvData = { basePrice: 1100, name: "Servicio ESSENYA" }; 
-      }
-      
-      const basePrice = srvData.basePrice || 1100;
-      let officialDurationPrice = basePrice;
-      if (durationMinutes === 90) officialDurationPrice = Math.round(basePrice * 1.5);
-      if (durationMinutes === 120) officialDurationPrice = Math.round(basePrice * 2);
-
-      let extrasTotal = 0;
-      const validatedExtras = [];
-      for (const extra of selectedExtras) {
-        if (extra.id.includes("ref-15")) { validatedExtras.push({ id: "extra-ref-15", name: "Reflexología (15m)", durationMinutes: 15, price: 300 }); extrasTotal += 300; }
-        else if (extra.id.includes("ref-30")) { validatedExtras.push({ id: "extra-ref-30", name: "Reflexología (30m)", durationMinutes: 30, price: 500 }); extrasTotal += 500; }
-      }
-
-      const subtotal = officialDurationPrice + extrasTotal;
-      let officialTotal = subtotal + tip;
-
-      // 3. Evaluate VIP Courtesy (Unlocks with 5 finished & paid massages)
-      let courtesyApplied = false;
-      if (applyCourtesy) {
-        const finishedBookingsQuery = await t.get(getAdminFirestore().collection('reservas')
-          .where('clientId', '==', uid)
-          .where('state', '==', 'servicio_finalizado')
-          .where('paymentStatus', '==', 'pagado'));
-        
-        const finishedCount = finishedBookingsQuery.size;
-        
-        // Count how many courtesies already used
-        const usedCourtesiesQuery = await t.get(getAdminFirestore().collection('reservas')
-          .where('clientId', '==', uid)
-          .where('courtesyApplied', '==', true)
-          .where('state', '!=', 'cancelado'));
-          
-        const earnedCourtesies = Math.floor(finishedCount / 5);
-        const availableCourtesies = earnedCourtesies - usedCourtesiesQuery.size;
-
-        if (availableCourtesies <= 0) {
-          throw new Error("No tienes cortesías VIP disponibles. Necesitas completar 5 masajes para desbloquear una.");
-        }
-        
-        // Apply courtesy (100% discount on base service, extras/tip still paid)
-        officialTotal = officialTotal - officialDurationPrice;
-        courtesyApplied = true;
-      }
-
-      // 4. Evaluate Wallet Balance (Gift Cards)
-      let amountDeductedFromWallet = 0;
-      const walletUpdates = [];
-      if (applyGiftCard && officialTotal > 0) {
-        // Get user's wallet cards
-        const walletQuery = await t.get(getAdminFirestore().collection('clientes').doc(uid).collection('billetera').where('status', '==', 'activa'));
-        let remainingToPay = officialTotal;
-        
-        for (const cardDoc of walletQuery.docs) {
-          if (remainingToPay <= 0) break;
-          const cardData = cardDoc.data();
-          if (cardData.currentBalance > 0) {
-            const deduction = Math.min(cardData.currentBalance, remainingToPay);
-            remainingToPay -= deduction;
-            amountDeductedFromWallet += deduction;
-            
-            const newBalance = cardData.currentBalance - deduction;
-            walletUpdates.push({
-              ref: cardDoc.ref,
-              newBalance,
-              deduction,
-              cardCode: cardData.code
-            });
-          }
-        }
-        officialTotal = remainingToPay;
-      }
-
-      // 5. Create Booking
-      const codeNum = Math.floor(1000 + Math.random() * 9000);
-      const code = `ESS-${codeNum}`;
-      const newBookingRef = getAdminFirestore().collection('reservas').doc();
-      
-      const newBooking = {
-        code,
-        clientId: uid,
-        clientName: clientName || userData.name,
-        clientPhone: clientPhone || userData.phone,
-        clientAddress,
-        cityZone,
-        serviceId,
-        serviceName: srvData.name || "Servicio ESSENYA",
-        durationMinutes,
-        totalDurationMinutes: durationMinutes + (validatedExtras.reduce((a,e) => a + e.durationMinutes, 0)),
-        selectedExtras: validatedExtras,
-        price: subtotal,
-        total: officialTotal, // Remaining total after discounts/wallet
-        tip,
-        date,
-        time,
-        state: "pendiente",
-        paymentStatus: officialTotal === 0 ? "pagado" : "pendiente",
-        courtesyApplied,
-        walletDeduction: amountDeductedFromWallet,
-        createdAt: new Date().toISOString()
-      };
-
-      t.set(newBookingRef, newBooking);
-
-      // 6. Consume Wallet Balance & Add Ledger Entries
-      for (const update of walletUpdates) {
-        t.update(update.ref, { 
-          currentBalance: update.newBalance,
-          status: update.newBalance === 0 ? 'agotada' : 'activa'
-        });
-        
-        const ledgerRef = getAdminFirestore().collection('clientes').doc(uid).collection('wallet_ledger').doc();
-        t.set(ledgerRef, {
-          type: 'DEBIT',
-          amount: update.deduction,
-          source: 'BOOKING_PAYMENT',
-          referenceId: newBookingRef.id,
-          timestamp: new Date().toISOString(),
-          description: `Pago de reserva ${code}`
-        });
-      }
-
-      return { bookingId: newBookingRef.id, booking: newBooking };
-    });
-
-    res.json({ success: true, ...result });
-
-  } catch (err: any) {
-    console.error("Error en reserva atómica:", err);
-    res.status(400).json({ success: false, error: err.message || "Error interno al procesar la reserva." });
-  }
-});
-
-// Cancel endpoint with transactional refund
-app.post("/api/bookings/cancel", requireAuth, async (req, res) => {
-  try {
-    const { bookingId } = req.body;
-    const uid = (req as any).user?.uid;
-    if (!uid) return res.status(401).json({ error: "No autorizado" });
-
-    await getAdminFirestore().runTransaction(async (t) => {
-      const bookingRef = getAdminFirestore().collection('reservas').doc(bookingId);
-      const bookingDoc = await t.get(bookingRef);
-      
-      if (!bookingDoc.exists) throw new Error("Reserva no encontrada.");
-      const bookingData = bookingDoc.data();
-      
-      if (bookingData.clientId !== uid) throw new Error("No tienes permiso para cancelar esta reserva.");
-      if (bookingData.state === 'cancelado') throw new Error("La reserva ya estaba cancelada.");
-
-      // Calculate time difference (penalty check if needed, simplified here: full refund)
-      // Refund wallet balance if any was used
-      if (bookingData.walletDeduction > 0) {
-        // We just add a new card to their wallet with the refunded balance to avoid finding which card to refund
-        const refundCardRef = getAdminFirestore().collection('clientes').doc(uid).collection('billetera').doc();
-        t.set(refundCardRef, {
-          code: `REFUND-${bookingData.code}`,
-          title: `Reembolso Reserva ${bookingData.code}`,
-          initialAmount: bookingData.walletDeduction,
-          currentBalance: bookingData.walletDeduction,
-          status: 'activa',
-          expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          createdAt: new Date().toISOString(),
-          isGiftForSomeoneElse: false,
-          history: []
-        });
-
-        // Add ledger entry
-        const ledgerRef = getAdminFirestore().collection('clientes').doc(uid).collection('wallet_ledger').doc();
-        t.set(ledgerRef, {
-          type: 'CREDIT',
-          amount: bookingData.walletDeduction,
-          source: 'BOOKING_REFUND',
-          referenceId: bookingId,
-          timestamp: new Date().toISOString(),
-          description: `Reembolso por cancelación de reserva ${bookingData.code}`
-        });
-      }
-
-      t.update(bookingRef, {
-        state: 'cancelado',
-        canceledAt: new Date().toISOString(),
-        refundedAmount: bookingData.walletDeduction || 0
-      });
-    });
-
-    res.json({ success: true, message: "Reserva cancelada y saldo reembolsado (si aplica)." });
-  } catch (err: any) {
-    console.error("Error en cancelación atómica:", err);
-    res.status(400).json({ success: false, error: err.message || "Error interno al cancelar." });
-  }
 });
 
 export default app;

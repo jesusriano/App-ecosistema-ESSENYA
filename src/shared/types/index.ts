@@ -123,6 +123,8 @@ export interface Booking {
   liveLng?: number;
   paymentMethod: 'Tarjeta de Crédito / Débito' | 'Tarjeta Crédito VIP' | 'Transferencia Interbancaria (SPEI)' | 'Transferencia Bank VIP' | 'Efectivo (Pago al Recibir)' | 'Tarjeta de Regalo (Saldo Billetera)';
   paymentStatus: 'pagado' | 'pendiente' | 'reembolsado' | 'rechazado';
+  applyGiftCard?: boolean;
+  applyCourtesy?: boolean;
   paid?: boolean;
   updatedAt?: string;
   acceptedAt?: string;

@@ -1,4 +1,5 @@
-import { auth } from '../../../lib/firebase';
+const fs = require('fs');
+const content = `import { auth } from '../../../lib/firebase';
 import { db } from '../../../lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 
@@ -48,7 +49,7 @@ export interface ValidationResult {
 async function getAuthHeaders() {
   const headers = { 'Content-Type': 'application/json' };
   const token = await auth.currentUser?.getIdToken();
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (token) headers['Authorization'] = \`Bearer \${token}\`;
   return headers;
 }
 
@@ -108,3 +109,6 @@ export async function redeemExternalGiftCard(clientId: string, code: string): Pr
   }
   return { valid: true, message: data.message, card: data.card };
 }
+`;
+fs.writeFileSync('src/aplicaciones/cliente/services/billeteraService.ts', content);
+console.log("Patched billeteraService.ts");

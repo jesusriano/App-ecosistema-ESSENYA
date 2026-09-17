@@ -116,11 +116,12 @@ async function main() {
 
   try {
     await assertFails(clientDb.collection('reservas').doc('nueva_reserva_valida').set({
+      id: 'reserva_para_aceptar',
       clientId: 'cliente123',
+      serviceId: 'srv-123',
       state: 'pendiente',
-      price: 350,
       total: 350,
-      paymentStatus: 'pendiente',
+      createdAt: new Date().toISOString(),
       createdAt: new Date().toISOString()
     }));
     console.log("✅ TEST: Creación directa de reserva por cliente (Blocked as expected)");

@@ -115,11 +115,6 @@ service cloud.firestore {
     // 4. PUBLIC CATALOGS (Read: Public, Write: Admin)
     // ========================================================
     
-        match /gift_cards/{cardId} {
-      allow read: if isAdmin();
-      allow write: if false;
-    }
-
     match /servicios/{servicioId} {
       allow read: if true;
       allow write: if isAdmin();
@@ -169,13 +164,7 @@ service cloud.firestore {
       allow delete: if isAdmin();
 
       match /billetera/{cardId} {
-        allow read: if (isOwner(clienteId) || isAdmin()) && isValidId(cardId);
-        allow write: if false;
-      }
-
-      match /wallet_ledger/{ledgerId} {
-        allow read: if (isOwner(clienteId) || isAdmin()) && isValidId(ledgerId);
-        allow write: if false;
+        allow read, write: if (isOwner(clienteId) || isAdmin()) && isValidId(cardId);
       }
     }
     
@@ -243,22 +232,22 @@ service cloud.firestore {
         resource.data.therapistId == request.auth.uid || 
         isAdmin()
       );
-      allow create: if isAdmin();
-      allow update: if isSignedIn() && isValidId(reservaId) && (
+      allow create: if isSignedIn() && isValidId(reservaId) && isValidBooking(incoming()) && (
+        incoming().clientId == request.auth.uid || isAdmin()
+      );
+      allow update: if isSignedIn() && isValidId(reservaId) && isValidBooking(incoming()) && (
         isAdmin() ||
         (!isTerminalState(existing().state) && (
-          isValidBooking(incoming()) &&
           // Action: Client Update (Rating/Comment or cancel)
           (isOwner(existing().clientId) && incoming().total == existing().total && 
            incoming().diff(existing()).affectedKeys().hasOnly(['state', 'rating', 'reviewComment', 'reviewComment', 'reviewedAt', 'updatedAt']) &&
            isValidStateTransition(existing().state, incoming().state)) ||
-          isValidBooking(incoming()) &&
           // Action: Therapist Update (Location or status change)
           (isOwner(existing().therapistId) && incoming().total == existing().total && 
            incoming().diff(existing()).affectedKeys().hasOnly(['state', 'liveLat', 'liveLng', 'updatedAt']) &&
            isValidStateTransition(existing().state, incoming().state)) ||
           // Action: Unassigned Booking Acceptance
-          (existing().state == 'pendiente' && get(/databases/$(database)/documents/terapeutas/$(request.auth.uid)).data.estado == 'activo' &&
+          (existing().state == 'pendiente' && !('therapistId' in existing()) &&
            incoming().therapistId == request.auth.uid &&
            incoming().diff(existing()).affectedKeys().hasOnly(['state', 'therapistId', 'therapistName', 'therapistPhoto', 'therapistPhone', 'acceptedAt', 'updatedAt']))
         ))
