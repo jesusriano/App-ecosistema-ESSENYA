@@ -81,6 +81,7 @@ export interface ClientUser {
   specialNotes?: string;
   vipPreferences?: string;
   registeredAddresses?: string[];
+  courtesyUsed?: boolean;
 }
 
 export interface ServicePreference {

@@ -22,15 +22,7 @@ export const DeveloperDashboard: React.FC = () => {
   ];
 
   const clearAppCache = (appName: string) => {
-    const prefixes: Record<string, string[]> = {
-      'Portal Cliente': ['essenya_auth_cliente', 'essenya_bookings_cache', 'essenya_client_photo'],
-      'Portal Terapeuta': ['essenya_auth_terapeuta', 'essenya_sync_queue', 'essenya_therapist_audit_logs'],
-      'Panel Administrador': ['essenya_auth_administrador', 'essenya_auto_cleanup_done']
-    };
-
-    const keys = prefixes[appName] || [];
-    keys.forEach(k => localStorage.removeItem(k));
-    showToast(`Caché de ${appName} limpiado correctamente.`);
+    showToast(`Las cachés de ${appName} están sincronizadas con Firestore.`);
   };
 
   return (
@@ -75,12 +67,9 @@ export const DeveloperDashboard: React.FC = () => {
             </div>
 
             <div className="pt-2 flex gap-2">
-              <button 
-                onClick={() => clearAppCache(app.name)}
-                className="flex-1 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-500 text-[10px] font-bold rounded-lg transition-all flex items-center justify-center gap-1.5"
-              >
-                <Trash2 className="w-3 h-3" /> Purge
-              </button>
+              <div className="flex-1 px-3 py-1.5 bg-[#C9A55B]/10 border border-[#C9A55B]/20 text-[#C9A55B] text-[10px] font-bold rounded-lg flex items-center justify-center gap-1.5 opacity-50">
+                <Shield className="w-3 h-3" /> Secure State
+              </div>
             </div>
           </div>
         ))}
@@ -158,12 +147,10 @@ export const DeveloperDashboard: React.FC = () => {
                 size="sm"
                 fullWidth
                 onClick={() => {
-                  localStorage.clear();
-                  showToast('LocalStorage Limpio.');
-                  window.location.reload();
+                  showToast('El estado del sistema se sincroniza automáticamente desde Firestore.');
                 }}
               >
-                <RefreshCw className="w-4 h-4 mr-2" /> Reset App State
+                <Shield className="w-4 h-4 mr-2" /> Verified State
               </LuxuryButton>
             </div>
           </div>

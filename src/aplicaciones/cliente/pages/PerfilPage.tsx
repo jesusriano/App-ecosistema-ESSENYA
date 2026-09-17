@@ -32,10 +32,10 @@ export const PerfilPage: React.FC = () => {
   const displayPhone = authUser?.telefono || client?.phone || '+52 55 1234 5678';
 
   const [clientPhoto, setClientPhoto] = useState<string>(() => {
-    return localStorage.getItem('essenya_client_photo') || client?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
+    return client?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
   });
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -50,12 +50,22 @@ export const PerfilPage: React.FC = () => {
     }
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const dataUrl = event.target?.result as string;
-      if (dataUrl) {
-        setClientPhoto(dataUrl);
-        localStorage.setItem('essenya_client_photo', dataUrl);
-        showToast('Foto de Perfil Actualizada', 'Tu fotografía de socio VIP se ha guardado exitosamente.', 'success');
+      if (dataUrl && client?.id) {
+        try {
+          setClientPhoto(dataUrl);
+          // Persist to Firestore directly (100% Secure)
+          const { doc, updateDoc } = await import('firebase/firestore');
+          const { db } = await import('../../../lib/firebase');
+          const clientRef = doc(db, 'clientes', client.id);
+          await updateDoc(clientRef, { photo: dataUrl });
+          
+          showToast('Foto de Perfil Actualizada', 'Tu fotografía de socio VIP se ha guardado exitosamente en el servidor.', 'success');
+        } catch (error) {
+          console.error('Error updating photo in Firestore:', error);
+          showToast('Error al guardar foto', 'No se pudo guardar la foto en el servidor.', 'error');
+        }
       }
     };
     reader.readAsDataURL(file);

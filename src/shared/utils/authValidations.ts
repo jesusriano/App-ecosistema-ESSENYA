@@ -78,7 +78,15 @@ export const isTransientNetworkError = (error: any): boolean => {
 };
 
 export const getLockoutKey = (portal: string, email: string): string => {
-  return `essenya_lockout_${portal}_${email.trim().toLowerCase()}`;
+  const normalized = email.trim().toLowerCase();
+  // Simple non-reversible hash to avoid plain-text PII in localStorage keys
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i++) {
+    const char = normalized.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return `essenya_lockout_${portal}_${Math.abs(hash)}`;
 };
 
 export const getLockoutInfo = (portal: string, email: string) => {

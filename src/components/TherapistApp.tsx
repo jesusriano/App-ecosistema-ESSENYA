@@ -319,7 +319,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
       {!isOnline && (
         <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2.5 text-center text-xs text-amber-700 dark:text-amber-400 font-semibold flex items-center justify-center gap-2 shadow-xs">
           <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500 animate-pulse" />
-          <span>Modo Sin Conexión Activo: Tu agenda y servicios programados se muestran desde la caché local segura de localStorage.</span>
+          <span>Modo Sin Conexión Activo: Tu agenda y servicios programados se sincronizarán automáticamente al recuperar la conexión.</span>
         </div>
       )}
 

@@ -116,10 +116,19 @@ export interface VipCourtesyStatus {
   discountPercent: number;
 }
 
-const VIP_COURTESY_STORAGE_KEY = 'essenya_vip_courtesy_used';
-
-export function getVipCourtesyStatus(completedMassagesCount: number): VipCourtesyStatus {
-  const isUsed = localStorage.getItem(VIP_COURTESY_STORAGE_KEY) === 'true';
+export async function getVipCourtesyStatus(clientId: string, completedMassagesCount: number): Promise<VipCourtesyStatus> {
+  let isUsed = false;
+  if (clientId) {
+    try {
+      const clientSnap = await getDoc(doc(db, 'clientes', clientId));
+      if (clientSnap.exists()) {
+        isUsed = clientSnap.data().courtesyUsed === true;
+      }
+    } catch (e) {
+      console.error('Error fetching courtesy status from Firestore:', e);
+    }
+  }
+  
   const unlocked = completedMassagesCount >= 5;
   const massagesNeeded = Math.max(0, 5 - completedMassagesCount);
   return {
@@ -132,8 +141,14 @@ export function getVipCourtesyStatus(completedMassagesCount: number): VipCourtes
   };
 }
 
-export function markVipCourtesyAsUsed(): void {
-  localStorage.setItem(VIP_COURTESY_STORAGE_KEY, 'true');
+export async function markVipCourtesyAsUsed(clientId: string): Promise<void> {
+  if (!clientId) return;
+  try {
+    const clientRef = doc(db, 'clientes', clientId);
+    await updateDoc(clientRef, { courtesyUsed: true });
+  } catch (e) {
+    console.error('Error marking courtesy as used in Firestore:', e);
+  }
 }
 
 export interface PromoValidationResult {

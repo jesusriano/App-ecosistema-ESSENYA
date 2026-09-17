@@ -61,7 +61,9 @@ export const TerapeutasPage: React.FC = () => {
     changeTherapistStatus, 
     resetTherapistPassword, 
     deleteTherapist, 
-    reviewDocument 
+    reviewDocument,
+    loadSensitiveInfo,
+    sensitiveInfo
   } = useTherapistContext();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -519,14 +521,31 @@ export const TerapeutasPage: React.FC = () => {
                   {/* Special Box for Pending Therapists */}
                   {t.estado === 'pendiente' && (
                     <div className="bg-[var(--bg-subcard)] p-3 rounded-xl border border-[#C9A55B]/30 space-y-2 text-xs">
-                      <p className="font-bold text-[#C9A55B] flex items-center gap-1">
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>Expediente de Acreditación Requerido</span>
-                      </p>
+                      <div className="flex justify-between items-center">
+                        <p className="font-bold text-[#C9A55B] flex items-center gap-1">
+                          <ShieldCheck className="w-4 h-4" />
+                          <span>Expediente de Acreditación</span>
+                        </p>
+                        {!sensitiveInfo[t.id] && (
+                          <button 
+                            onClick={() => loadSensitiveInfo(t.id)}
+                            className="text-[10px] text-[#C9A55B] underline hover:text-[#C9A55B]/80 font-bold cursor-pointer"
+                          >
+                            Revelar Datos
+                          </button>
+                        )}
+                      </div>
+                      
                       <div className="text-[11px] text-[var(--text-primary)] space-y-1 font-mono">
-                        <p><strong>CURP:</strong> {t.curp || 'No registrado'}</p>
-                        <p><strong>INE / Folio:</strong> {t.ineNumber || 'No registrado'}</p>
-                        <p><strong>CLABE:</strong> {t.cuentaBancariaCLABE || 'No registrado'}</p>
+                        {sensitiveInfo[t.id] ? (
+                          <>
+                            <p><strong>CURP:</strong> {sensitiveInfo[t.id].curp || 'No registrado'}</p>
+                            <p><strong>INE / Folio:</strong> {sensitiveInfo[t.id].ineNumber || 'No registrado'}</p>
+                            <p><strong>CLABE:</strong> {sensitiveInfo[t.id].cuentaBancariaCLABE || 'No registrado'}</p>
+                          </>
+                        ) : (
+                          <p className="text-[var(--text-muted)] italic">Datos protegidos. Haz clic en "Revelar" para consultar.</p>
+                        )}
                       </div>
                     </div>
                   )}

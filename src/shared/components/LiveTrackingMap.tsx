@@ -2,6 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { Navigation, MapPin, Key, Compass, ShieldCheck, Car, Clock, CheckCircle2, Activity, LocateFixed } from 'lucide-react';
 
+import { useEcosystem } from '../context/EcosystemContext';
+
 interface LiveTrackingMapProps {
   clientAddress: string;
   cityZone: string;
@@ -14,24 +16,8 @@ interface LiveTrackingMapProps {
   clientLat?: number;
   clientLng?: number;
   isTherapistView?: boolean;
+  onRouteCalculated?: (info: { distance: string; duration: string }) => void;
 }
-
-const getEffectiveApiKey = (): string => {
-  if (typeof window !== 'undefined') {
-    const localKey = localStorage.getItem('essenya_gmaps_key');
-    if (localKey && localKey.trim().length > 10) {
-      return localKey.trim();
-    }
-    
-    // Use environment variable if available
-    const envKey = (process.env as any).GOOGLE_MAPS_PLATFORM_KEY;
-    if (envKey && envKey.trim().length > 10) {
-      return envKey.trim();
-    }
-  }
-
-  return '';
-};
 
 // Elegant Dark Gold Theme Map Styles
 const darkGoldMapStyle = [
@@ -485,10 +471,19 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
   therapistLng,
   clientLat,
   clientLng,
-  isTherapistView
+  isTherapistView,
+  onRouteCalculated
 }) => {
-  const [activeApiKey, setActiveApiKey] = useState<string>(() => getEffectiveApiKey());
+  const { systemConfig } = useEcosystem();
+  const [activeApiKey, setActiveApiKey] = useState<string>('');
   const [inputKey, setInputKey] = useState<string>('');
+
+  useEffect(() => {
+    if (systemConfig.googleMapsKey) {
+      setActiveApiKey(systemConfig.googleMapsKey);
+    }
+  }, [systemConfig.googleMapsKey]);
+
   const [mapError, setMapError] = useState<string | null>(null);
   const [useVectorMode, setUseVectorMode] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -559,18 +554,6 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
   }, []);
 
   const hasValidKey = Boolean(activeApiKey) && activeApiKey.length > 10;
-
-  const handleSaveKey = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (inputKey.trim().length > 10) {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('essenya_gmaps_key', inputKey.trim());
-      }
-      setActiveApiKey(inputKey.trim());
-      setMapError(null);
-      setUseVectorMode(false);
-    }
-  };
 
   if (bookingState === 'aceptada' && !isTherapistView) {
     return (
@@ -729,7 +712,10 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
                   therapistLng={therapistLng}
                   clientLat={clientLat}
                   clientLng={clientLng}
-                  onRouteCalculated={(info) => setRouteInfo(info)}
+                  onRouteCalculated={(info) => {
+                    setRouteInfo(info);
+                    if (onRouteCalculated) onRouteCalculated(info);
+                  }}
                 />
               </Map>
 

@@ -2,6 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { Navigation, MapPin, ShieldCheck, Car, Clock, Lock } from 'lucide-react';
 
+import { useEcosystem } from '../../../shared/context/EcosystemContext';
+
 interface ReservasMapProps {
   clientAddress: string;
   cityZone: string;
@@ -10,23 +12,6 @@ interface ReservasMapProps {
   bookingState: string;
 }
 
-const getEffectiveApiKey = (): string => {
-  if (typeof window !== 'undefined') {
-    const localKey = localStorage.getItem('essenya_gmaps_key');
-    if (localKey && localKey.trim().length > 10) {
-      return localKey.trim();
-    }
-
-    // Use environment variable if available
-    const envKey = (process.env as any).GOOGLE_MAPS_PLATFORM_KEY;
-    if (envKey && envKey.trim().length > 10) {
-      return envKey.trim();
-    }
-  }
-  return '';
-};
-
-// Elegant Dark Gold Theme Map Styles
 const darkGoldMapStyle = [
   { elementType: "geometry", stylers: [{ color: "#181818" }] },
   { elementType: "labels.text.stroke", stylers: [{ color: "#181818" }] },
@@ -178,8 +163,15 @@ export const ReservasMap: React.FC<ReservasMapProps> = ({
   therapistPhoto,
   bookingState,
 }) => {
-  const [apiKey] = useState<string>(() => getEffectiveApiKey());
+  const { systemConfig } = useEcosystem();
+  const [apiKey, setApiKey] = useState<string>('');
   const [mapError, setMapError] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (systemConfig.googleMapsKey) {
+      setApiKey(systemConfig.googleMapsKey);
+    }
+  }, [systemConfig.googleMapsKey]);
 
   useEffect(() => {
     const prevAuthFailure = (window as any).gm_authFailure;

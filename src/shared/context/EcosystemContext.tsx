@@ -66,9 +66,14 @@ interface EcosystemContextType {
   handleUpdateLiveLocation: (bookingId: string, lat: number, lng: number) => Promise<void>;
   handleResolvePanicAlert: (alertId: string, adminName?: string) => Promise<void>;
   handleAttendPanicAlert: (alertId: string, adminName?: string) => Promise<void>;
+  handleUpdateSystemConfig: (updates: Partial<{ googleMapsKey: string, autoCleanupDone: boolean }>) => Promise<void>;
   completedServicesCount: number;
   activeBookingCount: number;
   pendingSyncCount: number;
+  systemConfig: {
+    googleMapsKey?: string;
+    autoCleanupDone?: boolean;
+  };
 }
 
 const EcosystemContext = createContext<EcosystemContextType | undefined>(undefined);
@@ -79,6 +84,11 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
   const { getUser, firebaseUser, sessions } = useAuth();
   const authClient = getUser('cliente');
   const authTherapist = getUser('terapeuta');
+
+  const [systemConfig, setSystemConfig] = useState<{
+    googleMapsKey?: string;
+    autoCleanupDone?: boolean;
+  }>({});
 
   // Shared Ecosystem Connected State
   const [services, setServices] = useState<ServiceItem[]>(INITIAL_SERVICES);
@@ -132,22 +142,12 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [client, setClient] = useState<ClientUser>(INITIAL_CLIENT);
   const [clients, setClients] = useState<ClientUser[]>([]);
   
-  // Initialize bookings from LocalStorage for immediate offline availability
-  const [bookings, setBookings] = useState<Booking[]>(() => {
-    const cached = localStorage.getItem('essenya_bookings_cache') || localStorage.getItem('essenya_therapist_offline_agenda');
-    if (cached) {
-      try { return JSON.parse(cached); } catch { return []; }
-    }
-    return [];
-  });
+  // Initialize bookings empty. We don't cache for 100% security as requested.
+  const [bookings, setBookings] = useState<Booking[]>([]);
 
-  // Keep LocalStorage in sync with bookings state for robust offline fallback
+  // Removed LocalStorage sync for bookings and offline agenda
   useEffect(() => {
-    if (bookings.length > 0) {
-      const serialized = JSON.stringify(bookings);
-      localStorage.setItem('essenya_bookings_cache', serialized);
-      localStorage.setItem('essenya_therapist_offline_agenda', serialized);
-    }
+    // No-op for security
   }, [bookings]);
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -232,24 +232,12 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [setBookings, setInvoices, setPanicAlerts, setAuditLogs, setClients]);
 
-  // Offline Sync Queue
+  // Offline Sync Queue (Now only in-memory for security)
   const [pendingQueue, setPendingQueue] = useState<any[]>([]);
 
-  // Initialize Queue from localStorage
+  // Removed localStorage Queue persistence
   useEffect(() => {
-    const savedQueue = localStorage.getItem('essenya_sync_queue');
-    if (savedQueue) {
-      try {
-        setPendingQueue(JSON.parse(savedQueue));
-      } catch (e) {
-        console.error('Error parsing sync queue:', e);
-      }
-    }
-  }, []);
-
-  // Save Queue to localStorage
-  useEffect(() => {
-    localStorage.setItem('essenya_sync_queue', JSON.stringify(pendingQueue));
+    // No-op for security
   }, [pendingQueue]);
 
   // Sync Logic
@@ -367,12 +355,19 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
     }, err => handleFirestoreError(err, OperationType.LIST, 'zonas'));
 
+    const unsubConfig = onSnapshot(doc(db, 'configuraciones', 'global'), (docSnap) => {
+      if (docSnap.exists()) {
+        setSystemConfig(docSnap.data() as any);
+      }
+    }, err => handleFirestoreError(err, OperationType.GET, 'configuraciones/global'));
+
     // 2. Private Subscriptions (Require active authenticated Firebase User)
     if (!firebaseUser) {
       return () => {
         unsubServicios();
         unsubTerapeuta();
         unsubZonas();
+        unsubConfig();
       };
     }
 
@@ -572,6 +567,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       unsubInvoices();
       unsubAudit();
       unsubPanic();
+      unsubConfig();
     };
   }, [firebaseUser, sessions, currentPortal]);
 
@@ -1151,6 +1147,14 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     );
   };
 
+  const handleUpdateSystemConfig = async (updates: Partial<{ googleMapsKey: string, autoCleanupDone: boolean }>) => {
+    try {
+      await setDoc(doc(db, 'configuraciones', 'global'), updates, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'configuraciones/global', updates);
+    }
+  };
+
   const handleSendMessage = (bookingId: string, text: string) => {
     addLog(
       'Mensajería',
@@ -1593,9 +1597,11 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     handleUpdateLiveLocation,
     handleResolvePanicAlert,
     handleAttendPanicAlert,
+    handleUpdateSystemConfig,
     completedServicesCount,
     activeBookingCount,
-    pendingSyncCount: pendingQueue.length
+    pendingSyncCount: pendingQueue.length,
+    systemConfig
   }), [
     currentPortal, setCurrentPortal, services, therapists, activeTherapist,
     client, clients, bookings, invoices, zones, auditLogs, panicAlerts,
@@ -1609,8 +1615,8 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     handleAddClient, handleEditClient, handleToggleBlockClient, handleDeleteClient,
     handleRescheduleBooking, handleCancelBooking, handleConfirmPayment,
     handleRejectPayment, handleDataCleanup, handleUpdateLiveLocation,
-    handleResolvePanicAlert, handleAttendPanicAlert, completedServicesCount,
-    activeBookingCount, pendingQueue.length
+    handleResolvePanicAlert, handleAttendPanicAlert, handleUpdateSystemConfig, completedServicesCount,
+    activeBookingCount, pendingQueue.length, systemConfig
   ]);
 
   return (

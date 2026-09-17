@@ -30,8 +30,37 @@ export const PromocionesPage: React.FC<PromocionesPageProps> = ({ onStartBooking
 
   const completedCount = completedAndPaidBookings.length;
   const tierInfo = useMemo(() => calculateMembershipTier(completedCount), [completedCount]);
-  const vipCourtesy = useMemo(() => getVipCourtesyStatus(completedCount), [completedCount]);
-  const giftCards = useMemo(() => getGiftCards(), []);
+
+  const [giftCards, setGiftCards] = useState<any[]>([]);
+  const [vipCourtesy, setVipCourtesy] = useState<{
+    unlocked: boolean;
+    used: boolean;
+    massagesCompleted: number;
+    massagesNeeded: number;
+    code: string;
+    discountPercent: number;
+  }>({
+    unlocked: false,
+    used: false,
+    massagesCompleted: 0,
+    massagesNeeded: 5,
+    code: 'VIP15',
+    discountPercent: 15
+  });
+
+  // Fetch async security-sensitive data from Firestore
+  React.useEffect(() => {
+    const fetchSecurityData = async () => {
+      if (client?.id) {
+        const cards = await getGiftCards(client.id);
+        const courtesy = await getVipCourtesyStatus(client.id, completedCount);
+        setGiftCards(cards);
+        setVipCourtesy(courtesy);
+      }
+    };
+    fetchSecurityData();
+  }, [client?.id, completedCount]);
+
   const primaryGiftCard = giftCards[0] || { code: 'REGALO-ESS-1400', currentBalance: 1400 };
 
   const handleCopyCode = (code: string) => {

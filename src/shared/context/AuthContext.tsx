@@ -53,25 +53,10 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [sessions, setSessions] = useState<AuthSessions>(() => {
-    // Restore active sessions from localStorage for each independent portal if available
-    try {
-      const storedClient = localStorage.getItem('essenya_auth_cliente');
-      const storedTherapist = localStorage.getItem('essenya_auth_terapeuta');
-      const storedAdmin = localStorage.getItem('essenya_auth_administrador');
-
-      return {
-        cliente: storedClient ? JSON.parse(storedClient) : null,
-        terapeuta: storedTherapist ? JSON.parse(storedTherapist) : null,
-        administrador: storedAdmin ? JSON.parse(storedAdmin) : null,
-      };
-    } catch {
-      return {
-        cliente: null,
-        terapeuta: null,
-        administrador: null,
-      };
-    }
+  const [sessions, setSessions] = useState<AuthSessions>({
+    cliente: null,
+    terapeuta: null,
+    administrador: null,
   });
 
   const [loading, setLoading] = useState(false);
@@ -106,11 +91,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               fechaActualizacion: new Date().toISOString()
             };
 
-            setSessions(prev => {
-              const updated = { ...prev, administrador: adminProfile };
-              localStorage.setItem('essenya_auth_administrador', JSON.stringify(adminProfile));
-              return updated;
-            });
+            setSessions(prev => ({ ...prev, administrador: adminProfile }));
           }
 
           // 2. Fetch master profile from 'users' collection
@@ -164,12 +145,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           
           if (profile) {
             const role = profile.rol;
-            
-            setSessions(prev => {
-              const updated = { ...prev, [role]: profile };
-              localStorage.setItem(`essenya_auth_${role}`, JSON.stringify(profile));
-              return updated;
-            });
+            setSessions(prev => ({ ...prev, [role]: profile }));
           }
 
           // 3. Realtime listener on current user document to reflect immediate Admin approvals/rejections
@@ -182,7 +158,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                   const current = prev[r];
                   if (current && (current.estado !== liveData.estado || current.membershipTier !== liveData.membershipTier)) {
                     const merged = { ...current, ...liveData };
-                    localStorage.setItem(`essenya_auth_${r}`, JSON.stringify(merged));
                     return { ...prev, [r]: merged };
                   }
                   return prev;
@@ -200,7 +175,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                   const current = prev.terapeuta;
                   if (current && current.estado !== tData.estado) {
                     const updated = { ...current, estado: tData.estado, motivoRechazoAccount: tData.motivoRechazoAccount };
-                    localStorage.setItem('essenya_auth_terapeuta', JSON.stringify(updated));
                     return { ...prev, terapeuta: updated };
                   }
                   return prev;
@@ -223,26 +197,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           terapeuta: null,
           administrador: null,
         });
-        localStorage.removeItem('essenya_auth_cliente');
-        localStorage.removeItem('essenya_auth_terapeuta');
-        localStorage.removeItem('essenya_auth_administrador');
       }
     });
 
     return () => unsubscribe();
   }, []);
 
-  // Save session state to localStorage helper
+  // Update session state helper
   const updateSession = useCallback((role: UserRole, profile: UserAuthProfile | null) => {
-    setSessions(prev => {
-      const updated = { ...prev, [role]: profile };
-      if (profile) {
-        localStorage.setItem(`essenya_auth_${role}`, JSON.stringify(profile));
-      } else {
-        localStorage.removeItem(`essenya_auth_${role}`);
-      }
-      return updated;
-    });
+    setSessions(prev => ({ ...prev, [role]: profile }));
   }, []);
 
   // Register Handler
@@ -476,22 +439,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         docSnap = await retryAsync(() => getDoc(userDocRef), 2, 700);
       } catch (getErr: any) {
-        // Fallback for transient reconnects if local valid session matches authenticated UID
-        if (isTransientNetworkError(getErr)) {
-          const cachedRaw = localStorage.getItem(`essenya_auth_${role}`);
-          if (cachedRaw) {
-            try {
-              const cachedProfile = JSON.parse(cachedRaw);
-              if (cachedProfile && (cachedProfile.uid === uid || cachedProfile.id === uid) && cachedProfile.rol === role) {
-                console.info('Session restored from cache during temporary Firebase reconnect');
-                clearFailedAttempts(role, trimmedEmail);
-                updateSession(role, cachedProfile);
-                setLoading(false);
-                return { success: true };
-              }
-            } catch {}
-          }
-        }
         handleFirestoreError(getErr, OperationType.GET, `users/${uid}`);
         throw getErr;
       }

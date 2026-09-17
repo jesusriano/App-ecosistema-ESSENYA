@@ -21,8 +21,10 @@ interface TherapistContextType {
   auditLogs: AuditLog[];
   loading: boolean;
   firestoreError: string | null;
+  sensitiveInfo: Record<string, { curp?: string; ineNumber?: string; cuentaBancariaCLABE?: string }>;
   
   // Admin Operations
+  loadSensitiveInfo: (id: string) => Promise<void>;
   createTherapist: (data: {
     id?: string;
     nombre: string;
@@ -244,32 +246,13 @@ export const sanitizeTherapist = (raw: any): TherapistFullProfile => {
 const INITIAL_THERAPISTS: TherapistFullProfile[] = [];
 
 export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [therapists, setTherapists] = useState<TherapistFullProfile[]>(() => {
-    try {
-      const stored = localStorage.getItem('essenya_therapists_list');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          return parsed.map(sanitizeTherapist);
-        }
-      }
-      return INITIAL_THERAPISTS;
-    } catch {
-      return INITIAL_THERAPISTS;
-    }
-  });
+  const [therapists, setTherapists] = useState<TherapistFullProfile[]>(INITIAL_THERAPISTS);
 
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
-    try {
-      const stored = localStorage.getItem('essenya_therapist_audit_logs');
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
+  const [sensitiveInfo, setSensitiveInfo] = useState<Record<string, any>>({});
   const { firebaseUser, sessions } = useAuth();
 
   // Firestore Realtime Subscription for Therapists
@@ -292,9 +275,6 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         setLoading(false);
         if (snapshot.empty) {
           setTherapists([]);
-          try {
-            localStorage.setItem('essenya_therapists_list', JSON.stringify([]));
-          } catch {}
         } else {
           const loaded: TherapistFullProfile[] = snapshot.docs
             .map(docSnap => {
@@ -362,17 +342,13 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [firebaseUser, sessions.administrador, sessions.terapeuta]);
 
-  // Sync state to LocalStorage
+  // Sync state to LocalStorage - REMOVED for security
   useEffect(() => {
-    try {
-      localStorage.setItem('essenya_therapists_list', JSON.stringify(therapists));
-    } catch {}
+    // No-op for security
   }, [therapists]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('essenya_therapist_audit_logs', JSON.stringify(auditLogs));
-    } catch {}
+    // No-op for security
   }, [auditLogs]);
 
   // Log Audit Action
@@ -387,6 +363,21 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       details
     };
     setAuditLogs(prev => [newLog, ...prev]);
+  }, []);
+
+  const loadSensitiveInfo = useCallback(async (id: string) => {
+    try {
+      const privateInfoRef = doc(db, 'terapeutas', id, 'private_info', 'sensitive');
+      const snap = await getDoc(privateInfoRef);
+      if (snap.exists()) {
+        setSensitiveInfo(prev => ({
+          ...prev,
+          [id]: snap.data()
+        }));
+      }
+    } catch (err) {
+      console.error('Error loading sensitive info for therapist:', id, err);
+    }
   }, []);
 
   // Admin Operation: Create Therapist with Temporary Credentials
@@ -516,6 +507,15 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       };
       await setDoc(doc(db, 'users', finalId), cleanForFirestore(userPayload), { merge: true });
       await setDoc(doc(db, 'terapeutas', finalId), cleanForFirestore(newTherapist), { merge: true });
+
+      // Guardar datos sensibles en subcolección privada
+      const privateInfoRef = doc(db, 'terapeutas', finalId, 'private_info', 'sensitive');
+      await setDoc(privateInfoRef, {
+        curp: data.curp || null,
+        ineNumber: data.ineNumber || null,
+        cuentaBancariaCLABE: data.cuentaBancariaCLABE || null,
+        updatedAt: new Date().toISOString()
+      });
       
       if (initialStatus === 'activo') {
         const publicPayload = {
@@ -575,6 +575,24 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     try {
       await updateDoc(doc(db, 'terapeutas', id), cleanForFirestore(updatePayload));
+
+      // Update sensitive info if provided
+      if (updates.curp || updates.ineNumber || updates.cuentaBancariaCLABE) {
+        const privateInfoRef = doc(db, 'terapeutas', id, 'private_info', 'sensitive');
+        const sensitiveUpdates: any = {};
+        if (updates.curp) sensitiveUpdates.curp = updates.curp;
+        if (updates.ineNumber) sensitiveUpdates.ineNumber = updates.ineNumber;
+        if (updates.cuentaBancariaCLABE) sensitiveUpdates.cuentaBancariaCLABE = updates.cuentaBancariaCLABE;
+        sensitiveUpdates.updatedAt = new Date().toISOString();
+        
+        await setDoc(privateInfoRef, sensitiveUpdates, { merge: true });
+        
+        setSensitiveInfo(prev => ({
+          ...prev,
+          [id]: { ...(prev[id] || {}), ...sensitiveUpdates }
+        }));
+      }
+
       try {
         await updateDoc(doc(db, 'users', id), cleanForFirestore({
           fechaActualizacion: new Date().toISOString()
@@ -1204,7 +1222,9 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         replaceDocument,
         deleteDocument,
         updateSelfProfile,
-        getTherapistById
+        getTherapistById,
+        loadSensitiveInfo,
+        sensitiveInfo
       }}
     >
       {children}

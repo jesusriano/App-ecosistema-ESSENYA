@@ -176,10 +176,17 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   const [customTipVal, setCustomTipVal] = useState<string>('0');
   const [isSubmittingBooking, setIsSubmittingBooking] = useState<boolean>(false);
 
-  // Client Photo State & Local Persistence
+  // Client Photo State
   const [clientPhoto, setClientPhoto] = useState<string>(() => {
-    return localStorage.getItem('essenya_client_photo') || client?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
+    return client?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
   });
+
+  // Keep state in sync with client prop if it changes
+  useEffect(() => {
+    if (client?.photo) {
+      setClientPhoto(client.photo);
+    }
+  }, [client?.photo]);
 
   // Sync geolocation to address
   React.useEffect(() => {
@@ -197,7 +204,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     }
   }, [geolocError]);
 
-  const handleClientPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleClientPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -212,12 +219,22 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     }
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const dataUrl = event.target?.result as string;
-      if (dataUrl) {
-        setClientPhoto(dataUrl);
-        localStorage.setItem('essenya_client_photo', dataUrl);
-        showToast('Foto de Perfil Actualizada', 'Tu fotografía de socio VIP se ha guardado exitosamente.', 'success');
+      if (dataUrl && client?.id) {
+        try {
+          setClientPhoto(dataUrl);
+          // Persist to Firestore directly (100% Secure)
+          const { doc, updateDoc } = await import('firebase/firestore');
+          const { db } = await import('../../../lib/firebase');
+          const clientRef = doc(db, 'clientes', client.id);
+          await updateDoc(clientRef, { photo: dataUrl });
+          
+          showToast('Foto de Perfil Actualizada', 'Tu fotografía de socio VIP se ha guardado exitosamente en el servidor.', 'success');
+        } catch (error) {
+          console.error('Error updating photo in Firestore:', error);
+          showToast('Error al guardar foto', 'No se pudo guardar la foto en el servidor.', 'error');
+        }
       }
     };
     reader.readAsDataURL(file);
@@ -369,7 +386,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   const totalPrice = bookingPricing.total;
 
   // Apply Coupon with strict membership tier validation (DIAMOND10, VIP15, GOLD2026, ESSENYABLACK)
-  const handleApplyCoupon = (customCode?: string) => {
+  const handleApplyCoupon = async (customCode?: string) => {
     const code = (typeof customCode === 'string' ? customCode : couponCode).trim().toUpperCase();
     if (!code) {
       showToast('Ingresa un código', 'Por favor escribe un código promocional o de membresía.', 'error');
@@ -380,6 +397,17 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     if (!result.valid) {
       showToast(result.title, result.message, 'error');
       return;
+    }
+
+    // Secondary check for VIP15 (Courtesy) usage in Firestore
+    if (result.type === 'VIP15' && client?.id) {
+      const { getDoc, doc } = await import('firebase/firestore');
+      const { db } = await import('../../../lib/firebase');
+      const clientSnap = await getDoc(doc(db, 'clientes', client.id));
+      if (clientSnap.exists() && clientSnap.data().courtesyUsed) {
+        showToast('Beneficio Ya Utilizado', 'Esta cortesía única de nivel Diamond ya ha sido aplicada anteriormente.', 'error');
+        return;
+      }
     }
 
     setAppliedPromo({
@@ -401,9 +429,10 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   };
 
   // Gift Card application handler ($1,400 MXN system)
-  const handleApplyGiftCard = (customCode?: string) => {
+  const handleApplyGiftCard = async (customCode?: string) => {
+    if (!client?.id) return;
     const code = (typeof customCode === 'string' ? customCode : giftCardCodeInput).trim().toUpperCase();
-    const result = validateGiftCardCode(code);
+    const result = await validateGiftCardCode(client.id, code);
     if (!result.valid || !result.card) {
       showToast('Tarjeta Inválida', result.message, 'error');
       return;
@@ -423,7 +452,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
   // Submit Booking
   const handleConfirmBooking = async () => {
-    if (!selectedService || isSubmittingBooking) return;
+    if (!selectedService || isSubmittingBooking || !client?.id) return;
     if (!bookingPricing.isPriceAvailable) {
       showToast('Precio no disponible', 'Precio no disponible. Selecciona otro servicio o comunícate con ESSENYA.', 'error');
       return;
@@ -511,12 +540,13 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
       // Consume VIP15 courtesy benefit if applied (single-use)
       if (appliedPromo?.type === 'VIP15') {
-        markVipCourtesyAsUsed();
+        await markVipCourtesyAsUsed(client.id);
       }
 
       // Deduct Gift Card balance if applied
       if (appliedGiftCard && giftCardDeduction > 0) {
-        applyGiftCardToBooking(
+        await applyGiftCardToBooking(
+          client.id,
           appliedGiftCard.code,
           giftCardDeduction,
           newBk.code,
@@ -1835,7 +1865,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                           </button>
                         )}
 
-                        {completedMassagesCount >= 5 && !getVipCourtesyStatus(completedMassagesCount).used ? (
+                        {completedMassagesCount >= 5 && !client?.courtesyUsed ? (
                           <button
                             type="button"
                             onClick={() => {

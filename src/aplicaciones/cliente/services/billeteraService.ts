@@ -1,3 +1,6 @@
+import { db } from '../../../lib/firebase';
+import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp } from 'firebase/firestore';
+
 export interface GiftCardTransaction {
   id: string;
   date: string;
@@ -12,16 +15,16 @@ export interface GiftCard {
   id: string;
   code: string;
   title: string;
-  initialAmount: number; // 1400 MXN (Valor del regalo)
-  purchasePrice: number; // 1400 MXN (Costo que el cliente pagó al comprarla)
+  initialAmount: number; 
+  purchasePrice: number; 
   currentBalance: number;
   status: 'activa' | 'parcialmente_usada' | 'agotada' | 'vencida';
-  expirationDate: string; // 12 meses
+  expirationDate: string; 
   createdAt: string;
-  recipientName?: string; // Para quién es el regalo
-  recipientContact?: string; // Teléfono / WhatsApp del destinatario
-  senderName?: string; // Quién lo regala
-  customMessage?: string; // Dedicatoria
+  recipientName?: string; 
+  recipientContact?: string; 
+  senderName?: string; 
+  customMessage?: string; 
   paymentMethod?: 'tarjeta' | 'transferencia';
   isGiftForSomeoneElse?: boolean;
   history: GiftCardTransaction[];
@@ -35,8 +38,6 @@ export interface PurchaseGiftCardParams {
   paymentMethod: 'tarjeta' | 'transferencia';
 }
 
-const BILLETERA_STORAGE_KEY = 'essenya_billetera_gift_cards';
-
 /**
  * Fecha por defecto de vencimiento: 12 meses a partir de la emisión
  */
@@ -46,48 +47,26 @@ function getDefaultExpiration(): string {
   return d.toISOString().split('T')[0];
 }
 
-/**
- * Tarjetas de regalo iniciales de demostración:
- * Vacío por defecto: ningún socio nuevo tiene saldo falso ni tarjetas inventadas.
- */
-const DEFAULT_GIFT_CARDS: GiftCard[] = [];
-
-export function getGiftCards(): GiftCard[] {
+export async function getGiftCards(clientId: string): Promise<GiftCard[]> {
+  if (!clientId) return [];
   try {
-    const raw = localStorage.getItem(BILLETERA_STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw) as GiftCard[];
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    // Depurar cualquier tarjeta demo residual que inyectaba saldo ficticio de $1,400
-    const filtered = parsed.filter(c => c.id !== 'gc-demo-comprada-01' && c.code !== 'REGALO-ESS-1400');
-    if (filtered.length !== parsed.length) {
-      saveGiftCards(filtered);
-    }
-    return filtered;
-  } catch {
-    return [];
-  }
-}
-
-export function saveGiftCards(cards: GiftCard[]): void {
-  try {
-    localStorage.setItem(BILLETERA_STORAGE_KEY, JSON.stringify(cards));
+    const billeteraRef = collection(db, 'clientes', clientId, 'billetera');
+    const snap = await getDocs(billeteraRef);
+    const cards = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as GiftCard));
+    
+    // Filter any residual fake demo cards
+    return cards.filter(c => c.id !== 'gc-demo-comprada-01' && c.code !== 'REGALO-ESS-1400');
   } catch (e) {
-    console.error('Error guardando tarjetas en la Billetera:', e);
+    console.error('Error obteniendo billetera de Firestore:', e);
+    return [];
   }
 }
 
 /**
  * Saldo en cuenta disponible para que el cliente pague sus propias reservas.
- * Solo computa tarjetas canjeadas / recibidas para uso propio (isGiftForSomeoneElse === false).
- * Las tarjetas compradas para obsequiar a otras personas NO forman parte del saldo en cuenta del comprador.
  */
-export function getBilleteraTotalBalance(): number {
-  const cards = getGiftCards();
+export async function getBilleteraTotalBalance(clientId: string): Promise<number> {
+  const cards = await getGiftCards(clientId);
   return cards.reduce((sum, c) => {
     const isPersonal = !c.isGiftForSomeoneElse;
     const isActive = c.status !== 'agotada' && c.status !== 'vencida';
@@ -104,26 +83,24 @@ export interface ValidationResult {
 /**
  * Valida si un código de tarjeta de regalo existe, está activo, no vencido y con saldo disponible.
  */
-export function validateGiftCardCode(rawCode: string): ValidationResult {
+export async function validateGiftCardCode(clientId: string, rawCode: string): Promise<ValidationResult> {
   const code = rawCode.trim().toUpperCase();
   if (!code) {
     return { valid: false, message: 'Por favor introduce el código de la tarjeta de regalo.' };
   }
 
-  const cards = getGiftCards();
+  const cards = await getGiftCards(clientId);
   const card = cards.find(c => c.code.toUpperCase() === code);
 
   if (!card) {
     return { valid: false, message: 'El código de tarjeta de regalo no existe en el sistema o es incorrecto.' };
   }
 
-  // Verificar fecha de vencimiento
   const today = new Date().toISOString().split('T')[0];
   if (card.expirationDate && card.expirationDate < today) {
     return { valid: false, message: 'Esta tarjeta de regalo ha vencido su periodo de vigencia (12 meses).', card };
   }
 
-  // Verificar si está agotada
   if (card.currentBalance <= 0 || card.status === 'agotada') {
     return { valid: false, message: 'Esta tarjeta de regalo ya fue utilizada en su totalidad ($0 MXN disponible).', card };
   }
@@ -137,31 +114,29 @@ export function validateGiftCardCode(rawCode: string): ValidationResult {
 
 /**
  * Aplica el saldo disponible de una tarjeta de regalo al monto de una reserva.
- * Maneja consumos parciales conservando el saldo restante.
  */
-export function applyGiftCardToBooking(
+export async function applyGiftCardToBooking(
+  clientId: string,
   cardCode: string,
   bookingTotal: number,
   bookingCode: string,
   serviceName?: string
-): {
+): Promise<{
   amountDeducted: number;
   newBalance: number;
   card: GiftCard;
-} {
-  const cards = getGiftCards();
-  const index = cards.findIndex(c => c.code.toUpperCase() === cardCode.trim().toUpperCase());
+}> {
+  const cards = await getGiftCards(clientId);
+  const card = cards.find(c => c.code.toUpperCase() === cardCode.trim().toUpperCase());
 
-  if (index === -1) {
+  if (!card) {
     throw new Error('Tarjeta de regalo no encontrada.');
   }
 
-  const card = cards[index];
   const amountToDeduct = Math.min(card.currentBalance, bookingTotal);
   const remaining = Math.max(0, card.currentBalance - amountToDeduct);
 
-  const updatedCard: GiftCard = {
-    ...card,
+  const updatedCard: Partial<GiftCard> = {
     currentBalance: remaining,
     status: remaining === 0 ? 'agotada' : 'parcialmente_usada',
     history: [
@@ -178,25 +153,22 @@ export function applyGiftCardToBooking(
     ]
   };
 
-  cards[index] = updatedCard;
-  saveGiftCards(cards);
+  const cardRef = doc(db, 'clientes', clientId, 'billetera', card.id);
+  await updateDoc(cardRef, updatedCard);
 
   return {
     amountDeducted: amountToDeduct,
     newBalance: remaining,
-    card: updatedCard
+    card: { ...card, ...updatedCard } as GiftCard
   };
 }
 
 /**
  * Compra una Tarjeta de Regalo de $1,400 MXN para obsequiar a otra persona.
- * El cliente paga $1,400 MXN y genera un cupón de regalo digital con dedicatoria.
  */
-export function purchaseGiftCard(params: PurchaseGiftCardParams): GiftCard {
-  const cards = getGiftCards();
+export async function purchaseGiftCard(clientId: string, params: PurchaseGiftCardParams): Promise<GiftCard> {
   const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-  const newCard: GiftCard = {
-    id: `gc-gift-${Date.now()}-${randomSuffix}`,
+  const newCard: Omit<GiftCard, 'id'> = {
     code: `REGALO-ESS-${randomSuffix}`,
     title: `Tarjeta de Regalo ESSENYA $1,400 MXN para ${params.recipientName}`,
     initialAmount: 1400,
@@ -214,31 +186,33 @@ export function purchaseGiftCard(params: PurchaseGiftCardParams): GiftCard {
     history: []
   };
 
-  const updated = [newCard, ...cards];
-  saveGiftCards(updated);
-  return newCard;
+  const billeteraRef = collection(db, 'clientes', clientId, 'billetera');
+  const docRef = await addDoc(billeteraRef, newCard);
+  
+  return { id: docRef.id, ...newCard };
 }
 
 /**
- * Canjea o agrega a la billetera una tarjeta de regalo que alguien le regaló al cliente.
- * Al canjearla, el saldo se añade a su cuenta personal para pagar reservas.
+ * Canjea o agrega a la billetera una tarjeta de regalo.
  */
-export function redeemExternalGiftCard(code: string): ValidationResult {
+export async function redeemExternalGiftCard(clientId: string, code: string): Promise<ValidationResult> {
   const cleanCode = (code || '').trim().toUpperCase();
   if (!cleanCode) {
     return { valid: false, message: 'Por favor introduce el código de regalo a canjear.' };
   }
 
-  const cards = getGiftCards();
+  const cards = await getGiftCards(clientId);
   const existing = cards.find(c => c.code.toUpperCase() === cleanCode);
 
   if (existing) {
     if (existing.currentBalance <= 0 || existing.status === 'agotada') {
       return { valid: false, message: 'Esta tarjeta de regalo ya ha sido consumida en su totalidad ($0 MXN disponible).' };
     }
-    // Al canjearla pasa a ser saldo personal del cliente
+    
+    const cardRef = doc(db, 'clientes', clientId, 'billetera', existing.id);
+    await updateDoc(cardRef, { isGiftForSomeoneElse: false });
     existing.isGiftForSomeoneElse = false;
-    saveGiftCards(cards);
+    
     return {
       valid: true,
       message: `¡Tarjeta canjeada con éxito! Tu saldo de $${existing.currentBalance.toLocaleString()} MXN está listo para utilizarse en tus reservas.`,
@@ -246,10 +220,8 @@ export function redeemExternalGiftCard(code: string): ValidationResult {
     };
   }
 
-  // Si es un código válido emitido de regalo ESSENYA (ej. REGALO-ESS-XXXX)
   if (/^REGALO-ESS-\d{4}$/.test(cleanCode)) {
-    const newRedeemedCard: GiftCard = {
-      id: `gc-redeemed-${Date.now()}`,
+    const newRedeemedCard: Omit<GiftCard, 'id'> = {
       code: cleanCode,
       title: 'Tarjeta de Regalo ESSENYA Canjeada ($1,400 MXN)',
       initialAmount: 1400,
@@ -265,11 +237,14 @@ export function redeemExternalGiftCard(code: string): ValidationResult {
       isGiftForSomeoneElse: false,
       history: []
     };
-    saveGiftCards([newRedeemedCard, ...cards]);
+    
+    const billeteraRef = collection(db, 'clientes', clientId, 'billetera');
+    const docRef = await addDoc(billeteraRef, newRedeemedCard);
+    
     return {
       valid: true,
       message: '¡Tarjeta de regalo de $1,400 MXN canjeada exitosamente! Se ha añadido a tu saldo para agendar masajes.',
-      card: newRedeemedCard
+      card: { id: docRef.id, ...newRedeemedCard }
     };
   }
 

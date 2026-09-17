@@ -68,15 +68,35 @@ export const InicioPage: React.FC<InicioPageProps> = ({ onGoToReservas }) => {
     return calculateMembershipTier(completedCount);
   }, [completedCount]);
 
-  // Estado del beneficio Cortesía VIP (15% de descuento a partir de 5 masajes)
-  const vipCourtesy = useMemo(() => {
-    return getVipCourtesyStatus(completedCount);
-  }, [completedCount]);
+  const [billeteraBalance, setBilleteraBalance] = useState<number>(0);
+  const [vipCourtesy, setVipCourtesy] = useState<{
+    unlocked: boolean;
+    used: boolean;
+    massagesCompleted: number;
+    massagesNeeded: number;
+    code: string;
+    discountPercent: number;
+  }>({
+    unlocked: false,
+    used: false,
+    massagesCompleted: 0,
+    massagesNeeded: 5,
+    code: 'VIP15',
+    discountPercent: 15
+  });
 
-  // Saldo de la Billetera
-  const billeteraBalance = useMemo(() => {
-    return getBilleteraTotalBalance();
-  }, []);
+  // Fetch async security-sensitive data from Firestore
+  React.useEffect(() => {
+    const fetchSecurityData = async () => {
+      if (client?.id) {
+        const balance = await getBilleteraTotalBalance(client.id);
+        const courtesy = await getVipCourtesyStatus(client.id, completedCount);
+        setBilleteraBalance(balance);
+        setVipCourtesy(courtesy);
+      }
+    };
+    fetchSecurityData();
+  }, [client?.id, completedCount]);
 
   const getTierIcon = () => {
     switch (tierInfo.iconType) {

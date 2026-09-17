@@ -129,6 +129,41 @@
         "ultimoAcceso": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "correo", "nombre", "rol", "estado"]
+    },
+    "Service": {
+      "title": "Service Catalog Item",
+      "description": "Available rituals and treatments",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "basePrice": { "type": "number" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "name", "basePrice"]
+    },
+    "Zone": {
+      "title": "Coverage Zone",
+      "description": "Geographic service area",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "surgeMultiplier": { "type": "number" }
+      },
+      "required": ["id", "name"]
+    },
+    "AuditLog": {
+      "title": "System Audit Log",
+      "description": "History of sensitive actions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "action": { "type": "string" },
+        "userName": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "action", "userName", "timestamp"]
     }
   },
   "firestore": {
@@ -155,6 +190,18 @@
     "alertas_panico/{alertaId}": {
       "schema": "PanicAlert",
       "description": "Real-time emergency panic alerts and live geolocation updates streamed to admin portal"
+    },
+    "servicios/{servicioId}": {
+      "schema": "Service",
+      "description": "Rituals and services catalog"
+    },
+    "zonas/{zonaId}": {
+      "schema": "Zone",
+      "description": "Coverage zones"
+    },
+    "audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "System event audit trail"
     }
   }
 }

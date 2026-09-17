@@ -226,6 +226,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
       }
 
       // 5. Guardar expediente profesional completo en colección 'terapeutas'
+      // SANEAMIENTO: Los campos sensibles se guardan en una subcolección protegida
       const therapistRef = doc(db, 'terapeutas', uid);
       await setDoc(therapistRef, {
         id: uid,
@@ -238,10 +239,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
         fotografia: finalFotografia,
         fechaNacimiento: registrationPayload.fechaNacimiento,
         direccion: registrationPayload.direccion,
-        curp: registrationPayload.curp,
-        ineNumber: registrationPayload.ineNumber,
         certificacionesInfo: registrationPayload.certificacionesInfo,
-        cuentaBancariaCLABE: registrationPayload.cuentaBancariaCLABE,
         contactoEmergencia: registrationPayload.contactoEmergencia,
         especialidades: registrationPayload.especialidades,
         experienciaAnos: registrationPayload.experienciaAnos,
@@ -258,6 +256,15 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
         createdAt: new Date().toISOString(),
         solicitudRegistroFecha: new Date().toISOString()
       }, { merge: true });
+
+      // Guardar datos sensibles en subcolección privada
+      const privateInfoRef = doc(db, 'terapeutas', uid, 'private_info', 'sensitive');
+      await setDoc(privateInfoRef, {
+        curp: registrationPayload.curp,
+        ineNumber: registrationPayload.ineNumber,
+        cuentaBancariaCLABE: registrationPayload.cuentaBancariaCLABE,
+        updatedAt: new Date().toISOString()
+      });
 
       // 6. Cerrar la sesión activa para que el usuario regrese a la pantalla de login con aviso de revisión
       try {

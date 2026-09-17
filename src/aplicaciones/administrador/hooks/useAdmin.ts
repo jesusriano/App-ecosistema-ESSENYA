@@ -40,6 +40,8 @@ export const useAdmin = () => {
     handleResolvePanicAlert: ecosystem.handleResolvePanicAlert,
     handleAttendPanicAlert: ecosystem.handleAttendPanicAlert,
     handleDataCleanup: ecosystem.handleDataCleanup,
+    handleUpdateSystemConfig: ecosystem.handleUpdateSystemConfig,
+    systemConfig: ecosystem.systemConfig,
     activeBookingCount: ecosystem.activeBookingCount,
   };
 };

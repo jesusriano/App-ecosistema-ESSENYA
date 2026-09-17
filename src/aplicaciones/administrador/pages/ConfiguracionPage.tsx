@@ -13,7 +13,7 @@ export const ConfiguracionPage: React.FC = () => {
   const { 
     zones, auditLogs, handleToggleZoneSurge, 
     handleAddZone, handleEditZone, handleDeleteZone,
-    handleDataCleanup
+    handleDataCleanup, systemConfig, handleUpdateSystemConfig
   } = useAdmin();
   const { showToast } = useToast();
 
@@ -21,12 +21,12 @@ export const ConfiguracionPage: React.FC = () => {
 
   useEffect(() => {
     const runAutoCleanup = async () => {
-      const hasCleaned = localStorage.getItem('essenya_auto_cleanup_done');
+      const hasCleaned = systemConfig.autoCleanupDone;
       if (!hasCleaned) {
         setIsCleaning(true);
         try {
           await handleDataCleanup();
-          localStorage.setItem('essenya_auto_cleanup_done', 'true');
+          await handleUpdateSystemConfig({ autoCleanupDone: true });
           showToast('Limpieza de datos de prueba completada exitosamente.', 'success');
         } catch (err) {
           console.error('Auto-cleanup failed:', err);
@@ -36,7 +36,7 @@ export const ConfiguracionPage: React.FC = () => {
       }
     };
     runAutoCleanup();
-  }, [handleDataCleanup, showToast]);
+  }, [handleDataCleanup, showToast, systemConfig.autoCleanupDone, handleUpdateSystemConfig]);
 
   const [showZoneModal, setShowZoneModal] = useState(false);
   const [editingZone, setEditingZone] = useState<CoverageZone | null>(null);
@@ -247,16 +247,7 @@ export const ConfiguracionPage: React.FC = () => {
               if (window.confirm('¿Estás seguro de que deseas eliminar TODOS los datos de prueba de la NUBE (Reservas, Clientes de Prueba, Facturas) y cachés locales? Esta acción dejará el sistema en blanco para producción.')) {
                 try {
                   await handleDataCleanup();
-                  const keysToRemove = [
-                    'essenya_bookings_cache',
-                    'essenya_client_photo',
-                    'essenya_panic_alerts',
-                    'essenya_auth_cliente',
-                    'essenya_auth_terapeuta',
-                    'essenya_auth_administrador'
-                  ];
-                  keysToRemove.forEach(k => localStorage.removeItem(k));
-                  showToast('¡Base de datos y cachés limpiados! Sistema restablecido.');
+                  showToast('¡Base de datos limpia! Sistema restablecido.');
                   setTimeout(() => window.location.reload(), 1500);
                 } catch (err) {
                   showToast('Error al limpiar la base de datos.', 'error');

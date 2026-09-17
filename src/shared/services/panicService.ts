@@ -151,15 +151,7 @@ export async function triggerPanicAlert(params: TriggerPanicParams): Promise<{ a
     }
   }
 
-  // Backup in localStorage for offline resiliency
-  try {
-    const stored = JSON.parse(localStorage.getItem('essenya_panic_alerts') || '[]');
-    stored.unshift(panicData);
-    localStorage.setItem('essenya_panic_alerts', JSON.stringify(stored.slice(0, 20)));
-  } catch (e) {
-    console.error('LocalStorage backup error:', e);
-  }
-
+  // No backup in localStorage for 100% security
   return { alert: panicData, alertId };
 }
 
@@ -245,24 +237,14 @@ export function subscribeToPanicAlerts(
         onAlertsUpdate(alerts);
       },
       (error) => {
-        console.warn('Firestore snapshot error on alertas_panico, falling back to local storage:', error.message);
-        try {
-          const stored = JSON.parse(localStorage.getItem('essenya_panic_alerts') || '[]');
-          onAlertsUpdate(stored);
-        } catch (_) {
-          onAlertsUpdate([]);
-        }
+        console.warn('Firestore snapshot error on alertas_panico:', error.message);
+        onAlertsUpdate([]);
         if (onError) onError(error);
       }
     );
   } catch (err: any) {
     console.error('Error attaching listener to alertas_panico:', err);
-    try {
-      const stored = JSON.parse(localStorage.getItem('essenya_panic_alerts') || '[]');
-      onAlertsUpdate(stored);
-    } catch (_) {
-      onAlertsUpdate([]);
-    }
+    onAlertsUpdate([]);
     return () => {};
   }
 }
