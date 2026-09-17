@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { MessageCircle, ShieldAlert, X, ExternalLink, Headphones, Wrench } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useEcosystem } from '../context/EcosystemContext';
@@ -145,28 +146,28 @@ export const TechSupportWhatsAppButton: React.FC<TechSupportWhatsAppButtonProps>
   }
 
   // Floating button by default: fully responsive layout for mobile and desktop
-  const positionClasses = className.trim() || 'bottom-20 right-3 sm:bottom-6 sm:right-6';
+  const positionClasses = className.trim() || 'bottom-16 right-2.5 sm:bottom-6 sm:right-6';
 
   return (
     <>
-      <div className={`fixed z-40 flex flex-col items-end pointer-events-none max-w-[calc(100vw-1.5rem)] ${positionClasses}`}>
+      <div className={`fixed z-[9999] flex flex-col items-end pointer-events-none max-w-[calc(100vw-1rem)] ${positionClasses}`}>
         <button
           id="btn-tech-support-whatsapp"
           type="button"
           onClick={() => setIsOpen(true)}
           aria-label="Soporte Técnico WhatsApp"
-          className="pointer-events-auto group flex items-center space-x-1.5 sm:space-x-2 pl-2.5 pr-3 py-2 sm:pl-3.5 sm:pr-4 sm:py-2.5 min-h-[44px] rounded-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-xl shadow-emerald-950/30 border border-emerald-400/40 transition-all duration-300 hover:scale-105 cursor-pointer touch-manipulation"
+          className="pointer-events-auto group flex items-center space-x-1.5 sm:space-x-2 pl-2 pr-2.5 py-1.5 sm:pl-3.5 sm:pr-4 sm:py-2.5 min-h-[40px] sm:min-h-[44px] rounded-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-xl shadow-emerald-950/30 border border-emerald-400/40 transition-all duration-300 hover:scale-105 cursor-pointer touch-manipulation max-w-full truncate"
         >
           <span className="relative flex h-2.5 w-2.5 sm:h-3 sm:w-3 shrink-0">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 sm:h-3 sm:w-3 bg-emerald-100"></span>
           </span>
-          <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-white shrink-0" />
-          <div className="flex flex-col text-left">
-            <span className="text-[8px] sm:text-[9px] uppercase tracking-wider text-emerald-100 font-bold leading-none">
+          <MessageCircle className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white shrink-0" />
+          <div className="flex flex-col text-left min-w-0">
+            <span className="text-[7.5px] sm:text-[9px] uppercase tracking-wider text-emerald-100 font-bold leading-none truncate">
               WhatsApp
             </span>
-            <span className="text-[11px] sm:text-xs font-bold leading-tight whitespace-nowrap">
+            <span className="text-[10px] sm:text-xs font-bold leading-tight truncate">
               <span className="inline sm:hidden">Soporte</span>
               <span className="hidden sm:inline">Soporte Técnico</span>
             </span>
@@ -179,13 +180,13 @@ export const TechSupportWhatsAppButton: React.FC<TechSupportWhatsAppButtonProps>
   );
 
   function renderModal() {
-    return (
+    return createPortal(
       <div 
         role="dialog"
         aria-modal="true"
         aria-labelledby="tech-support-title"
         onClick={() => setIsOpen(false)}
-        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto overscroll-contain"
+        className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto overscroll-contain"
       >
         <div 
           className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl sm:rounded-3xl max-w-md w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] overflow-y-auto p-4 sm:p-6 space-y-3.5 sm:space-y-4 shadow-2xl relative text-[var(--text-primary)] my-auto overscroll-contain"
@@ -273,7 +274,8 @@ export const TechSupportWhatsAppButton: React.FC<TechSupportWhatsAppButtonProps>
             </button>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     );
   }
 };
