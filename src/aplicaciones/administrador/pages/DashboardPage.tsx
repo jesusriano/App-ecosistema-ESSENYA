@@ -283,7 +283,7 @@ export const DashboardPage: React.FC = () => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1 */}
         <div 
-          onClick={() => navigate('/reservas')}
+          onClick={() => navigate('/admin/reservas')}
           className="bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-[#C9A55B]/60 rounded-2xl p-4 space-y-2 relative overflow-hidden cursor-pointer transition-all hover:shadow-md group"
           title="Ver Módulo de Reservas"
         >
@@ -303,7 +303,7 @@ export const DashboardPage: React.FC = () => {
 
         {/* KPI 2 */}
         <div 
-          onClick={() => navigate('/finanzas')}
+          onClick={() => navigate('/admin/finanzas')}
           className="bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-[#C9A55B]/60 rounded-2xl p-4 space-y-2 cursor-pointer transition-all hover:shadow-md group"
           title="Ver Módulo de Finanzas"
         >
@@ -323,7 +323,7 @@ export const DashboardPage: React.FC = () => {
 
         {/* KPI 3 */}
         <div 
-          onClick={() => navigate('/terapeutas')}
+          onClick={() => navigate('/admin/terapeutas')}
           className="bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-[#C9A55B]/60 rounded-2xl p-4 space-y-2 cursor-pointer transition-all hover:shadow-md group"
           title="Ver Red de Terapeutas"
         >
@@ -343,7 +343,7 @@ export const DashboardPage: React.FC = () => {
 
         {/* KPI 4 */}
         <div 
-          onClick={() => navigate('/clientes')}
+          onClick={() => navigate('/admin/clientes')}
           className="bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-[#C9A55B]/60 rounded-2xl p-4 space-y-2 cursor-pointer transition-all hover:shadow-md group"
           title="Ver Socios VIP"
         >
@@ -376,7 +376,7 @@ export const DashboardPage: React.FC = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div 
-            onClick={() => navigate('/terapeutas')}
+            onClick={() => navigate('/admin/terapeutas')}
             className="bg-[var(--bg-subcard)] border border-[#C9A55B]/40 hover:border-[#C9A55B] rounded-xl p-3.5 flex items-center justify-between cursor-pointer transition-all hover:shadow-md group"
             title="Ir a Terapeutas Pendientes"
           >
@@ -397,7 +397,7 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           <div 
-            onClick={() => navigate('/terapeutas')}
+            onClick={() => navigate('/admin/terapeutas')}
             className="bg-[var(--bg-subcard)] border border-emerald-500/30 hover:border-emerald-500 rounded-xl p-3.5 flex items-center justify-between cursor-pointer transition-all hover:shadow-md group"
             title="Ir a Terapeutas Aprobadas"
           >
@@ -418,7 +418,7 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           <div 
-            onClick={() => navigate('/terapeutas')}
+            onClick={() => navigate('/admin/terapeutas')}
             className="bg-[var(--bg-subcard)] border border-red-500/30 hover:border-red-500 rounded-xl p-3.5 flex items-center justify-between cursor-pointer transition-all hover:shadow-md group"
             title="Ir a Terapeutas Rechazadas"
           >
