@@ -18,11 +18,13 @@ export const ConfiguracionPage: React.FC = () => {
   const { showToast } = useToast();
 
   const [isCleaning, setIsCleaning] = useState(false);
+  const hasCleanedRef = React.useRef(false);
 
   useEffect(() => {
     const runAutoCleanup = async () => {
       const hasCleaned = systemConfig.autoCleanupDone;
-      if (!hasCleaned) {
+      if (!hasCleaned && !hasCleanedRef.current) {
+        hasCleanedRef.current = true;
         setIsCleaning(true);
         try {
           await handleDataCleanup();
@@ -36,7 +38,7 @@ export const ConfiguracionPage: React.FC = () => {
       }
     };
     runAutoCleanup();
-  }, [handleDataCleanup, showToast, systemConfig.autoCleanupDone, handleUpdateSystemConfig]);
+  }, [systemConfig.autoCleanupDone]);
 
   const [showZoneModal, setShowZoneModal] = useState(false);
   const [editingZone, setEditingZone] = useState<CoverageZone | null>(null);

@@ -1205,13 +1205,13 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     );
   };
 
-  const handleUpdateSystemConfig = async (updates: Partial<{ googleMapsKey: string, autoCleanupDone: boolean }>) => {
+  const handleUpdateSystemConfig = React.useCallback(async (updates: Partial<{ googleMapsKey: string, autoCleanupDone: boolean }>) => {
     try {
       await setDoc(doc(db, 'configuraciones', 'global'), updates, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'configuraciones/global', updates);
     }
-  };
+  }, []);
 
   const handleSendMessage = (bookingId: string, text: string) => {
     addLog(

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Activity, Calendar, Users, UserCheck, DollarSign, 
@@ -24,14 +24,16 @@ export const DashboardPage: React.FC = () => {
   const { therapists: fullTherapists } = useTherapistContext();
   const { showToast } = useToast();
 
-  const activePanicAlerts = panicAlerts.filter(a => a.status === 'activa' || a.status === 'en_atencion');
+  const activePanicAlerts = useMemo(() => {
+    return (panicAlerts || []).filter(a => a && (a.status === 'activa' || a.status === 'en_atencion'));
+  }, [panicAlerts]);
   const [selectedPanicAlert, setSelectedPanicAlert] = useState<any>(null);
 
   useEffect(() => {
-    if (activePanicAlerts.length > 0 && !selectedPanicAlert) {
+    if (activePanicAlerts.length > 0 && (!selectedPanicAlert || !activePanicAlerts.some(a => a.id === selectedPanicAlert.id))) {
       setSelectedPanicAlert(activePanicAlerts[0]);
     }
-  }, [panicAlerts]);
+  }, [activePanicAlerts, selectedPanicAlert]);
 
   const pendingTherapistsCount = fullTherapists.filter(t => t.estado === 'pendiente').length;
   const approvedTherapistsCount = fullTherapists.filter(t => t.estado === 'activo').length;
@@ -52,9 +54,11 @@ export const DashboardPage: React.FC = () => {
   };
 
   // Selected Active Booking for Live Tracking
-  const activeServicesOnTrack = bookings.filter(b => 
-    b.state === 'en_camino' || b.state === 'llegue' || b.state === 'servicio_iniciado' || b.state === 'aceptada'
-  );
+  const activeServicesOnTrack = useMemo(() => {
+    return (bookings || []).filter(b => 
+      b && (b.state === 'en_camino' || b.state === 'llegue' || b.state === 'servicio_iniciado' || b.state === 'aceptada')
+    );
+  }, [bookings]);
 
   const [selectedTrackBookingId, setSelectedTrackBookingId] = useState<string>(
     activeServicesOnTrack.length > 0 ? activeServicesOnTrack[0].id : bookings[0]?.id || ''
@@ -67,8 +71,10 @@ export const DashboardPage: React.FC = () => {
       if (!isCurrentActive) {
         setSelectedTrackBookingId(activeServicesOnTrack[0].id);
       }
+    } else if (bookings.length > 0 && !selectedTrackBookingId) {
+      setSelectedTrackBookingId(bookings[0].id);
     }
-  }, [bookings]);
+  }, [activeServicesOnTrack, bookings, selectedTrackBookingId]);
 
   const currentTrackBooking = bookings.find(b => b.id === selectedTrackBookingId) || bookings[0];
 
