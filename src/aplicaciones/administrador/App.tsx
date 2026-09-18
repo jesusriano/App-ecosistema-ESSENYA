@@ -10,7 +10,8 @@ export const AdminAppModule: React.FC = () => {
 
   // Derive sub-route from URL path (e.g. /admin/terapeutas -> /terapeutas)
   const currentRoute: AdminRoutePath = useMemo(() => {
-    const path = location.pathname.replace(/^\/admin/, '') || '/dashboard';
+    const rawPath = location.pathname;
+    const path = rawPath.replace(/^\/admin/, '') || '/dashboard';
     if (path === '/' || path === '') return '/dashboard';
     const validRoutes: AdminRoutePath[] = [
       '/dashboard',
@@ -19,10 +20,12 @@ export const AdminAppModule: React.FC = () => {
       '/clientes',
       '/servicios',
       '/pagos',
+      '/finanzas',
       '/reportes',
-      '/configuracion'
+      '/configuracion',
+      '/developer'
     ];
-    const matched = validRoutes.find(r => path.startsWith(r));
+    const matched = validRoutes.find(r => path === r || path.startsWith(r + '/') || path.startsWith(r));
     return matched || '/dashboard';
   }, [location.pathname]);
 

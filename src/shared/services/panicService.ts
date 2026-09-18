@@ -9,9 +9,9 @@ import {
   Unsubscribe,
   serverTimestamp
 } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { db, auth } from '../../lib/firebase';
 import { PanicAlert } from '../types';
-import { handleFirestoreError, OperationType } from '../utils/firestoreDebug';
+import { handleFirestoreError, OperationType, cleanForFirestore } from '../utils/firestoreDebug';
 
 // CDMX VIP Default Reference Coordinates (Polanco / Lomas de Chapultepec)
 export const DEFAULT_CDMX_COORDS = {
@@ -115,9 +115,12 @@ export async function triggerPanicAlert(params: TriggerPanicParams): Promise<{ a
 
   const nowIso = new Date().toISOString();
 
+  // Prioritize active authenticated Firebase user UID to guarantee consistency with Firestore rules
+  const resolvedUserId = auth.currentUser?.uid || params.userId || 'anon_user';
+
   const panicData: PanicAlert = {
     id: alertId,
-    userId: params.userId || 'anon_user',
+    userId: resolvedUserId,
     userName: params.userName || 'Usuario VIP ESSENYA',
     userRole: params.userRole || 'cliente',
     bookingCode: params.bookingCode || 'ESS-VIP-EMERGENCY',
@@ -137,23 +140,29 @@ export async function triggerPanicAlert(params: TriggerPanicParams): Promise<{ a
   const collectionPath = 'alertas_panico';
   try {
     const docRef = doc(db, collectionPath, alertId);
-    await setDoc(docRef, {
+    await setDoc(docRef, cleanForFirestore({
       ...panicData,
       serverTime: serverTimestamp()
-    });
+    }));
+    failedAlertIds.delete(alertId);
     console.log(`[ESSENYA S.O.C.] Alerta de pánico ${alertId} registrada exitosamente en Firestore.`);
   } catch (error) {
+    failedAlertIds.add(alertId);
     console.error('Error writing panic alert to Firestore:', error);
     try {
       handleFirestoreError(error, OperationType.CREATE, `${collectionPath}/${alertId}`, panicData);
     } catch (_) {
       // Keep going so UI does not freeze during emergency
     }
+    throw error;
   }
 
   // No backup in localStorage for 100% security
   return { alert: panicData, alertId };
 }
+
+// Keep track of failed alert IDs to prevent infinite error spamming
+const failedAlertIds = new Set<string>();
 
 /**
  * Updates live telemetry coordinates for an existing panic alert in Firestore
@@ -162,21 +171,31 @@ export async function updatePanicLocation(
   alertId: string, 
   coords: { latitude: number; longitude: number; accuracy?: number; speed?: number | null }
 ): Promise<void> {
+  if (failedAlertIds.has(alertId)) {
+    return;
+  }
+
   const collectionPath = 'alertas_panico';
   const nowIso = new Date().toISOString();
 
   try {
     const docRef = doc(db, collectionPath, alertId);
-    await updateDoc(docRef, {
+    const locPayload: any = {
       latitude: coords.latitude,
       longitude: coords.longitude,
       accuracy: coords.accuracy || 10,
-      speed: coords.speed || null,
       updatedAt: nowIso,
       lastTelemetryPing: serverTimestamp()
-    });
-  } catch (error) {
-    console.error(`Error updating panic location for ${alertId}:`, error);
+    };
+    if (coords.speed != null) {
+      locPayload.speed = coords.speed;
+    }
+    await updateDoc(docRef, cleanForFirestore(locPayload));
+  } catch (error: any) {
+    const errorMsg = error?.message || String(error);
+    console.warn(`Could not update panic location for ${alertId}:`, errorMsg);
+    // Mark as failed if document does not exist or permissions error so watcher halts attempts
+    failedAlertIds.add(alertId);
   }
 }
 
@@ -191,24 +210,27 @@ export async function updatePanicStatus(
   const collectionPath = 'alertas_panico';
   const nowIso = new Date().toISOString();
 
+  const updatePayload: any = {
+    status,
+    updatedAt: nowIso
+  };
+
+  if (status === 'en_atencion') {
+    updatePayload.attendedBy = adminName;
+    updatePayload.attendedAt = nowIso;
+  } else if (status === 'resuelta') {
+    updatePayload.resolvedBy = adminName;
+    updatePayload.resolvedAt = nowIso;
+  }
+
   try {
     const docRef = doc(db, collectionPath, alertId);
-    const updatePayload: any = {
-      status,
-      updatedAt: nowIso
-    };
-
-    if (status === 'en_atencion') {
-      updatePayload.attendedBy = adminName;
-      updatePayload.attendedAt = nowIso;
-    } else if (status === 'resuelta') {
-      updatePayload.resolvedBy = adminName;
-      updatePayload.resolvedAt = nowIso;
-    }
-
-    await updateDoc(docRef, updatePayload);
+    await updateDoc(docRef, cleanForFirestore(updatePayload));
   } catch (error) {
     console.error(`Error changing panic alert status ${alertId}:`, error);
+    try {
+      handleFirestoreError(error, OperationType.UPDATE, `${collectionPath}/${alertId}`, updatePayload);
+    } catch (_) {}
   }
 }
 

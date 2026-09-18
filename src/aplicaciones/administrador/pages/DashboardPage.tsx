@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Activity, Calendar, Users, UserCheck, DollarSign, 
   MapPin, Clock, Star, ShieldAlert, Sparkles, Navigation, 
@@ -13,6 +14,7 @@ import { ReservasMap } from '../components/ReservasMap';
 import { AdminStatsPanel } from '../components/AdminStatsPanel';
 
 export const DashboardPage: React.FC = () => {
+  const navigate = useNavigate();
   const { 
     bookings, therapists, clients, zones, auditLogs, 
     handleReassignTherapist, panicAlerts, activePanicAlertsCount,
@@ -279,8 +281,12 @@ export const DashboardPage: React.FC = () => {
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1 */}
-        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-2 relative overflow-hidden">
-          <div className="flex justify-between items-center text-[var(--text-muted)]">
+        <div 
+          onClick={() => navigate('/admin/reservas')}
+          className="bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-[#C9A55B]/60 rounded-2xl p-4 space-y-2 relative overflow-hidden cursor-pointer transition-all hover:shadow-md group"
+          title="Ver Módulo de Reservas"
+        >
+          <div className="flex justify-between items-center text-[var(--text-muted)] group-hover:text-[#C9A55B] transition-colors">
             <span className="text-xs font-semibold">Reservas Hoy</span>
             <Calendar className="w-4 h-4 text-[#C9A55B]" />
           </div>
@@ -288,12 +294,19 @@ export const DashboardPage: React.FC = () => {
             <span className="text-2xl font-serif font-bold text-[var(--text-primary)]">{bookings.length}</span>
             <span className="text-[10px] text-emerald-500 dark:text-emerald-400 font-bold">{finishedCount} concluidos</span>
           </div>
-          <p className="text-[10px] text-[var(--text-muted)]">{canceledCount} cancelaciones registradas</p>
+          <p className="text-[10px] text-[var(--text-muted)] flex items-center justify-between">
+            <span>{canceledCount} cancelaciones</span>
+            <span className="text-[#C9A55B] text-[10px] font-bold group-hover:translate-x-0.5 transition-transform">Ver &rarr;</span>
+          </p>
         </div>
 
         {/* KPI 2 */}
-        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-2">
-          <div className="flex justify-between items-center text-[var(--text-muted)]">
+        <div 
+          onClick={() => navigate('/admin/finanzas')}
+          className="bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-[#C9A55B]/60 rounded-2xl p-4 space-y-2 cursor-pointer transition-all hover:shadow-md group"
+          title="Ver Módulo de Finanzas"
+        >
+          <div className="flex justify-between items-center text-[var(--text-muted)] group-hover:text-[#C9A55B] transition-colors">
             <span className="text-xs font-semibold">Ingresos Hoy (GMV)</span>
             <DollarSign className="w-4 h-4 text-[#C9A55B]" />
           </div>
@@ -301,12 +314,19 @@ export const DashboardPage: React.FC = () => {
             <span className="text-2xl font-serif font-bold text-[#C9A55B]">${todayRevenue.toLocaleString()}</span>
             <span className="text-[10px] text-[var(--text-muted)]">MXN</span>
           </div>
-          <p className="text-[10px] text-emerald-500 dark:text-emerald-400 font-semibold">100% cobro garantizado</p>
+          <p className="text-[10px] text-emerald-500 dark:text-emerald-400 font-semibold flex items-center justify-between">
+            <span>100% cobro garantizado</span>
+            <span className="text-[#C9A55B] text-[10px] font-bold group-hover:translate-x-0.5 transition-transform">Ver &rarr;</span>
+          </p>
         </div>
 
         {/* KPI 3 */}
-        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-2">
-          <div className="flex justify-between items-center text-[var(--text-muted)]">
+        <div 
+          onClick={() => navigate('/admin/terapeutas')}
+          className="bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-[#C9A55B]/60 rounded-2xl p-4 space-y-2 cursor-pointer transition-all hover:shadow-md group"
+          title="Ver Red de Terapeutas"
+        >
+          <div className="flex justify-between items-center text-[var(--text-muted)] group-hover:text-[#C9A55B] transition-colors">
             <span className="text-xs font-semibold">Red Terapeutas</span>
             <UserCheck className="w-4 h-4 text-[#C9A55B]" />
           </div>
@@ -314,12 +334,19 @@ export const DashboardPage: React.FC = () => {
             <span className="text-2xl font-serif font-bold text-[var(--text-primary)]">{therapists.length}</span>
             <span className="text-[10px] text-[#C9A55B] font-mono">⭐ {avgRating}</span>
           </div>
-          <p className="text-[10px] text-[var(--text-muted)]">{therapists.filter(t => t.status === 'disponible').length} disponibles en zona</p>
+          <p className="text-[10px] text-[var(--text-muted)] flex items-center justify-between">
+            <span>{therapists.filter(t => t.status === 'disponible').length} disponibles</span>
+            <span className="text-[#C9A55B] text-[10px] font-bold group-hover:translate-x-0.5 transition-transform">Gestionar &rarr;</span>
+          </p>
         </div>
 
         {/* KPI 4 */}
-        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-2">
-          <div className="flex justify-between items-center text-[var(--text-muted)]">
+        <div 
+          onClick={() => navigate('/admin/clientes')}
+          className="bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-[#C9A55B]/60 rounded-2xl p-4 space-y-2 cursor-pointer transition-all hover:shadow-md group"
+          title="Ver Socios VIP"
+        >
+          <div className="flex justify-between items-center text-[var(--text-muted)] group-hover:text-[#C9A55B] transition-colors">
             <span className="text-xs font-semibold">Socios VIP Activos</span>
             <Users className="w-4 h-4 text-[#C9A55B]" />
           </div>
@@ -327,7 +354,10 @@ export const DashboardPage: React.FC = () => {
             <span className="text-2xl font-serif font-bold text-[var(--text-primary)]">{clients.length}</span>
             <span className="text-[10px] text-emerald-500 dark:text-emerald-400 font-bold">100% Verificados</span>
           </div>
-          <p className="text-[10px] text-[var(--text-muted)]">3 Membresías Black & Diamond</p>
+          <p className="text-[10px] text-[var(--text-muted)] flex items-center justify-between">
+            <span>3 Membresías Black</span>
+            <span className="text-[#C9A55B] text-[10px] font-bold group-hover:translate-x-0.5 transition-transform">Ver &rarr;</span>
+          </p>
         </div>
       </div>
 
@@ -344,44 +374,65 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-[var(--bg-subcard)] border border-[#C9A55B]/40 rounded-xl p-3.5 flex items-center justify-between">
+          <div 
+            onClick={() => navigate('/admin/terapeutas')}
+            className="bg-[var(--bg-subcard)] border border-[#C9A55B]/40 hover:border-[#C9A55B] rounded-xl p-3.5 flex items-center justify-between cursor-pointer transition-all hover:shadow-md group"
+            title="Ir a Terapeutas Pendientes"
+          >
             <div>
               <p className="text-[10px] text-[#C9A55B] font-bold uppercase tracking-wider flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5" />
                 <span>Masajistas Pendientes</span>
               </p>
               <p className="text-2xl font-mono font-bold text-[#C9A55B] mt-1">{pendingTherapistsCount}</p>
-              <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Expedientes por revisar</p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-0.5 flex items-center gap-1">
+                <span>Expedientes por revisar</span>
+                <span className="text-[#C9A55B] font-bold group-hover:translate-x-0.5 transition-transform">&rarr;</span>
+              </p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-[#C9A55B]/10 border border-[#C9A55B]/30 flex items-center justify-center text-[#C9A55B]">
+            <div className="w-10 h-10 rounded-xl bg-[#C9A55B]/10 border border-[#C9A55B]/30 flex items-center justify-center text-[#C9A55B] group-hover:scale-110 transition-transform">
               <Clock className="w-5 h-5" />
             </div>
           </div>
 
-          <div className="bg-[var(--bg-subcard)] border border-emerald-500/30 rounded-xl p-3.5 flex items-center justify-between">
+          <div 
+            onClick={() => navigate('/admin/terapeutas')}
+            className="bg-[var(--bg-subcard)] border border-emerald-500/30 hover:border-emerald-500 rounded-xl p-3.5 flex items-center justify-between cursor-pointer transition-all hover:shadow-md group"
+            title="Ir a Terapeutas Aprobadas"
+          >
             <div>
               <p className="text-[10px] text-emerald-500 dark:text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>Masajistas Aprobadas</span>
               </p>
               <p className="text-2xl font-mono font-bold text-emerald-500 dark:text-emerald-400 mt-1">{approvedTherapistsCount}</p>
-              <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Acceso activo al Radar</p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-0.5 flex items-center gap-1">
+                <span>Acceso activo al Radar</span>
+                <span className="text-emerald-500 font-bold group-hover:translate-x-0.5 transition-transform">&rarr;</span>
+              </p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-500 dark:text-emerald-400">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-500 dark:text-emerald-400 group-hover:scale-110 transition-transform">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
 
-          <div className="bg-[var(--bg-subcard)] border border-red-500/30 rounded-xl p-3.5 flex items-center justify-between">
+          <div 
+            onClick={() => navigate('/admin/terapeutas')}
+            className="bg-[var(--bg-subcard)] border border-red-500/30 hover:border-red-500 rounded-xl p-3.5 flex items-center justify-between cursor-pointer transition-all hover:shadow-md group"
+            title="Ir a Terapeutas Rechazadas"
+          >
             <div>
               <p className="text-[10px] text-red-500 dark:text-red-400 font-bold uppercase tracking-wider flex items-center gap-1">
                 <XCircle className="w-3.5 h-3.5" />
                 <span>Masajistas Rechazadas</span>
               </p>
               <p className="text-2xl font-mono font-bold text-red-500 dark:text-red-400 mt-1">{rejectedTherapistsCount}</p>
-              <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Solicitudes no acreditadas</p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-0.5 flex items-center gap-1">
+                <span>Solicitudes no acreditadas</span>
+                <span className="text-red-500 font-bold group-hover:translate-x-0.5 transition-transform">&rarr;</span>
+              </p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-500 dark:text-red-400">
+            <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-500 dark:text-red-400 group-hover:scale-110 transition-transform">
               <XCircle className="w-5 h-5" />
             </div>
           </div>

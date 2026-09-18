@@ -103,13 +103,18 @@
         "latitude": { "type": "number" },
         "longitude": { "type": "number" },
         "accuracy": { "type": "number" },
+        "altitude": { "type": ["number", "null"] },
+        "speed": { "type": ["number", "null"] },
         "status": { "type": "string", "enum": ["activa", "en_atencion", "resuelta"] },
         "emergencyType": { "type": "string" },
         "notes": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" },
+        "attendedBy": { "type": "string" },
+        "attendedAt": { "type": "string", "format": "date-time" },
         "resolvedBy": { "type": "string" },
-        "resolvedAt": { "type": "string", "format": "date-time" }
+        "resolvedAt": { "type": "string", "format": "date-time" },
+        "lastTelemetryPing": { "type": "object" }
       },
       "required": ["id", "userName", "status", "createdAt"]
     },

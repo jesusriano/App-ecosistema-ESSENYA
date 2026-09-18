@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { AdminHeader } from './AdminHeader';
 import { AdminSidebar, AdminRoutePath } from './AdminSidebar';
-import { Menu, X } from 'lucide-react';
+import { AdminNavigation } from './AdminNavigation';
+import { Menu, X, LayoutGrid } from 'lucide-react';
 import { ErrorBoundary } from '../../../shared/components/ErrorBoundary';
 
 interface AdminLayoutProps {
@@ -27,16 +28,23 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       {/* Header exclusivo de Administrador */}
       <AdminHeader />
 
-      {/* Bar for Mobile Hamburger Menu */}
-      <div className="md:hidden bg-[var(--bg-card)] border-b border-[var(--border-color)] px-3 py-2 flex items-center justify-between z-20">
+      {/* Barra de Navegación Horizontal Accesible (Mobile & Desktop) */}
+      <AdminNavigation 
+        currentRoute={currentRoute} 
+        onNavigate={handleNavigate} 
+      />
+
+      {/* Bar for Mobile Hamburger Menu if user wants full drawer */}
+      <div className="md:hidden bg-[var(--bg-card)] border-b border-[var(--border-color)] px-4 py-2 flex items-center justify-between">
         <button
+          type="button"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           className="px-3 py-1.5 rounded-xl bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[#C9A55B] hover:text-[var(--text-primary)] flex items-center gap-2 text-xs font-bold cursor-pointer transition-all"
         >
-          {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-          <span>Menú Panel Admin</span>
+          {isMobileMenuOpen ? <X className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />}
+          <span>Ver Menú Detallado</span>
         </button>
-        <span className="text-[11px] text-[var(--text-muted)] font-mono">Panel Admin</span>
+        <span className="text-[11px] text-[var(--text-muted)] font-mono">Panel Administrador</span>
       </div>
 
       <div className="flex-1 flex flex-col md:flex-row relative w-full">
@@ -44,30 +52,41 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         {isMobileMenuOpen && (
           <div 
             onClick={() => setIsMobileMenuOpen(false)}
-            className="md:hidden fixed inset-0 bg-black/70 backdrop-blur-xs z-30 transition-opacity"
+            className="md:hidden fixed inset-0 bg-black/70 backdrop-blur-xs z-[65] transition-opacity cursor-pointer"
           />
         )}
 
-        {/* Menú Lateral exclusivo de Administrador */}
+        {/* Mobile Sidebar Drawer */}
         <div className={`
-          fixed md:relative top-0 left-0 bottom-0 z-40 md:z-auto w-64 bg-[var(--bg-card)] border-r border-[var(--border-color)] 
-          transform transition-transform duration-300 ease-in-out md:transform-none h-full md:h-auto shrink-0
-          ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+          md:hidden fixed inset-y-0 left-0 z-[70] w-72 bg-[var(--bg-card)] border-r border-[var(--border-color)] shadow-2xl
+          transform transition-transform duration-300 ease-in-out overflow-y-auto flex flex-col
+          ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none'}
         `}>
-          <div className="p-4 md:hidden flex justify-between items-center border-b border-[var(--border-color)]">
-            <span className="font-bold text-xs text-[#C9A55B]">Navegación Admin</span>
+          <div className="p-4 flex justify-between items-center border-b border-[var(--border-color)] bg-[var(--bg-subcard)] sticky top-0 z-10">
+            <span className="font-bold text-xs text-[#C9A55B] tracking-wider uppercase">Menú Administrativo</span>
             <button 
+              type="button"
               onClick={() => setIsMobileMenuOpen(false)} 
-              className="p-1 rounded-lg bg-[var(--bg-subcard)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
+          <div className="flex-1 p-2">
+            <AdminSidebar 
+              currentRoute={currentRoute}
+              onNavigate={handleNavigate}
+            />
+          </div>
+        </div>
+
+        {/* Desktop Sidebar */}
+        <aside className="hidden md:flex flex-col w-64 bg-[var(--bg-card)] border-r border-[var(--border-color)] shrink-0 min-h-[calc(100vh-140px)]">
           <AdminSidebar 
             currentRoute={currentRoute}
             onNavigate={handleNavigate}
           />
-        </div>
+        </aside>
 
         {/* Contenido Principal de Administrador */}
         <main className="flex-1 p-3 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto overflow-y-auto min-w-0">
@@ -79,3 +98,4 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     </div>
   );
 };
+

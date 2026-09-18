@@ -55,10 +55,15 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ currentRoute, onNavi
           return (
             <button
               key={item.path}
-              onClick={() => onNavigate(item.path)}
-              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer w-full text-left ${
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onNavigate(item.path);
+              }}
+              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer w-full text-left relative z-10 ${
                 isActive
-                  ? 'bg-[#C9A55B]/15 text-[#C9A55B] font-bold border border-[#C9A55B]/40'
+                  ? 'bg-[#C9A55B]/15 text-[#C9A55B] font-bold border border-[#C9A55B]/40 shadow-xs'
                   : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-subcard)]'
               }`}
             >

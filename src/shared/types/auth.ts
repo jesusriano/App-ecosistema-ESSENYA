@@ -123,3 +123,12 @@ export interface LockoutState {
 
 export type AuthFormMode = 'login' | 'register' | 'forgot_password' | 'verify_code' | 'reset_password' | 'force_change_password';
 
+export interface PortalClaimVerificationResult {
+  authorized: boolean;
+  claimFound: boolean;
+  role?: UserRole | string;
+  claims?: Record<string, any> | null;
+  error?: string;
+  source?: 'token_claims' | 'server_sync' | 'firestore_admin' | 'none';
+}
+

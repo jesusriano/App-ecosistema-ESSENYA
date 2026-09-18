@@ -8,10 +8,10 @@ export const AdminHeader: React.FC = () => {
   const adminUser = getUser('administrador');
 
   return (
-    <div className="bg-[var(--bg-card)] border-b border-[var(--border-color)] px-6 py-3.5 flex justify-between items-center text-[var(--text-primary)] sticky top-0 z-30">
+    <div className="bg-[var(--bg-card)] border-b border-[var(--border-color)] px-4 sm:px-6 py-3 flex justify-between items-center text-[var(--text-primary)] relative z-10">
       <div className="flex items-center space-x-3">
         <EssenyaLogo size="xs" showText={true} align="left" />
-        <span className="bg-[#C9A55B]/20 text-[#C9A55B] border border-[#C9A55B]/40 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-widest hidden sm:inline-block">
+        <span className="bg-[#C9A55B]/20 text-[#806020] dark:text-[#C9A55B] border border-[#C9A55B]/40 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-widest hidden sm:inline-block">
           SISTEMA CENTRAL DE OPERACIONES ESSENYA
         </span>
       </div>

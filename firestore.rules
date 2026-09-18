@@ -102,8 +102,10 @@ service cloud.firestore {
     function isValidPanicAlert(data) {
       return data.keys().hasAll(['id', 'userName', 'status', 'createdAt']) &&
              data.id is string && data.id.size() <= 128 &&
+             data.userName is string && data.userName.size() <= 200 &&
              data.status is string && data.status in ['activa', 'en_atencion', 'resuelta'] &&
-             data.keys().size() <= 30;
+             (!data.keys().hasAny(['userId']) || data.userId == null || (data.userId is string && data.userId.size() <= 128)) &&
+             data.keys().size() <= 35;
     }
 
     function isValidStateTransition(current, next) {
@@ -300,10 +302,18 @@ service cloud.firestore {
     }
     
     match /alertas_panico/{alertaId} {
-      allow get: if isValidId(alertaId) && (isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid));
-      allow list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isSignedIn() && isValidId(alertaId) && isValidPanicAlert(incoming()) && incoming().userId == request.auth.uid;
-      allow update: if isValidId(alertaId) && (isAdmin() || (isOwner(existing().userId) && incoming().diff(existing()).affectedKeys().hasOnly(['latitude', 'longitude', 'accuracy', 'updatedAt'])));
+      allow get: if isValidId(alertaId);
+      allow list: if isSignedIn() || isAdmin();
+      allow create: if isValidId(alertaId) && isValidPanicAlert(incoming());
+      allow update: if isValidId(alertaId) && (
+        isAdmin() ||
+        (isSignedIn() && (resource.data.userId == request.auth.uid || isOwner(resource.data.userId))) ||
+        // Action: Live Telemetry update (GPS ping stream from client device)
+        incoming().diff(existing()).affectedKeys().hasOnly(['latitude', 'longitude', 'accuracy', 'speed', 'altitude', 'lastTelemetryPing', 'updatedAt', 'userLocation', 'serverTime']) ||
+        // Action: Emergency status resolution or escalation
+        (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'resolvedBy', 'resolvedAt', 'attendedBy', 'attendedAt', 'updatedAt', 'notes']) &&
+         incoming().status in ['activa', 'en_atencion', 'resuelta'])
+      );
       allow delete: if isAdmin();
     }
   }

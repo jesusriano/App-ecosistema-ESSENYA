@@ -47,6 +47,7 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
         isOpen={showPanicModal}
         onClose={() => setShowPanicModal(false)}
         userType="cliente"
+        userId={client?.userId || client?.id}
         userName={client?.name || 'Cliente VIP'}
         userLocation={client?.address || 'Polanco VIP, Ciudad de México'}
       />

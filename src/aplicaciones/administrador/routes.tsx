@@ -17,7 +17,9 @@ interface AdminRoutesProps {
 }
 
 export const AdminRoutes: React.FC<AdminRoutesProps> = ({ currentRoute }) => {
-  switch (currentRoute) {
+  const normalizedRoute = (currentRoute || '').replace(/^\/admin/, '') || '/dashboard';
+
+  switch (normalizedRoute) {
     case '/dashboard':
       return <DashboardPage />;
     case '/reservas':
@@ -31,7 +33,6 @@ export const AdminRoutes: React.FC<AdminRoutesProps> = ({ currentRoute }) => {
     case '/pagos':
       return <PagosPage />;
     case '/finanzas':
-    case '/admin/finanzas':
       return <FinanzasDashboard />;
     case '/reportes':
       return <ReportesPage />;

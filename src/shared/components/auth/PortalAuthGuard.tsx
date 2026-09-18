@@ -7,7 +7,7 @@ import {
   ShieldAlert, LogOut, ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { UserRole, AuthFormMode } from '../../types/auth';
+import { UserRole, AuthFormMode, PortalClaimVerificationResult } from '../../types/auth';
 import { EssenyaLogo } from '../EssenyaLogo';
 import { LuxuryButton } from '../ui/LuxuryButton';
 import { CaptchaChallenge } from './CaptchaChallenge';
@@ -22,7 +22,19 @@ interface PortalAuthGuardProps {
 }
 
 export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children }) => {
-  const { sessions, isAuthenticated, getUser, login, register, sendPasswordReset, logout, completeFirstLoginPasswordChange } = useAuth();
+  const { 
+    sessions, 
+    isAuthenticated, 
+    getUser, 
+    login, 
+    register, 
+    sendPasswordReset, 
+    logout, 
+    completeFirstLoginPasswordChange,
+    isAuthReady,
+    verifyPortalClaim,
+    hasPortalClaim
+  } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -31,6 +43,11 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
   const [isCaptchaVerified, setIsCaptchaVerified] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [forceShowLogin, setForceShowLogin] = useState(false);
+
+  // Explicit client-side Claim Verification State
+  const [claimStatus, setClaimStatus] = useState<'idle' | 'verifying' | 'authorized' | 'denied'>('idle');
+  const [claimResult, setClaimResult] = useState<PortalClaimVerificationResult | null>(null);
+  const [isSyncingClaims, setIsSyncingClaims] = useState(false);
 
   // Real-time Firestore admin verification state
   const [adminFirestoreStatus, setAdminFirestoreStatus] = useState<'idle' | 'checking' | 'verified' | 'unauthorized'>('idle');
@@ -71,6 +88,59 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
     administrador: '/admin'
   };
 
+  // Explicit client-side Claim Verification effect
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!isAuthReady) return;
+
+    if (currentUser) {
+      setClaimStatus('verifying');
+      verifyPortalClaim(role, { forceRefresh: false })
+        .then((result) => {
+          if (!isMounted) return;
+          setClaimResult(result);
+          if (result.authorized) {
+            setClaimStatus('authorized');
+          } else {
+            setClaimStatus('denied');
+          }
+        })
+        .catch((err) => {
+          if (!isMounted) return;
+          setClaimStatus('denied');
+          setClaimResult({
+            authorized: false,
+            claimFound: false,
+            error: err?.message || 'Error al validar claims de autenticación.',
+            source: 'none'
+          });
+        });
+    } else {
+      setClaimStatus('idle');
+      setClaimResult(null);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [role, currentUser?.uid, currentUser?.correo, isAuthReady, verifyPortalClaim]);
+
+  const handleForceSyncClaims = async () => {
+    setIsSyncingClaims(true);
+    try {
+      const res = await verifyPortalClaim(role, { forceRefresh: true });
+      setClaimResult(res);
+      if (res.authorized) {
+        setClaimStatus('authorized');
+      } else {
+        setClaimStatus('denied');
+      }
+    } finally {
+      setIsSyncingClaims(false);
+    }
+  };
+
   // Real-time Firestore admin verification effect
   useEffect(() => {
     let isMounted = true;
@@ -107,8 +177,114 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
     };
   }, [role, currentUser?.uid, currentUser?.correo]);
 
-  // 1. Role Integrity Validation: If logged in with the target role
+  // 0. Initial Auth Preparation Screen: Wait for Firebase Auth and claims resolution
+  if (!isAuthReady) {
+    return (
+      <div className="min-h-[85vh] flex items-center justify-center p-4 bg-[#FAF8F5] dark:bg-[#0D0D0D]">
+        <div className="w-full max-w-md bg-white dark:bg-[#141414] border border-[#C9A55B]/40 rounded-3xl p-8 shadow-2xl text-center space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-[#C9A55B]/10 border border-[#C9A55B]/30 text-[#C9A55B] flex items-center justify-center mx-auto animate-spin">
+            <RefreshCw className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-[#C9A55B]">
+              Autenticación ESSENYA
+            </span>
+            <h3 className="font-serif font-bold text-lg text-[#1C1917] dark:text-white">
+              Inicializando Sesión Segura
+            </h3>
+            <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA]">
+              Validando estado criptográfico y claims de acceso...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 1. Role & Claim Integrity Validation: If logged in with the target role
   if (currentUser) {
+    // 1a. Security Claim Pre-render Verification
+    if (claimStatus === 'verifying') {
+      return (
+        <div className="min-h-[85vh] flex items-center justify-center p-4 bg-[#FAF8F5] dark:bg-[#0D0D0D]">
+          <div className="w-full max-w-md bg-white dark:bg-[#141414] border border-[#C9A55B]/40 rounded-3xl p-8 shadow-2xl text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-[#C9A55B]/10 border border-[#C9A55B]/30 text-[#C9A55B] flex items-center justify-center mx-auto animate-spin">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-[#C9A55B]">
+                Validación de Claims en Cliente
+              </span>
+              <h3 className="font-serif font-bold text-lg text-[#1C1917] dark:text-white">
+                Verificando Token y Permisos del Portal
+              </h3>
+              <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA]">
+                Comprobando claims para portal <span className="text-[#C9A55B] font-semibold">{roleDisplayNames[role]}</span> antes de cargar la interfaz...
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // 1b. Claim Denial Barrier (Prevents UI render and avoids permission errors)
+    if (claimStatus === 'denied') {
+      return (
+        <div className="min-h-[85vh] flex items-center justify-center p-4 md:p-8 bg-[#FAF8F5] dark:bg-[#0D0D0D]">
+          <div className="w-full max-w-lg bg-white dark:bg-[#141414] border border-red-500/40 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 text-center">
+            <div className="w-16 h-16 rounded-3xl bg-red-500/10 border border-red-500/30 text-red-500 flex items-center justify-center mx-auto">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+            <div className="space-y-2">
+              <span className="bg-red-500/15 text-red-600 dark:text-red-400 text-xs font-bold px-3 py-1 rounded-full border border-red-500/30 uppercase tracking-widest">
+                Acceso Denegado por Claim de Seguridad
+              </span>
+              <h2 className="text-xl font-serif font-bold text-[#1C1917] dark:text-white pt-2">
+                Claim Insuficiente para {roleDisplayNames[role]}
+              </h2>
+              <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] leading-relaxed">
+                {claimResult?.error || `Tu token de sesión no cuenta con el claim correspondiente para acceder al portal de ${roleDisplayNames[role]}.`}
+              </p>
+              {claimResult?.claims && (
+                <div className="mt-3 p-3 bg-black/5 dark:bg-black/40 rounded-xl text-left font-mono text-[11px] text-[#6B655F] dark:text-[#AAAAAA] border border-black/10 dark:border-white/10 overflow-x-auto">
+                  <div className="font-sans font-bold text-[10px] uppercase text-[#A8A29E] mb-1">Claims detectados en Token:</div>
+                  <div>rol: <span className="text-[#C9A55B]">{claimResult.claims.rol || claimResult.claims.role || 'no asignado'}</span></div>
+                  <div>admin: <span className="text-[#C9A55B]">{String(Boolean(claimResult.claims.admin))}</span></div>
+                  {claimResult.claims.email && <div>email: <span>{claimResult.claims.email}</span></div>}
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
+              <button
+                type="button"
+                disabled={isSyncingClaims}
+                onClick={handleForceSyncClaims}
+                className="px-5 py-2.5 bg-[#C9A55B] hover:bg-[#D8B46B] text-black text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncingClaims ? 'animate-spin' : ''}`} />
+                <span>{isSyncingClaims ? 'Sincronizando...' : 'Sincronizar Claims y Reintentar'}</span>
+              </button>
+              {claimResult?.role && rolePaths[claimResult.role as UserRole] && (
+                <button
+                  type="button"
+                  onClick={() => navigate(rolePaths[claimResult.role as UserRole])}
+                  className="px-5 py-2.5 bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
+                >
+                  Ir a mi Portal Autorizado
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => logout(role)}
+                className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
+              >
+                Cerrar Sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
     // Security check: ensure user role matches expected portal role
     if (currentUser.rol !== role) {
       return (

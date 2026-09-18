@@ -80,8 +80,10 @@ export const TherapistHeader: React.FC<TherapistHeaderProps> = ({ therapist, onO
           </button>
 
           <button
+            id="therapist-header-panic-btn"
+            type="button"
             onClick={onOpenPanicModal}
-            className="flex items-center space-x-1 sm:space-x-1.5 px-2.5 sm:px-3 py-1.5 bg-red-600/10 hover:bg-red-600/20 border border-red-500/40 text-red-600 dark:text-red-400 font-bold text-[11px] sm:text-xs rounded-xl cursor-pointer transition-all"
+            className="flex items-center space-x-1 sm:space-x-1.5 px-2.5 sm:px-3 py-1.5 bg-red-600/10 hover:bg-red-600/20 border border-red-500/40 text-red-600 dark:text-red-400 font-bold text-[11px] sm:text-xs rounded-xl cursor-pointer transition-all min-h-[36px]"
             title="S.O.S. Seguridad Terapeuta"
           >
             <AlertTriangle className="w-3.5 h-3.5 text-red-500 animate-pulse shrink-0" />

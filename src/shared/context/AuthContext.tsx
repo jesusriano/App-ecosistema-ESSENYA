@@ -13,7 +13,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../../lib/firebase';
-import { UserAuthProfile, UserRole, AccountStatus } from '../types/auth';
+import { UserAuthProfile, UserRole, AccountStatus, PortalClaimVerificationResult } from '../types/auth';
 import { 
   getFriendlyErrorMessage, 
   getLockoutInfo, 
@@ -35,6 +35,7 @@ interface AuthSessions {
 interface AuthContextType {
   sessions: AuthSessions;
   loading: boolean;
+  isAuthReady: boolean;
   claims: Record<string, any> | null;
   customClaims: Record<string, any> | null;
   idToken: string | null;
@@ -52,6 +53,8 @@ interface AuthContextType {
   isAuthenticated: (role: UserRole) => boolean;
   getUser: (role: UserRole) => UserAuthProfile | null;
   verifyAdminInFirestore: (uid?: string, email?: string) => Promise<AdminVerificationResult>;
+  verifyPortalClaim: (portal: UserRole | string, options?: { forceRefresh?: boolean }) => Promise<PortalClaimVerificationResult>;
+  hasPortalClaim: (portal: UserRole | string) => boolean;
   getIdToken: (forceRefresh?: boolean) => Promise<string | null>;
   refreshClaims: () => Promise<Record<string, any> | null>;
   hasPermission: (permission: string) => boolean;
@@ -115,6 +118,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   });
 
   const [loading, setLoading] = useState(false);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [currentFirebaseUser, setCurrentFirebaseUser] = useState<any>(auth.currentUser);
   const [currentClaims, setCurrentClaims] = useState<Record<string, any> | null>(null);
   const [currentIdToken, setCurrentIdToken] = useState<string | null>(null);
@@ -138,11 +142,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           let idToken = tokenInfo?.token || null;
           let expiresAt = tokenInfo?.expiresAt || 0;
 
-          // 2. Synchronize claims with backend
+          // 2. Synchronize claims with backend and force refresh client token
           if (idToken) {
             const syncedClaims = await requestServerClaimsSync(idToken);
             if (syncedClaims) {
               tokenClaims = syncedClaims;
+              // Re-fetch token to ensure freshly minted custom claims are in client JWT
+              const reloaded = await fetchTokenAndClaims(firebaseUser, true);
+              if (reloaded) {
+                tokenClaims = reloaded.claims;
+                idToken = reloaded.token;
+                expiresAt = reloaded.expiresAt;
+              }
             }
           }
 
@@ -284,6 +295,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           };
         } catch (err) {
           console.warn('Firestore user synchronization note:', err);
+        } finally {
+          setIsAuthReady(true);
+          setLoading(false);
         }
       } else {
         // Clear all sessions and claims on logout from Firebase Auth
@@ -294,6 +308,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           terapeuta: null,
           administrador: null,
         });
+        setIsAuthReady(true);
+        setLoading(false);
       }
     });
 
@@ -878,6 +894,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const serverClaims = await requestServerClaimsSync(tokenInfo.token);
       if (serverClaims) {
         claims = serverClaims;
+        const reloaded = await fetchTokenAndClaims(auth.currentUser, true);
+        if (reloaded) {
+          claims = reloaded.claims;
+          tokenInfo.token = reloaded.token;
+        }
       }
     }
     setCurrentClaims(claims);
@@ -889,11 +910,178 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return checkIsAdminInFirestore({ uid, email });
   }, []);
 
+  /**
+   * Explicitly verifies on the client side whether the currently authenticated user
+   * has the required custom claim for the target portal before rendering the UI.
+   * Prevents Firestore runtime permission-denied errors when navigating.
+   */
+  const verifyPortalClaim = useCallback(async (
+    portal: UserRole | string,
+    options: { forceRefresh?: boolean } = {}
+  ): Promise<PortalClaimVerificationResult> => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      return {
+        authorized: false,
+        claimFound: false,
+        source: 'none',
+        error: 'No se detectó un usuario autenticado en Firebase Auth para este portal.'
+      };
+    }
+
+    const normPortal = portal === 'admin' ? 'administrador' : portal === 'therapist' ? 'terapeuta' : portal === 'client' ? 'cliente' : portal;
+
+    // 1. Fetch current token and claims (forceRefresh if requested)
+    let tokenInfo = await fetchTokenAndClaims(currentUser, options.forceRefresh || false);
+    let tokenClaims = tokenInfo?.claims || currentClaims || {};
+
+    const checkClaimsMatch = (claims: Record<string, any>): boolean => {
+      if (normPortal === 'administrador') {
+        const hasAdminFlag = Boolean(claims.admin === true);
+        const hasAdminRole = claims.role === 'administrador' || claims.rol === 'administrador';
+        const hasAdminPerm = Array.isArray(claims.permissions) && (claims.permissions.includes('admin:access') || claims.permissions.includes('admin:all'));
+        const email = (currentUser.email || '').toLowerCase().trim();
+        const isMaster = email === 'essenya222@gmail.com' || email === 'graphixglow.2024@gmail.com' || email.endsWith('@essenya.com');
+        return hasAdminFlag || hasAdminRole || hasAdminPerm || isMaster;
+      }
+
+      if (normPortal === 'terapeuta') {
+        const hasTherapistRole = claims.role === 'terapeuta' || claims.rol === 'terapeuta';
+        const hasTherapistPerm = Array.isArray(claims.permissions) && claims.permissions.includes('therapist:access');
+        const isAdminSuper = Boolean(claims.admin === true || claims.role === 'administrador' || claims.rol === 'administrador');
+        return hasTherapistRole || hasTherapistPerm || isAdminSuper;
+      }
+
+      if (normPortal === 'cliente') {
+        const hasClientRole = claims.role === 'cliente' || claims.rol === 'cliente';
+        const hasClientPerm = Array.isArray(claims.permissions) && claims.permissions.includes('client:access');
+        const isAdminSuper = Boolean(claims.admin === true || claims.role === 'administrador' || claims.rol === 'administrador');
+        return hasClientRole || hasClientPerm || isAdminSuper;
+      }
+
+      return false;
+    };
+
+    // If claims match immediately in token
+    if (checkClaimsMatch(tokenClaims)) {
+      return {
+        authorized: true,
+        claimFound: true,
+        role: normPortal,
+        claims: tokenClaims,
+        source: 'token_claims'
+      };
+    }
+
+    // 2. Self-healing fallback: If claim is not in the token, request server claims sync and reload token
+    if (tokenInfo?.token) {
+      try {
+        const synced = await requestServerClaimsSync(tokenInfo.token);
+        if (synced) {
+          // Force refresh token so the newly set claims are included in the client JWT
+          const refreshed = await fetchTokenAndClaims(currentUser, true);
+          if (refreshed) {
+            tokenClaims = refreshed.claims;
+            setCurrentClaims(tokenClaims);
+            setCurrentIdToken(refreshed.token);
+
+            if (checkClaimsMatch(tokenClaims)) {
+              return {
+                authorized: true,
+                claimFound: true,
+                role: normPortal,
+                claims: tokenClaims,
+                source: 'server_sync'
+              };
+            }
+          }
+        }
+      } catch (syncErr) {
+        console.warn('Auto-healing claims sync notice:', syncErr);
+      }
+    }
+
+    // 3. Admin Firestore verification fallback for admin portal
+    if (normPortal === 'administrador') {
+      const adminCheck = await checkIsAdminInFirestore({
+        uid: currentUser.uid,
+        email: currentUser.email
+      });
+      if (adminCheck.isAdmin) {
+        return {
+          authorized: true,
+          claimFound: true,
+          role: 'administrador',
+          claims: tokenClaims,
+          source: 'firestore_admin'
+        };
+      }
+    }
+
+    const detectedRole = tokenClaims.role || tokenClaims.rol || (tokenClaims.admin ? 'administrador' : undefined);
+    const roleNames: Record<string, string> = {
+      cliente: 'Cliente VIP',
+      terapeuta: 'Terapeuta Certificado',
+      administrador: 'Administrador del Sistema'
+    };
+
+    return {
+      authorized: false,
+      claimFound: false,
+      role: detectedRole,
+      claims: tokenClaims,
+      source: 'none',
+      error: `Tu usuario actual (${currentUser.email}) tiene el rol '${roleNames[detectedRole as string] || detectedRole || 'Sin Rol'}' en sus claims de autenticación, pero este portal requiere privilegios exclusivos de '${roleNames[normPortal] || normPortal}'.`
+    };
+  }, [currentClaims]);
+
+  /**
+   * Fast synchronous check of claims already loaded in memory
+   */
+  const hasPortalClaim = useCallback((portal: UserRole | string): boolean => {
+    if (!currentClaims && !auth.currentUser) return false;
+    const norm = portal === 'admin' ? 'administrador' : portal === 'therapist' ? 'terapeuta' : portal === 'client' ? 'cliente' : portal;
+    const claims = currentClaims || {};
+
+    if (norm === 'administrador') {
+      const email = (auth.currentUser?.email || '').toLowerCase().trim();
+      const isMaster = email === 'essenya222@gmail.com' || email === 'graphixglow.2024@gmail.com';
+      return Boolean(
+        claims.admin || 
+        claims.role === 'administrador' || 
+        claims.rol === 'administrador' ||
+        claims.permissions?.includes('admin:access') ||
+        claims.permissions?.includes('admin:all') ||
+        isMaster
+      );
+    }
+    if (norm === 'terapeuta') {
+      return Boolean(
+        claims.role === 'terapeuta' || 
+        claims.rol === 'terapeuta' ||
+        claims.permissions?.includes('therapist:access') ||
+        claims.admin ||
+        claims.role === 'administrador'
+      );
+    }
+    if (norm === 'cliente') {
+      return Boolean(
+        claims.role === 'cliente' || 
+        claims.rol === 'cliente' ||
+        claims.permissions?.includes('client:access') ||
+        claims.admin ||
+        claims.role === 'administrador'
+      );
+    }
+    return false;
+  }, [currentClaims]);
+
   return (
     <AuthContext.Provider
       value={{
         sessions,
         loading,
+        isAuthReady,
         claims: currentClaims,
         customClaims: currentClaims,
         idToken: currentIdToken,
@@ -907,6 +1095,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isAuthenticated,
         getUser,
         verifyAdminInFirestore,
+        verifyPortalClaim,
+        hasPortalClaim,
         getIdToken,
         refreshClaims,
         hasPermission,

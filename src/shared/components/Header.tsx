@@ -127,23 +127,60 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
+        {/* Portal Switcher Selector */}
+        <div className="flex items-center bg-[#FAF8F5] dark:bg-[#1A1A1A] p-1 rounded-2xl border border-[#E5DFD3] dark:border-[#2A2A2A] shadow-xs">
+          <button
+            type="button"
+            onClick={() => onSelectPortal('client')}
+            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold transition-all cursor-pointer ${
+              currentPortal === 'client'
+                ? 'bg-white dark:bg-[#262626] text-[#806020] dark:text-[#C9A55B] font-bold shadow-xs'
+                : 'text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white'
+            }`}
+          >
+            Cliente
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelectPortal('therapist')}
+            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold transition-all cursor-pointer ${
+              currentPortal === 'therapist'
+                ? 'bg-white dark:bg-[#262626] text-[#806020] dark:text-[#C9A55B] font-bold shadow-xs'
+                : 'text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white'
+            }`}
+          >
+            Terapeuta
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelectPortal('admin')}
+            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold transition-all cursor-pointer ${
+              currentPortal === 'admin'
+                ? 'bg-[#C9A55B] text-black font-bold shadow-xs'
+                : 'text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white'
+            }`}
+          >
+            Admin
+          </button>
+        </div>
+
         {/* Panel Actions / Website Link & Status */}
-        <div className="flex items-center space-x-3 shrink-0">
+        <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
           <a
             href="https://essenyamexico.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-[#FAF8F5] dark:bg-[#1A1A1A] hover:bg-[#F2ECE1] dark:hover:bg-[#222222] border border-[#E5DFD3] dark:border-[#2A2A2A] text-xs font-semibold text-[#806020] dark:text-[#C9A55B] transition-all cursor-pointer"
+            className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-[#FAF8F5] dark:bg-[#1A1A1A] hover:bg-[#F2ECE1] dark:hover:bg-[#222222] border border-[#E5DFD3] dark:border-[#2A2A2A] text-xs font-semibold text-[#806020] dark:text-[#C9A55B] transition-all cursor-pointer"
             title="Ir a la página web oficial essenyamexico.com"
           >
             <Globe className="w-3.5 h-3.5 text-[#C9A55B]" />
-            <span className="hidden sm:inline">Página Web</span>
+            <span className="hidden sm:inline">Web</span>
             <ExternalLink className="w-3 h-3 opacity-70" />
           </a>
 
           <div className="hidden lg:flex items-center space-x-2.5 bg-[#FAF8F5] dark:bg-[#141414] px-3 py-1.5 rounded-xl border border-[#E5DFD3] dark:border-[#262626] shadow-xs">
             <Activity className="w-3.5 h-3.5 text-[#C9A55B]" />
-            <span className="text-[11px] text-[var(--text-primary)] font-bold">Panel Independiente</span>
+            <span className="text-[11px] text-[var(--text-primary)] font-bold">Activo</span>
           </div>
         </div>
       </div>

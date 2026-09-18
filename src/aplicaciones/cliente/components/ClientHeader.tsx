@@ -101,14 +101,17 @@ export const ClientHeader: React.FC<ClientHeaderProps> = ({ client, onOpenPanicM
           </button>
 
           <motion.button
+            id="client-header-panic-btn"
+            type="button"
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
             onClick={onOpenPanicModal}
-            className="flex items-center space-x-1 sm:space-x-1.5 px-2.5 sm:px-3 py-1.5 bg-red-600/10 hover:bg-red-600/20 border border-red-500/40 text-red-600 dark:text-red-400 font-bold text-xs rounded-xl cursor-pointer transition-all"
+            className="flex items-center space-x-1 sm:space-x-1.5 px-2.5 sm:px-3 py-1.5 bg-red-600/10 hover:bg-red-600/20 border border-red-500/40 text-red-600 dark:text-red-400 font-bold text-xs rounded-xl cursor-pointer transition-all min-h-[36px]"
             title="Botón de Pánico SOS 24/7"
           >
-            <AlertTriangle className="w-3.5 h-3.5 text-red-500 animate-pulse" />
-            <span className="hidden sm:inline">Botón SOS 24/7</span>
+            <AlertTriangle className="w-3.5 h-3.5 text-red-500 animate-pulse shrink-0" />
+            <span className="text-[11px] sm:text-xs">SOS</span>
+            <span className="hidden sm:inline"> 24/7</span>
           </motion.button>
 
           <button

@@ -45,6 +45,7 @@ export interface ServiceItem {
 
 export interface Therapist {
   id: string;
+  userId?: string;
   name: string;
   photo: string;
   rating: number;
@@ -67,6 +68,7 @@ export interface Therapist {
 
 export interface ClientUser {
   id: string;
+  userId?: string;
   name: string;
   email: string;
   phone: string;

@@ -3047,6 +3047,9 @@ export const ClientApp: React.FC<ClientAppProps> = ({
         isOpen={showPanicModal}
         onClose={() => setShowPanicModal(false)}
         userType="client"
+        userId={client?.userId || client?.id}
+        userName={client?.name || 'Cliente VIP'}
+        userLocation={client?.address || 'Polanco VIP, Ciudad de México'}
       />
 
       {/* Botón Flotante de Soporte Técnico Exclusivo vía WhatsApp */}

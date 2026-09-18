@@ -600,7 +600,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
               onClick={() => setShowPanicModal(true)}
               id="therapist-panic-sos-btn"
               title="Botón de Pánico Emergencia SOS"
-              className="flex items-center justify-center space-x-1.5 bg-gradient-to-r from-red-600 via-red-500 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-md animate-pulse shrink-0"
+              className="flex items-center justify-center space-x-1.5 bg-gradient-to-r from-red-600 via-red-500 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-md animate-pulse shrink-0 cursor-pointer min-h-[38px]"
             >
               <AlertTriangle className="w-4 h-4 text-white" />
               <span>Botón Pánico SOS</span>
@@ -1530,11 +1530,30 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
         onSendPostCare={() => setActiveTab('postcare')}
       />
 
-      {/* Global Safety Emergency Panic Modal */}
+      {/* Mobile Floating Quick-Access Panic SOS Button (Fixed for Small Screens) */}
+      <motion.button
+        id="therapist-floating-panic-sos-btn"
+        whileTap={{ scale: 0.92 }}
+        onClick={() => setShowPanicModal(true)}
+        className="sm:hidden fixed bottom-6 right-4 z-40 bg-gradient-to-r from-red-600 via-red-500 to-red-700 text-white font-bold text-xs p-3 rounded-full shadow-2xl shadow-red-600/50 border-2 border-red-400 flex items-center gap-1.5 cursor-pointer animate-pulse"
+        title="Botón de Pánico Emergencia SOS"
+        aria-label="Botón de Pánico Emergencia SOS"
+      >
+        <AlertTriangle className="w-5 h-5 text-white shrink-0" />
+        <span className="text-[11px] uppercase tracking-wider font-extrabold pr-1">SOS</span>
+      </motion.button>
+
+      {/* Global Safety Emergency Panic Modal - Mobile-Optimized Full-Screen Overlay */}
       <PanicModal 
         isOpen={showPanicModal}
         onClose={() => setShowPanicModal(false)}
         userType="therapist"
+        userRole="terapeuta"
+        userId={activeTherapist.userId || activeTherapist.id}
+        userName={activeTherapist.name || 'Terapeuta Certificada'}
+        userLocation={currentBooking?.clientAddress || activeTherapist.coverageZones?.[0] || 'Polanco VIP / Cobertura CDMX'}
+        bookingCode={currentBooking?.code || 'EMERGENCY-THERAPIST'}
+        fullScreenOnMobile={true}
       />
     </div>
   );

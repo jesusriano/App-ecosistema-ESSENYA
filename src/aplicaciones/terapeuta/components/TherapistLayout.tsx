@@ -44,6 +44,7 @@ export const TherapistLayout: React.FC<TherapistLayoutProps> = ({
         isOpen={showPanicModal}
         onClose={() => setShowPanicModal(false)}
         userType="terapeuta"
+        userId={therapist?.userId || therapist?.id}
         userName={therapist?.name || 'Elena Rostova'}
         userLocation={therapist?.coverageZones?.[0] || 'Polanco / Lomas CDMX'}
       />
