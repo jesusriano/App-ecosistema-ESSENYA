@@ -33,8 +33,14 @@ service cloud.firestore {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/administradores/$(request.auth.uid)) ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        request.auth.token.email == 'essenya222@gmail.com' ||
-        request.auth.token.email == 'graphixglow.2024@gmail.com'
+        (request.auth.token.keys().hasAny(['email']) && (
+          request.auth.token.email.lower() == 'essenya222@gmail.com' ||
+          request.auth.token.email.lower() == 'graphixglow.2024@gmail.com' ||
+          request.auth.token.email.lower().matches('.*@essenya\\..*')
+        )) ||
+        (request.auth.token.keys().hasAny(['admin']) && request.auth.token.admin == true) ||
+        (request.auth.token.keys().hasAny(['role']) && request.auth.token.role == 'administrador') ||
+        (request.auth.token.keys().hasAny(['rol']) && request.auth.token.rol == 'administrador')
       );
     }
 
@@ -61,9 +67,9 @@ service cloud.firestore {
     }
 
     function isValidSensitiveInfo(data) {
-      return (data.keys().hasAny(['curp']) ? (data.curp == null || (data.curp is string && data.curp.matches('^[A-Z]{4}[0-9]{6}[A-Z]{6}[0-9A-Z]{2}$'))) : true) &&
-             (data.keys().hasAny(['cuentaBancariaCLABE']) ? (data.cuentaBancariaCLABE == null || (data.cuentaBancariaCLABE is string && data.cuentaBancariaCLABE.matches('^[0-9]{18}$'))) : true) &&
-             (data.keys().hasAny(['ineNumber']) ? (data.ineNumber == null || (data.ineNumber is string && data.ineNumber.size() <= 20)) : true);
+      return (data.keys().hasAny(['curp']) ? (data.curp == null || (data.curp is string && (data.curp == '' || data.curp.matches('^[A-Z0-9]{18}$')))) : true) &&
+             (data.keys().hasAny(['cuentaBancariaCLABE']) ? (data.cuentaBancariaCLABE == null || (data.cuentaBancariaCLABE is string && (data.cuentaBancariaCLABE == '' || data.cuentaBancariaCLABE.matches('^[0-9]{18}$')))) : true) &&
+             (data.keys().hasAny(['ineNumber']) ? (data.ineNumber == null || (data.ineNumber is string && data.ineNumber.size() <= 25)) : true);
     }
 
     function isValidTherapist(data) {

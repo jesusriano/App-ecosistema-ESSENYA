@@ -6,12 +6,14 @@ import { TerapeutasPage } from './pages/TerapeutasPage';
 import { ClientesPage } from './pages/ClientesPage';
 import { ServiciosPage } from './pages/ServiciosPage';
 import { PagosPage } from './pages/PagosPage';
+import { FinanzasPage } from './pages/FinanzasPage';
+import { FinanzasDashboard } from './components/finanzas/FinanzasDashboard';
 import { ReportesPage } from './pages/ReportesPage';
 import { ConfiguracionPage } from './pages/ConfiguracionPage';
 import { DeveloperPage } from './pages/DeveloperPage';
 
 interface AdminRoutesProps {
-  currentRoute: AdminRoutePath;
+  currentRoute: AdminRoutePath | string;
 }
 
 export const AdminRoutes: React.FC<AdminRoutesProps> = ({ currentRoute }) => {
@@ -28,6 +30,9 @@ export const AdminRoutes: React.FC<AdminRoutesProps> = ({ currentRoute }) => {
       return <ServiciosPage />;
     case '/pagos':
       return <PagosPage />;
+    case '/finanzas':
+    case '/admin/finanzas':
+      return <FinanzasDashboard />;
     case '/reportes':
       return <ReportesPage />;
     case '/configuracion':

@@ -7,7 +7,9 @@ import {
   onAuthStateChanged,
   updatePassword,
   reauthenticateWithCredential,
-  EmailAuthProvider
+  EmailAuthProvider,
+  setPersistence,
+  browserLocalPersistence
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../../lib/firebase';
@@ -33,6 +35,9 @@ interface AuthSessions {
 interface AuthContextType {
   sessions: AuthSessions;
   loading: boolean;
+  claims: Record<string, any> | null;
+  customClaims: Record<string, any> | null;
+  idToken: string | null;
   
   // Strict Auth Actions per Portal
   login: (role: UserRole, email: string, pass: string, rememberMe?: boolean) => Promise<{ success: boolean; error?: string }>;
@@ -43,14 +48,64 @@ interface AuthContextType {
   completeFirstLoginPasswordChange: (role: UserRole, newPass: string) => Promise<{ success: boolean; error?: string }>;
   updateUserProfile: (role: UserRole, updates: Partial<UserAuthProfile>) => Promise<{ success: boolean; error?: string }>;
   
-  // Helper checks
+  // Helper checks & Permission validation
   isAuthenticated: (role: UserRole) => boolean;
   getUser: (role: UserRole) => UserAuthProfile | null;
   verifyAdminInFirestore: (uid?: string, email?: string) => Promise<AdminVerificationResult>;
+  getIdToken: (forceRefresh?: boolean) => Promise<string | null>;
+  refreshClaims: () => Promise<Record<string, any> | null>;
+  hasPermission: (permission: string) => boolean;
   firebaseUser: any;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+/**
+ * Obtains the current ID token and custom claims from Firebase Auth.
+ * If forceRefresh is true, forces a token refresh to fetch the latest claims.
+ */
+async function fetchTokenAndClaims(firebaseUser: any, forceRefresh = false): Promise<{
+  token: string;
+  claims: Record<string, any>;
+  expiresAt: number;
+} | null> {
+  if (!firebaseUser || typeof firebaseUser.getIdTokenResult !== 'function') return null;
+  try {
+    const result = await firebaseUser.getIdTokenResult(forceRefresh);
+    return {
+      token: result.token,
+      claims: result.claims || {},
+      expiresAt: new Date(result.expirationTime).getTime(),
+    };
+  } catch (err) {
+    console.warn('Could not fetch token/claims from Firebase Auth:', err);
+    return null;
+  }
+}
+
+/**
+ * Synchronizes custom claims with the server via /api/auth/sync-claims
+ */
+async function requestServerClaimsSync(idToken: string): Promise<Record<string, any> | null> {
+  try {
+    const res = await fetch('/api/auth/sync-claims', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${idToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.claims) {
+        return data.claims;
+      }
+    }
+  } catch (err) {
+    console.warn('Sync claims server call note (proceeding with local claims):', err);
+  }
+  return null;
+}
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [sessions, setSessions] = useState<AuthSessions>({
@@ -61,40 +116,71 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const [loading, setLoading] = useState(false);
   const [currentFirebaseUser, setCurrentFirebaseUser] = useState<any>(auth.currentUser);
+  const [currentClaims, setCurrentClaims] = useState<Record<string, any> | null>(null);
+  const [currentIdToken, setCurrentIdToken] = useState<string | null>(null);
 
-  // Synchronize Firestore user records and Auth State
+  // Guarantee browserLocalPersistence to keep client/user session active across mobile navigation and page reloads
+  useEffect(() => {
+    setPersistence(auth, browserLocalPersistence).catch((error) => {
+      console.warn('Error setting browserLocalPersistence on Firebase Auth:', error);
+    });
+  }, []);
+
+  // Synchronize Firestore user records, Token, Custom Claims and Auth State
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setCurrentFirebaseUser(firebaseUser);
       if (firebaseUser) {
         try {
-          // 1. Verify if user is an Admin in the 'administradores' collection in Firestore
+          // 1. Fetch ID Token and Custom Claims from Firebase Auth
+          const tokenInfo = await fetchTokenAndClaims(firebaseUser, false);
+          let tokenClaims = tokenInfo?.claims || {};
+          let idToken = tokenInfo?.token || null;
+          let expiresAt = tokenInfo?.expiresAt || 0;
+
+          // 2. Synchronize claims with backend
+          if (idToken) {
+            const syncedClaims = await requestServerClaimsSync(idToken);
+            if (syncedClaims) {
+              tokenClaims = syncedClaims;
+            }
+          }
+
+          setCurrentClaims(tokenClaims);
+          setCurrentIdToken(idToken);
+
+          // 3. Verify if user is an Admin in token claims or Firestore 'administradores' collection
+          const hasAdminClaim = Boolean(tokenClaims.admin || tokenClaims.role === 'administrador' || tokenClaims.rol === 'administrador');
           const adminCheck = await checkIsAdminInFirestore({ 
             uid: firebaseUser.uid, 
             email: firebaseUser.email 
           });
 
-          if (adminCheck.isAdmin && adminCheck.adminData) {
+          if (hasAdminClaim || adminCheck.isAdmin) {
             const adminDoc = adminCheck.adminData;
             const adminProfile: UserAuthProfile = {
               id: firebaseUser.uid,
               uid: firebaseUser.uid,
-              nombre: adminDoc.nombre || 'Administrador',
-              apellidos: adminDoc.apellidos || 'ESSENYA',
-              correo: adminDoc.correo || firebaseUser.email || '',
-              telefono: adminDoc.telefono || '',
+              nombre: adminDoc?.nombre || 'Administrador',
+              apellidos: adminDoc?.apellidos || 'ESSENYA',
+              correo: adminDoc?.correo || firebaseUser.email || '',
+              telefono: adminDoc?.telefono || '',
               estado: 'activo',
-              fechaRegistro: adminDoc.fechaRegistro || new Date().toISOString(),
+              fechaRegistro: adminDoc?.fechaRegistro || new Date().toISOString(),
               ultimoAcceso: new Date().toISOString(),
               correoVerificado: firebaseUser.emailVerified,
               rol: 'administrador',
-              fechaActualizacion: new Date().toISOString()
+              fechaActualizacion: new Date().toISOString(),
+              customClaims: tokenClaims,
+              idToken: idToken || undefined,
+              tokenExpiresAt: expiresAt,
+              permissions: ['admin:all', 'admin:access', 'therapist:access', 'client:access']
             };
 
             setSessions(prev => ({ ...prev, administrador: adminProfile }));
           }
 
-          // 2. Fetch master profile from 'users' collection
+          // 4. Fetch master profile from 'users' collection
           const userDocRef = doc(db, 'users', firebaseUser.uid);
           const docSnap = await getDoc(userDocRef);
           
@@ -144,11 +230,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
           
           if (profile) {
+            profile.customClaims = tokenClaims;
+            profile.idToken = idToken || undefined;
+            profile.tokenExpiresAt = expiresAt;
+            profile.permissions = profile.rol === 'administrador'
+              ? ['admin:all', 'admin:access', 'therapist:access', 'client:access']
+              : profile.rol === 'terapeuta'
+              ? ['therapist:access', 'therapist:services', 'client:access']
+              : ['client:access', 'client:bookings'];
+
             const role = profile.rol;
             setSessions(prev => ({ ...prev, [role]: profile }));
           }
 
-          // 3. Realtime listener on current user document to reflect immediate Admin approvals/rejections
+          // 5. Realtime listener on current user document to reflect immediate Admin approvals/rejections
           const unsubLiveUser = onSnapshot(doc(db, 'users', firebaseUser.uid), (liveSnap) => {
             if (liveSnap.exists()) {
               const liveData = liveSnap.data() as UserAuthProfile;
@@ -157,7 +252,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setSessions(prev => {
                   const current = prev[r];
                   if (current && (current.estado !== liveData.estado || current.membershipTier !== liveData.membershipTier)) {
-                    const merged = { ...current, ...liveData };
+                    const merged = { ...current, ...liveData, customClaims: tokenClaims, idToken: idToken || undefined };
                     return { ...prev, [r]: merged };
                   }
                   return prev;
@@ -191,7 +286,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.warn('Firestore user synchronization note:', err);
         }
       } else {
-        // Clear all sessions on logout from Firebase Auth
+        // Clear all sessions and claims on logout from Firebase Auth
+        setCurrentClaims(null);
+        setCurrentIdToken(null);
         setSessions({
           cliente: null,
           terapeuta: null,
@@ -242,6 +339,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setLoading(true);
 
     try {
+      // Guarantee session persistence in browser / mobile storage before registration
+      try {
+        await setPersistence(auth, browserLocalPersistence);
+      } catch (persistErr) {
+        console.warn('Could not set persistence before register:', persistErr);
+      }
+
       // 2. Create Firebase Auth user
       const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, contrasena);
       const uid = userCredential.user.uid;
@@ -381,20 +485,53 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     try {
+      // Guarantee session persistence in browser / mobile storage before sign in
+      try {
+        await setPersistence(auth, browserLocalPersistence);
+      } catch (persistErr) {
+        console.warn('Could not set persistence before login:', persistErr);
+      }
+
       // 1. Firebase Auth Sign in with automated retry on temporary connection drops
       const userCredential = await retryAsync(() => signInWithEmailAndPassword(auth, trimmedEmail, pass));
       const uid = userCredential.user.uid;
 
-      // 2. Specialized Check for Administrator Role in Firestore 'administradores' Collection
+      // 2. Fetch and Validate ID Token & Custom Claims from Firebase Auth
+      const tokenInfo = await fetchTokenAndClaims(userCredential.user, true);
+      let tokenClaims = tokenInfo?.claims || {};
+      let idToken = tokenInfo?.token || null;
+      let expiresAt = tokenInfo?.expiresAt || (Date.now() + 3600 * 1000);
+
+      // Synchronize claims with backend
+      if (idToken) {
+        const syncedClaims = await requestServerClaimsSync(idToken);
+        if (syncedClaims) {
+          tokenClaims = syncedClaims;
+          // Re-fetch token to ensure freshly minted claims are loaded
+          const reloaded = await fetchTokenAndClaims(userCredential.user, true);
+          if (reloaded) {
+            tokenClaims = reloaded.claims;
+            idToken = reloaded.token;
+            expiresAt = reloaded.expiresAt;
+          }
+        }
+      }
+
+      setCurrentClaims(tokenClaims);
+      setCurrentIdToken(idToken);
+
+      // 3. Specialized Check for Administrator Role
       if (role === 'administrador') {
+        const hasAdminClaim = Boolean(tokenClaims.admin || tokenClaims.role === 'administrador' || tokenClaims.rol === 'administrador');
         const adminCheck = await retryAsync(() => checkIsAdminInFirestore({ uid, email: trimmedEmail }));
 
-        if (!adminCheck.isAdmin) {
+        // Strict validation: Prevents frontend from trusting admin role without token claims or Firestore confirmation
+        if (!hasAdminClaim && !adminCheck.isAdmin) {
           await signOut(auth);
           setLoading(false);
           return {
             success: false,
-            error: 'Acceso Denegado: Tu usuario no cuenta con el rol de Administrador asignado en la colección "administradores" de Firestore.'
+            error: 'Acceso Denegado: Tu usuario no cuenta con el rol de Administrador ni con los permisos requeridos.'
           };
         }
 
@@ -411,7 +548,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           ultimoAcceso: new Date().toISOString(),
           correoVerificado: userCredential.user.emailVerified,
           rol: 'administrador',
-          fechaActualizacion: new Date().toISOString()
+          fechaActualizacion: new Date().toISOString(),
+          customClaims: tokenClaims,
+          idToken: idToken || undefined,
+          tokenExpiresAt: expiresAt,
+          permissions: ['admin:all', 'admin:access', 'therapist:access', 'client:access']
         };
 
         // Update last access in Firestore
@@ -433,7 +574,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { success: true };
       }
 
-      // 3. Fetch Profile from Firestore and Verify Role for Clients & Therapists
+      // 4. Fetch Profile from Firestore and Verify Role for Clients & Therapists
       const userDocRef = doc(db, 'users', uid);
       let docSnap;
       try {
@@ -496,7 +637,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { success: false, error: 'Perfil de usuario no encontrado en la base de datos (Ni en users, ni en terapeutas/clientes).' };
       }
 
-      // STRICT ROLE VALIDATION
+      // STRICT ROLE VALIDATION: Verify role against requested portal
       if (userProfile.rol !== role) {
         await signOut(auth);
         setLoading(false);
@@ -517,6 +658,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setLoading(false);
         return { success: false, error: 'Tu cuenta ha sido suspendida temporalmente. Contacta a soporte.' };
       }
+
+      // Attach verified token and custom claims to profile
+      userProfile.customClaims = tokenClaims;
+      userProfile.idToken = idToken || undefined;
+      userProfile.tokenExpiresAt = expiresAt;
+      userProfile.permissions = role === 'terapeuta'
+        ? ['therapist:access', 'therapist:services', 'client:access']
+        : ['client:access', 'client:bookings'];
 
       // Update last access in Firestore
       try {
@@ -556,7 +705,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       await signOut(auth);
     } catch {}
+    setCurrentClaims(null);
+    setCurrentIdToken(null);
     updateSession(role, null);
+    if (role === 'administrador') {
+      setSessions({
+        cliente: null,
+        terapeuta: null,
+        administrador: null
+      });
+    }
   };
 
   // Password Reset Handler
@@ -666,12 +824,66 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const isAuthenticated = (role: UserRole): boolean => {
+    // If checking client portal, administrators are also authorized to view client experiences
+    if (role === 'cliente' && (sessions.cliente || sessions.administrador)) {
+      return true;
+    }
     return Boolean(sessions[role]);
   };
 
   const getUser = (role: UserRole): UserAuthProfile | null => {
+    if (role === 'cliente' && !sessions.cliente && sessions.administrador) {
+      // Seamlessly map administrator session into client context
+      const admin = sessions.administrador;
+      return {
+        ...admin,
+        rol: 'cliente',
+        membershipTier: 'Diamante VIP',
+        permissions: ['client:access', 'client:bookings', 'admin:access']
+      };
+    }
     return sessions[role];
   };
+
+  const hasPermission = useCallback((permission: string): boolean => {
+    if (sessions.administrador || currentClaims?.admin || currentClaims?.role === 'administrador') {
+      return true;
+    }
+    if (Array.isArray(currentClaims?.permissions) && currentClaims.permissions.includes(permission)) {
+      return true;
+    }
+    if (permission.startsWith('client:') && (sessions.cliente || sessions.administrador)) return true;
+    if (permission.startsWith('therapist:') && (sessions.terapeuta || sessions.administrador)) return true;
+    if (permission.startsWith('admin:') && sessions.administrador) return true;
+    return false;
+  }, [sessions, currentClaims]);
+
+  const getIdToken = useCallback(async (forceRefresh = false): Promise<string | null> => {
+    if (!auth.currentUser) return null;
+    try {
+      const token = await auth.currentUser.getIdToken(forceRefresh);
+      setCurrentIdToken(token);
+      return token;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const refreshClaims = useCallback(async (): Promise<Record<string, any> | null> => {
+    if (!auth.currentUser) return null;
+    const tokenInfo = await fetchTokenAndClaims(auth.currentUser, true);
+    if (!tokenInfo) return null;
+    let claims = tokenInfo.claims;
+    if (tokenInfo.token) {
+      const serverClaims = await requestServerClaimsSync(tokenInfo.token);
+      if (serverClaims) {
+        claims = serverClaims;
+      }
+    }
+    setCurrentClaims(claims);
+    setCurrentIdToken(tokenInfo.token);
+    return claims;
+  }, []);
 
   const verifyAdminInFirestore = useCallback(async (uid?: string, email?: string): Promise<AdminVerificationResult> => {
     return checkIsAdminInFirestore({ uid, email });
@@ -682,6 +894,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       value={{
         sessions,
         loading,
+        claims: currentClaims,
+        customClaims: currentClaims,
+        idToken: currentIdToken,
         login,
         register,
         logout,
@@ -692,6 +907,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isAuthenticated,
         getUser,
         verifyAdminInFirestore,
+        getIdToken,
+        refreshClaims,
+        hasPermission,
         firebaseUser: currentFirebaseUser
       }}
     >

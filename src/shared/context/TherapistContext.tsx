@@ -62,6 +62,7 @@ interface TherapistContextType {
   updateSelfProfile: (therapistId: string, updates: Partial<TherapistFullProfile>) => Promise<{ success: boolean; error?: string }>;
   
   getTherapistById: (id: string) => TherapistFullProfile | undefined;
+  refreshTherapists: () => Promise<void>;
 }
 
 const TherapistContext = createContext<TherapistContextType | undefined>(undefined);
@@ -255,59 +256,95 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [sensitiveInfo, setSensitiveInfo] = useState<Record<string, any>>({});
   const { firebaseUser, sessions } = useAuth();
 
-  // Firestore Realtime Subscription for Therapists
-  useEffect(() => {
-    if (!firebaseUser) {
-      setTherapists([]);
-      setLoading(false);
-      return;
-    }
-
-    const isAdminSession = !!sessions.administrador ||
-      firebaseUser.email === 'essenya222@gmail.com' ||
-      firebaseUser.email === 'graphixglow.2024@gmail.com';
-    const isTherapistSession = !!sessions.terapeuta;
-
-    setLoading(true);
-
-    if (isAdminSession) {
-      // Subscribe to the entire collection
-      const unsubscribe = onSnapshot(collection(db, 'terapeutas'), (snapshot) => {
-        setFirestoreError(null);
-        setLoading(false);
-        if (snapshot.empty) {
-          setTherapists([]);
-        } else {
-          const loaded: TherapistFullProfile[] = snapshot.docs
-            .map(docSnap => {
+  // Helper to fetch therapists from backend API (guarantees administrative visibility)
+  const fetchTherapistsFromBackend = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/therapists');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.therapists)) {
+          const loaded: TherapistFullProfile[] = data.therapists
+            .map((raw: any) => {
               try {
-                return sanitizeTherapist({
-                  id: docSnap.id,
-                  ...docSnap.data()
-                });
+                return sanitizeTherapist(raw);
               } catch (e) {
-                console.error('Error sanitizing therapist profile:', docSnap.id, e);
+                console.error('Error sanitizing therapist profile from backend:', raw?.id, e);
                 return null;
               }
             })
             .filter((t): t is TherapistFullProfile => t !== null);
           setTherapists(loaded);
+          setFirestoreError(null);
         }
-      }, (err) => {
-        setLoading(false);
-        const isPermissionDenied = err.code === 'permission-denied' || (err.message && err.message.includes('permission-denied'));
-        if (isPermissionDenied) {
-          console.error('Firestore permission-denied en colección "terapeutas" (admin):', err);
-          setFirestoreError('No fue posible cargar las solicitudes de terapeutas.');
-        } else {
-          handleFirestoreError(err, OperationType.LIST, 'terapeutas');
-          setFirestoreError('No fue posible cargar las solicitudes de terapeutas.');
-        }
-      });
-      return () => unsubscribe();
+      }
+    } catch (apiErr) {
+      console.warn('Backend API fallback for therapists encountered an error:', apiErr);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Firestore Realtime Subscription for Therapists
+  useEffect(() => {
+    const isAdminSession = !!sessions.administrador ||
+      (firebaseUser && (
+        firebaseUser.email === 'essenya222@gmail.com' ||
+        firebaseUser.email === 'graphixglow.2024@gmail.com'
+      ));
+    const isTherapistSession = !!sessions.terapeuta;
+
+    if (!isAdminSession && !isTherapistSession && !firebaseUser) {
+      setTherapists([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
+    if (isAdminSession) {
+      // 1. Inmediatamente consultar vía backend para garantizar visibilidad sin fricción
+      fetchTherapistsFromBackend();
+
+      // 2. Si hay conexión y usuario en Firebase Auth, suscribirse en tiempo real a la colección
+      if (firebaseUser) {
+        const unsubscribe = onSnapshot(collection(db, 'terapeutas'), (snapshot) => {
+          setFirestoreError(null);
+          setLoading(false);
+          if (snapshot.empty) {
+            // Revalidar con backend antes de vaciar por completo
+            fetchTherapistsFromBackend();
+          } else {
+            const loaded: TherapistFullProfile[] = snapshot.docs
+              .map(docSnap => {
+                try {
+                  return sanitizeTherapist({
+                    id: docSnap.id,
+                    ...docSnap.data()
+                  });
+                } catch (e) {
+                  console.error('Error sanitizing therapist profile:', docSnap.id, e);
+                  return null;
+                }
+              })
+              .filter((t): t is TherapistFullProfile => t !== null);
+            setTherapists(loaded);
+          }
+        }, (err) => {
+          setLoading(false);
+          console.warn('Firestore onSnapshot fallback a backend para terapeutas:', err);
+          // Si Firestore client tiene problemas de reglas o conexión, el backend resuelve
+          fetchTherapistsFromBackend();
+        });
+        return () => unsubscribe();
+      }
     } else if (isTherapistSession) {
       // Subscribe ONLY to their own therapist document
-      const therapistId = sessions.terapeuta?.id || firebaseUser.uid;
+      const therapistId = sessions.terapeuta?.id || firebaseUser?.uid;
+      if (!therapistId) {
+        setTherapists([]);
+        setLoading(false);
+        return;
+      }
       const unsubscribe = onSnapshot(doc(db, 'terapeutas', therapistId), (docSnap) => {
         setFirestoreError(null);
         setLoading(false);
@@ -342,7 +379,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       setTherapists([]);
       setLoading(false);
     }
-  }, [firebaseUser, sessions.administrador, sessions.terapeuta]);
+  }, [firebaseUser, sessions.administrador, sessions.terapeuta, fetchTherapistsFromBackend]);
 
   // Sync state to LocalStorage - REMOVED for security
   useEffect(() => {
@@ -647,6 +684,68 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     let target = therapists.find(t => t.id === id);
     if (!target) return { success: false, error: 'Terapeuta no encontrada.' };
 
+    const statusLabel = 
+      status === 'activo' ? 'Aprobada / Activada' : 
+      status === 'rechazado' ? 'Rechazada' : 
+      status === 'pendiente' ? 'Puesta en Revisión Pendiente' : 
+      status === 'inactivo' ? 'Desactivada' : 'Suspendida / Bloqueada';
+
+    // 1. Primary path: Use the atomic administrative backend endpoint
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch('/api/admin/therapist/status', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          therapistId: id,
+          status,
+          reason,
+          email: target.correo
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          const finalId = result.therapistId || id;
+          const tempPass = result.generatedPassword || result.tempPassword;
+
+          // Update local state
+          setTherapists(prev => prev.map(t => {
+            if (t.id === id || t.id === finalId) {
+              return {
+                ...t,
+                id: finalId,
+                estado: status,
+                status: status,
+                motivoRechazoAccount: status === 'rechazado' ? (reason || 'No cumple con criterios.') : undefined,
+                fechaActualizacion: new Date().toISOString(),
+                ...(status === 'activo' ? {
+                  fechaAprobacion: new Date().toISOString(),
+                  aprobadoPor: auth.currentUser?.email || 'admin@essenya.mx',
+                  estadoVerificacion: 'verificado'
+                } : {})
+              };
+            }
+            return t;
+          }));
+
+          logAudit(finalId, `${target.nombre} ${target.apellidos}`, `Estado Cambiado a: ${statusLabel}`, reason || 'Acción ejecutada por Administradora.');
+          return { success: true, tempPassword: tempPass };
+        }
+      }
+    } catch (backendErr) {
+      console.warn('Backend /api/admin/therapist/status call had an issue, falling back to direct Firestore:', backendErr);
+    }
+
+    // 2. Fallback path: Direct client Firestore updates
     let realUid = id;
     let generatedTempPass: string | undefined = undefined;
 
@@ -673,9 +772,9 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
 
         if (checkResponse.ok) {
           const checkResult = await checkResponse.json();
-          if (checkResult.success && checkResult.exists) {
+          if (checkResult.success && (checkResult.exists || checkResult.verified)) {
             authExists = true;
-            realUid = checkResult.uid;
+            realUid = checkResult.uid || realUid;
           }
         }
       } catch (err) {
@@ -683,7 +782,6 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
 
       if (!authExists) {
-        // Automatically provision auth account for any therapist (self-registered or admin-created) upon approval
         try {
           const token = await auth.currentUser?.getIdToken();
           const headers: Record<string, string> = {
@@ -704,23 +802,17 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
             })
           });
 
-          if (!createResponse.ok) {
-            const errData = await createResponse.json().catch(() => ({ error: 'Error del servidor backend' }));
-            return { success: false, error: `No se pudo aprovisionar la cuenta de autenticación en Firebase Auth: ${errData.error}` };
-          }
-
-          const createResult = await createResponse.json();
-          if (createResult.success && createResult.uid) {
-            realUid = createResult.uid;
-          } else {
-            return { success: false, error: 'No se pudo crear la cuenta de autenticación en Firebase Auth.' };
+          if (createResponse.ok) {
+            const createResult = await createResponse.json();
+            if (createResult.success && createResult.uid) {
+              realUid = createResult.uid;
+            }
           }
         } catch (err: any) {
-          return { success: false, error: `Error de red al crear cuenta de autenticación: ${err.message}` };
+          console.warn('Fallback auth provisioning error:', err);
         }
       }
 
-      // If the UID changed (e.g. was a temporary generated local ID, and now we have a real Auth UID), migrate Firestore docs!
       if (realUid !== id) {
         try {
           const oldUserSnap = await getDoc(doc(db, 'users', id));
@@ -734,30 +826,26 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
               ...userData,
               id: realUid,
               uid: realUid
-            });
+            }, { merge: true });
           }
           if (therapistData) {
             await setDoc(doc(db, 'terapeutas', realUid), {
               ...therapistData,
               id: realUid,
               userId: realUid
-            });
+            }, { merge: true });
           }
 
-          // Delete old docs
-          await deleteDoc(doc(db, 'users', id));
-          await deleteDoc(doc(db, 'terapeutas', id));
+          await deleteDoc(doc(db, 'users', id)).catch(() => {});
+          await deleteDoc(doc(db, 'terapeutas', id)).catch(() => {});
 
           id = realUid;
-          // Update the list of therapists context state immediately
           setTherapists(prev => prev.map(t => {
             if (t.id === target.id) {
               return { ...t, id: realUid };
             }
             return t;
           }));
-          
-          // Re-fetch target
           target = { ...target, id: realUid };
         } catch (migrationErr: any) {
           console.error('Error migrating Firestore documents to new real UID:', migrationErr);
@@ -767,19 +855,17 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     const rejectionReason = status === 'rechazado' ? (reason || 'No cumple con los requisitos de acreditación.') : undefined;
 
-    const statusLabel = 
-      status === 'activo' ? 'Aprobada / Activada' : 
-      status === 'rechazado' ? 'Rechazada' : 
-      status === 'pendiente' ? 'Puesta en Revisión Pendiente' : 
-      status === 'inactivo' ? 'Desactivada' : 'Suspendida / Bloqueada';
-
     const statusPayload = {
       estado: status,
+      status: status,
+      estadoAprobacion: status === 'activo' ? 'aprobado' : (status === 'rechazado' ? 'rechazado' : 'pendiente'),
       motivoRechazoAccount: rejectionReason || null,
       fechaActualizacion: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       ...(status === 'activo' ? {
         fechaAprobacion: new Date().toISOString(),
-        aprobadoPor: auth.currentUser?.email || 'admin@essenya.mx'
+        aprobadoPor: auth.currentUser?.email || 'admin@essenya.mx',
+        estadoVerificacion: 'verificado'
       } : {})
     };
 
@@ -788,6 +874,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       try {
         await updateDoc(doc(db, 'users', id), cleanForFirestore({
           estado: status,
+          isActive: status === 'activo',
           fechaActualizacion: new Date().toISOString(),
           ...(status === 'activo' ? {
             fechaAprobacion: new Date().toISOString(),
@@ -796,7 +883,6 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         }));
       } catch {}
 
-      // Sync with terapeutas_publicos collection for client visibility
       if (status === 'activo') {
         const publicPayload = {
           id: target.id,
@@ -840,6 +926,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
           return { 
             ...t, 
             estado: status, 
+            status: status,
             motivoRechazoAccount: rejectionReason, 
             fechaActualizacion: new Date().toISOString() 
           };
@@ -934,7 +1021,18 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (!target) return { success: false, error: 'Terapeuta no encontrada.' };
 
     try {
-      await deleteDoc(doc(db, 'terapeutas', id));
+      const token = await auth.currentUser?.getIdToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      await fetch(`/api/admin/therapist/${id}`, {
+        method: 'DELETE',
+        headers
+      }).catch(() => {});
+    } catch {}
+
+    try {
+      await deleteDoc(doc(db, 'terapeutas', id)).catch(() => {});
       try {
         await deleteDoc(doc(db, 'users', id));
       } catch {}
@@ -1226,7 +1324,8 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         updateSelfProfile,
         getTherapistById,
         loadSensitiveInfo,
-        sensitiveInfo
+        sensitiveInfo,
+        refreshTherapists: fetchTherapistsFromBackend
       }}
     >
       {children}

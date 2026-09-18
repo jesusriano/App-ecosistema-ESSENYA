@@ -92,6 +92,10 @@ export interface UserAuthProfile {
   therapistProfile?: TherapistFullProfile;
   membershipTier?: string;
   motivoRechazoAccount?: string;
+  customClaims?: Record<string, any>;
+  idToken?: string;
+  tokenExpiresAt?: number;
+  permissions?: string[];
 }
 
 export interface PasswordRequirements {

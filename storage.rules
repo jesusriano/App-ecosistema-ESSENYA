@@ -41,8 +41,13 @@ service firebase.storage {
       );
     }
 
-    // 1. Fotos públicas de catálogo en subcarpeta:
+    // 1. Fotos públicas de catálogo y perfil en subcarpeta:
     match /terapeutas/{uid}/fotos/{archivo} {
+      allow read: if true;
+      allow write: if (isOwner(uid) || isAdmin()) && isAllowedPhoto(archivo);
+    }
+
+    match /terapeutas/{uid}/perfil/{archivo} {
       allow read: if true;
       allow write: if (isOwner(uid) || isAdmin()) && isAllowedPhoto(archivo);
     }

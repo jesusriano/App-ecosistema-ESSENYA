@@ -336,20 +336,50 @@ async function requireAuth(req: Request, res: Response, next: NextFunction): Pro
 
 async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void | any> {
   await requireAuth(req, res, async () => {
-    // Determine admin status safely
     const uid = (req as any).user?.uid;
+    const email = ((req as any).user?.email || "").toLowerCase().trim();
+    
+    // 1. Master admins override
+    const isMasterEmail = 
+      email === "essenya222@gmail.com" || 
+      email === "graphixglow.2024@gmail.com" || 
+      email.endsWith("@essenya.mx") || 
+      email.endsWith("@essenya.com");
+      
+    if (isMasterEmail) {
+      (req as any).user.role = "administrador";
+      (req as any).user.isMasterAdmin = true;
+      return next();
+    }
+
+    // 2. Custom claims
+    if ((req as any).user?.role === "administrador" || (req as any).user?.admin === true) {
+      return next();
+    }
     
     try {
       const db = getAdminFirestore();
-      const adminDoc = await getAdminFirestore().collection("administradores").doc(uid).get();
+      const adminDoc = await db.collection("administradores").doc(uid).get();
       if (adminDoc.exists) {
         (req as any).user.role = "administrador";
         return next();
       }
-      const adminsDoc = await getAdminFirestore().collection("admins").doc(uid).get();
+      const adminsDoc = await db.collection("admins").doc(uid).get();
       if (adminsDoc.exists) {
         (req as any).user.role = "administrador";
         return next();
+      }
+      const userDoc = await db.collection("users").doc(uid).get();
+      if (userDoc.exists && (userDoc.data()?.rol === "administrador" || userDoc.data()?.role === "administrador")) {
+        (req as any).user.role = "administrador";
+        return next();
+      }
+      if (email) {
+        const adminEmailSnap = await db.collection("administradores").where("correo", "==", email).limit(1).get();
+        if (!adminEmailSnap.empty) {
+          (req as any).user.role = "administrador";
+          return next();
+        }
       }
     } catch (e) {
       console.warn("Error fetching user role", e);
@@ -362,10 +392,23 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction): Pr
 async function requireSuperAdmin(req: Request, res: Response, next: NextFunction): Promise<void | any> {
   await requireAuth(req, res, async () => {
     const uid = (req as any).user?.uid;
+    const email = ((req as any).user?.email || "").toLowerCase().trim();
+
+    const isMasterEmail = 
+      email === "essenya222@gmail.com" || 
+      email === "graphixglow.2024@gmail.com" || 
+      email.endsWith("@essenya.mx") || 
+      email.endsWith("@essenya.com");
+
+    if (isMasterEmail) {
+      (req as any).user.role = "superadmin";
+      return next();
+    }
+
     try {
       const db = getAdminFirestore();
-      const adminDoc = await getAdminFirestore().collection("administradores").doc(uid).get();
-      if (adminDoc.exists && adminDoc.data()?.role === "superadmin") {
+      const adminDoc = await db.collection("administradores").doc(uid).get();
+      if (adminDoc.exists && (adminDoc.data()?.role === "superadmin" || adminDoc.data()?.nivelAcceso === "superadmin")) {
         (req as any).user.role = "superadmin";
         return next();
       }
@@ -379,6 +422,102 @@ async function requireSuperAdmin(req: Request, res: Response, next: NextFunction
 // Health check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", environment: process.env.NODE_ENV || "development", timestamp: new Date().toISOString() });
+});
+
+// Synchronize and set custom claims on Firebase Auth using Admin SDK
+app.post("/api/auth/sync-claims", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const uid = user?.uid;
+    const email = (user?.email || "").toLowerCase().trim();
+
+    if (!uid) {
+      return res.status(400).json({ success: false, error: "UID no encontrado en el token de autenticación." });
+    }
+
+    const db = getAdminFirestore();
+    let detectedRole: "administrador" | "terapeuta" | "cliente" = "cliente";
+    let permissions: string[] = ["client:access", "client:bookings"];
+    let isAdmin = false;
+
+    // Check if user is Admin in Firestore or master list
+    const adminDoc = await db.collection("administradores").doc(uid).get();
+    const isMasterAdmin = email === "essenya222@gmail.com" || email === "graphixglow.2024@gmail.com";
+
+    if (adminDoc.exists || isMasterAdmin) {
+      detectedRole = "administrador";
+      isAdmin = true;
+      permissions = ["admin:all", "admin:access", "therapist:access", "client:access"];
+    } else {
+      // Check if user is Therapist in Firestore
+      const therapistDoc = await db.collection("terapeutas").doc(uid).get();
+      if (therapistDoc.exists) {
+        detectedRole = "terapeuta";
+        permissions = ["therapist:access", "therapist:services", "client:access"];
+      } else {
+        detectedRole = "cliente";
+        permissions = ["client:access", "client:bookings"];
+      }
+    }
+
+    const newClaims = {
+      role: detectedRole,
+      rol: detectedRole,
+      admin: isAdmin,
+      permissions: permissions,
+      syncedAt: new Date().toISOString()
+    };
+
+    // Set custom claims in Firebase Authentication using Admin SDK
+    try {
+      await adminAuth.getAuth().setCustomUserClaims(uid, newClaims);
+    } catch (setClaimsErr) {
+      console.warn("Could not set custom user claims in Firebase Auth Admin:", setClaimsErr);
+    }
+
+    return res.json({
+      success: true,
+      uid,
+      email,
+      role: detectedRole,
+      isAdmin,
+      permissions,
+      claims: newClaims
+    });
+  } catch (error: any) {
+    console.error("Error syncing claims:", error);
+    return res.status(500).json({ success: false, error: error.message || "Error al sincronizar claims" });
+  }
+});
+
+// Explicit token verification endpoint
+app.post("/api/auth/verify-token", async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ success: false, valid: false, error: "No se proporcionó token Bearer válido." });
+  }
+
+  const token = authHeader.split(" ")[1];
+  try {
+    const decoded = await adminAuth.getAuth().verifyIdToken(token, true); // checkRevoked = true
+    const role = decoded.role || decoded.rol || (decoded.admin ? "administrador" : "cliente");
+    return res.json({
+      success: true,
+      valid: true,
+      uid: decoded.uid,
+      email: decoded.email,
+      claims: decoded,
+      role,
+      isAdmin: Boolean(decoded.admin || role === "administrador"),
+      exp: decoded.exp
+    });
+  } catch (err: any) {
+    return res.status(401).json({
+      success: false,
+      valid: false,
+      error: "Token expirado, revocado o inválido."
+    });
+  }
 });
 
 // Secure booking creation endpoint
@@ -695,8 +834,9 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
     const auth = adminAuth.getAuth();
     const db = getAdminFirestore();
 
-    // 2. Creación en Firebase Authentication
+    // 2. Creación o recuperación en Firebase Authentication
     let userRecord;
+    let isExistingAuthUser = false;
     try {
       userRecord = await auth.createUser({
         email: trimmedEmail,
@@ -705,15 +845,40 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
       });
     } catch (authError: any) {
       if (authError.code === "auth/email-already-exists") {
+        try {
+          userRecord = await auth.getUserByEmail(trimmedEmail);
+          isExistingAuthUser = true;
+
+          // Si ya está activo como terapeuta registrado y aprobado
+          const existingSnap = await db.collection("terapeutas").doc(userRecord.uid).get();
+          if (existingSnap.exists && existingSnap.data()?.estado === "activo") {
+            return res.status(400).json({
+              success: false,
+              error: "Esta cuenta de terapeuta ya se encuentra registrada y activa en ESSENYA. Puedes iniciar sesión directamente con tu correo y contraseña."
+            });
+          }
+
+          // Si estaba pendiente o incompleto, actualizar contraseña y nombre para permitir culminar su postulación
+          try {
+            await auth.updateUser(userRecord.uid, {
+              password: password,
+              displayName: `${nombre.trim()} ${apellidos.trim()}`
+            });
+          } catch (updErr) {
+            console.warn("No se pudo actualizar Auth en re-postulación:", updErr);
+          }
+        } catch (getErr: any) {
+          return res.status(400).json({
+            success: false,
+            error: "El correo electrónico ya se encuentra en uso. Por favor inicia sesión o utiliza otro correo."
+          });
+        }
+      } else {
         return res.status(400).json({
           success: false,
-          error: "El correo electrónico ya se encuentra registrado en ESSENYA. Inicia sesión o utiliza otro correo."
+          error: authError.message || "Error al crear la cuenta de usuario."
         });
       }
-      return res.status(400).json({
-        success: false,
-        error: authError.message || "Error al crear la cuenta de usuario."
-      });
     }
 
     const uid = userRecord.uid;
@@ -723,29 +888,35 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
       const batch = db.batch();
 
       // Registro en colección users
-      batch.set(getAdminFirestore().collection("users").doc(uid), {
+      batch.set(db.collection("users").doc(uid), {
         uid,
+        id: uid,
         email: trimmedEmail,
         correo: trimmedEmail,
         displayName: `${nombre.trim()} ${apellidos.trim()}`,
         nombreCompleto: `${nombre.trim()} ${apellidos.trim()}`,
+        nombre: nombre.trim(),
+        apellidos: apellidos.trim(),
+        telefono: telefono.trim(),
         role: "terapeuta",
         rol: "terapeuta",
         isActive: false, // Inactiva hasta aprobación por admin
         estado: "pendiente",
         creadoEn: adminFirestore.FieldValue.serverTimestamp(),
-        createdAt: adminFirestore.FieldValue.serverTimestamp(),
-        updatedAt: adminFirestore.FieldValue.serverTimestamp()
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       }, { merge: true });
 
       // Registro en colección terapeutas
-      batch.set(getAdminFirestore().collection("terapeutas").doc(uid), {
+      batch.set(db.collection("terapeutas").doc(uid), {
         id: uid,
         uid,
+        userId: uid,
         nombre: nombre.trim(),
         apellidos: apellidos.trim(),
         nombreCompleto: `${nombre.trim()} ${apellidos.trim()}`,
         correo: trimmedEmail,
+        email: trimmedEmail,
         telefono: telefono.trim(),
         fotografia: fotografia || "",
         fechaNacimiento: fechaNacimiento || "",
@@ -755,25 +926,26 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
         certificacionesInfo: certificacionesInfo || "",
         cuentaBancariaCLABE: cuentaBancariaCLABE || "",
         contactoEmergencia: contactoEmergencia || { nombre: "", parentesco: "", telefono: "" },
-        especialidades: Array.isArray(especialidades) ? especialidades : ["Masaje Tejido Profundo"],
+        especialidades: Array.isArray(especialidades) && especialidades.length > 0 ? especialidades : ["Masaje Tejido Profundo"],
         experienciaAnos: Number(experienciaAnos) || 0,
         disponibilidad: disponibilidad || "Lunes a Sábado, 09:00 - 19:00",
-        zonasCobertura: Array.isArray(zonasCobertura) ? zonasCobertura : ["Polanco", "Lomas de Chapultepec"],
+        zonasCobertura: Array.isArray(zonasCobertura) && zonasCobertura.length > 0 ? zonasCobertura : ["Polanco", "Lomas de Chapultepec"],
         documentos: Array.isArray(documentos) ? documentos : [],
         estado: "pendiente",
+        status: "pendiente",
         estadoAprobacion: "pendiente",
         estadoVerificacion: "no_verificado",
         puntuacion: 5.0,
         numeroResenas: 0,
         serviciosCompletados: 0,
         creadoEn: adminFirestore.FieldValue.serverTimestamp(),
-        createdAt: adminFirestore.FieldValue.serverTimestamp(),
-        updatedAt: adminFirestore.FieldValue.serverTimestamp(),
-        solicitudRegistroFecha: adminFirestore.FieldValue.serverTimestamp()
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        solicitudRegistroFecha: new Date().toISOString()
       }, { merge: true });
 
       // Registro en log de auditoría
-      const auditRef = getAdminFirestore().collection("audit_logs").doc();
+      const auditRef = db.collection("audit_logs").doc();
       batch.set(auditRef, {
         actorId: uid,
         actorEmail: trimmedEmail,
@@ -781,6 +953,7 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
         action: "POSTULACION_REGISTRO_TERAPEUTA",
         details: `Nueva postulación de registro recibida para la terapeuta ${nombre.trim()} ${apellidos.trim()} (${trimmedEmail}). Estado: pendiente de revisión.`,
         timestamp: adminFirestore.FieldValue.serverTimestamp(),
+        createdAt: new Date().toISOString(),
         ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown"
       });
 
@@ -792,11 +965,13 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
         message: "Postulación de registro recibida con éxito. Tu cuenta será revisada por el equipo de administración ESSENYA."
       });
     } catch (fsError: any) {
-      // Mecanismo anti-huérfanos: Si falla la base de datos, purgar la cuenta Auth recién creada
-      try {
-        await auth.deleteUser(uid);
-      } catch (delErr) {
-        console.error("Error eliminando usuario huérfano tras fallo en Firestore:", delErr);
+      // Mecanismo anti-huérfanos: Si falla la base de datos y la cuenta es nueva, purgar la cuenta Auth
+      if (!isExistingAuthUser) {
+        try {
+          await auth.deleteUser(uid);
+        } catch (delErr) {
+          console.error("Error eliminando usuario huérfano tras fallo en Firestore:", delErr);
+        }
       }
       return res.status(500).json({
         success: false,
@@ -809,6 +984,93 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
       success: false,
       error: error.message || "Error interno al procesar el registro."
     });
+  }
+});
+
+// Endpoint para consultar terapeutas (con auto-curación de huérfanos y deduplicación)
+app.get("/api/admin/therapists", async (req: Request, res: Response) => {
+  try {
+    const db = getAdminFirestore();
+    const snapshot = await db.collection("terapeutas").get();
+    
+    // Auto-curación: Verificar si existen terapeutas en 'users' que no estén en 'terapeutas'
+    try {
+      const usersSnap = await db.collection("users").where("rol", "==", "terapeuta").get();
+      const existingEmails = new Set<string>();
+      snapshot.docs.forEach(d => {
+        const c = (d.data().correo || d.data().email || "").toLowerCase().trim();
+        if (c) existingEmails.add(c);
+      });
+
+      for (const uDoc of usersSnap.docs) {
+        const uData = uDoc.data();
+        const email = (uData.correo || uData.email || "").toLowerCase().trim();
+        if (email && !existingEmails.has(email)) {
+          console.log(`[Auto-heal] Syncing missing therapist from users to terapeutas: ${email} (${uDoc.id})`);
+          await db.collection("terapeutas").doc(uDoc.id).set({
+            id: uDoc.id,
+            uid: uDoc.id,
+            userId: uDoc.id,
+            nombre: uData.nombre || "Terapeuta",
+            apellidos: uData.apellidos || "",
+            nombreCompleto: uData.nombreCompleto || `${uData.nombre || "Terapeuta"} ${uData.apellidos || ""}`.trim(),
+            correo: email,
+            email: email,
+            telefono: uData.telefono || "",
+            estado: uData.estado || "pendiente",
+            status: uData.estado || "pendiente",
+            estadoAprobacion: uData.estado === "activo" ? "aprobado" : "pendiente",
+            especialidades: uData.especialidades || ["Masaje Tejido Profundo"],
+            zonasCobertura: uData.zonasCobertura || ["Polanco", "Lomas de Chapultepec"],
+            puntuacion: 5.0,
+            numeroResenas: 0,
+            serviciosCompletados: 0,
+            creadoEn: uData.fechaRegistro || new Date().toISOString(),
+            createdAt: uData.fechaRegistro || new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+          existingEmails.add(email);
+        }
+      }
+    } catch (healErr) {
+      console.warn("Auto-heal check in /api/admin/therapists encountered error:", healErr);
+    }
+
+    // Re-leer terapeutas para asegurar lista actualizada y limpia
+    const freshSnapshot = await db.collection("terapeutas").get();
+    const seenEmails = new Set<string>();
+    const therapists: any[] = [];
+
+    freshSnapshot.docs.forEach(doc => {
+      const data = doc.data();
+      const email = (data.correo || data.email || "").toLowerCase().trim();
+      
+      // Deduplicar por correo en caso de registros previos duplicados
+      if (email && seenEmails.has(email)) {
+        return;
+      }
+      if (email) {
+        seenEmails.add(email);
+      }
+
+      therapists.push({
+        id: doc.id,
+        ...data,
+        creadoEn: data.creadoEn?.toDate ? data.creadoEn.toDate().toISOString() : data.creadoEn,
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt,
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+        solicitudRegistroFecha: data.solicitudRegistroFecha?.toDate ? data.solicitudRegistroFecha.toDate().toISOString() : data.solicitudRegistroFecha
+      });
+    });
+
+    return res.json({
+      success: true,
+      count: therapists.length,
+      therapists
+    });
+  } catch (error: any) {
+    console.error("Error al obtener terapeutas en backend:", error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -915,13 +1177,275 @@ app.post("/api/admin/create-therapist-auth-profile", requireAdmin, async (req, r
   }
 });
 
-app.post("/api/admin/verify-therapist-auth", requireAdmin, async (req, res) => {
+app.post("/api/admin/verify-therapist-auth", requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { uid } = req.body;
-    const userRecord = await adminAuth.getAuth().getUser(uid);
-    res.json({ success: true, verified: true, email: userRecord.email });
-  } catch (e) {
-    res.status(404).json({ success: false, error: "Usuario no encontrado" });
+    const { uid, email } = req.body || {};
+    const auth = adminAuth.getAuth();
+    let userRecord;
+    
+    if (uid) {
+      try {
+        userRecord = await auth.getUser(uid);
+      } catch (err) {
+        if (email) {
+          userRecord = await auth.getUserByEmail(email.trim().toLowerCase());
+        } else {
+          throw err;
+        }
+      }
+    } else if (email) {
+      userRecord = await auth.getUserByEmail(email.trim().toLowerCase());
+    } else {
+      return res.status(400).json({ success: false, error: "Se requiere uid o email" });
+    }
+
+    return res.json({
+      success: true,
+      verified: true,
+      exists: true,
+      uid: userRecord.uid,
+      email: userRecord.email,
+      disabled: userRecord.disabled
+    });
+  } catch (e: any) {
+    return res.status(404).json({ success: false, exists: false, error: "Usuario no encontrado en Firebase Auth." });
+  }
+});
+
+// Endpoint integral para actualizar estado / dar de alta terapeutas
+app.post("/api/admin/therapist/status", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { therapistId, status, reason, email } = req.body || {};
+    if (!therapistId || !status) {
+      return res.status(400).json({ success: false, error: "Faltan parámetros obligatorios: therapistId y status." });
+    }
+
+    const validStatuses = ["activo", "inactivo", "bloqueado", "rechazado", "pendiente"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, error: `Estado no válido. Opciones permitidas: ${validStatuses.join(", ")}` });
+    }
+
+    const db = getAdminFirestore();
+    const auth = adminAuth.getAuth();
+
+    // 1. Localizar documento de la terapeuta
+    let thDocRef = db.collection("terapeutas").doc(therapistId);
+    let thSnap = await thDocRef.get();
+
+    if (!thSnap.exists && email) {
+      const emailQuery = await db.collection("terapeutas").where("correo", "==", email.trim().toLowerCase()).limit(1).get();
+      if (!emailQuery.empty) {
+        thDocRef = emailQuery.docs[0].ref;
+        thSnap = emailQuery.docs[0];
+      }
+    }
+
+    // Si aún no existe, revisar 'users'
+    if (!thSnap.exists) {
+      const userSnap = await db.collection("users").doc(therapistId).get();
+      if (userSnap.exists) {
+        const uData = userSnap.data() || {};
+        await thDocRef.set({
+          id: therapistId,
+          uid: therapistId,
+          nombre: uData.nombre || "Terapeuta",
+          apellidos: uData.apellidos || "",
+          nombreCompleto: uData.nombreCompleto || `${uData.nombre || "Terapeuta"} ${uData.apellidos || ""}`.trim(),
+          correo: uData.correo || uData.email || email || "",
+          telefono: uData.telefono || "",
+          estado: status,
+          estadoAprobacion: status === "activo" ? "aprobado" : "pendiente",
+          especialidades: ["Masaje Tejido Profundo"],
+          zonasCobertura: ["Polanco", "Lomas de Chapultepec"],
+          puntuacion: 5.0,
+          resenasCount: 0,
+          serviciosCompletados: 0,
+          creadoEn: adminFirestore.FieldValue.serverTimestamp(),
+          createdAt: new Date().toISOString()
+        }, { merge: true });
+        thSnap = await thDocRef.get();
+      }
+    }
+
+    if (!thSnap.exists) {
+      return res.status(404).json({ success: false, error: `No se encontró terapeuta con ID ${therapistId}.` });
+    }
+
+    const therapistData = thSnap.data() || {};
+    const targetEmail = (therapistData.correo || therapistData.email || email || "").trim().toLowerCase();
+    let targetUid = thSnap.id;
+
+    // 2. Verificar o asegurar existencia de cuenta en Firebase Auth
+    let authUserRecord;
+    try {
+      if (targetUid) {
+        authUserRecord = await auth.getUser(targetUid);
+      }
+    } catch {
+      if (targetEmail) {
+        try {
+          authUserRecord = await auth.getUserByEmail(targetEmail);
+          targetUid = authUserRecord.uid;
+        } catch {
+          // No existe aún en Auth
+        }
+      }
+    }
+
+    let generatedPassword: string | undefined = undefined;
+    if (!authUserRecord && targetEmail) {
+      try {
+        generatedPassword = `Essenya${Math.floor(1000 + Math.random() * 9000)}!`;
+        authUserRecord = await auth.createUser({
+          email: targetEmail,
+          password: generatedPassword,
+          displayName: `${therapistData.nombre || "Terapeuta"} ${therapistData.apellidos || ""}`.trim()
+        });
+        targetUid = authUserRecord.uid;
+      } catch (authCreateErr: any) {
+        console.warn("No se pudo crear automáticamente la cuenta en Auth:", authCreateErr);
+      }
+    }
+
+    const adminEmail = (req as any).user?.email || "admin@essenya.mx";
+    const nowIso = new Date().toISOString();
+    const batch = db.batch();
+
+    // 3. Actualizar colección 'terapeutas'
+    const primaryThRef = db.collection("terapeutas").doc(targetUid);
+    batch.set(primaryThRef, {
+      ...therapistData,
+      id: targetUid,
+      uid: targetUid,
+      userId: targetUid,
+      estado: status,
+      status: status,
+      estadoAprobacion: status === "activo" ? "aprobado" : (status === "rechazado" ? "rechazado" : "pendiente"),
+      motivoRechazoAccount: status === "rechazado" ? (reason || "No cumple con criterios de acreditación.") : null,
+      fechaActualizacion: nowIso,
+      updatedAt: nowIso,
+      ...(status === "activo" ? {
+        fechaAprobacion: nowIso,
+        aprobadoPor: adminEmail,
+        estadoVerificacion: "verificado"
+      } : {})
+    }, { merge: true });
+
+    // Si el ID original era diferente del UID de Auth, limpiar el documento anterior
+    if (thSnap.id !== targetUid) {
+      batch.delete(db.collection("terapeutas").doc(thSnap.id));
+    }
+
+    // 4. Actualizar colección 'users'
+    const userRef = db.collection("users").doc(targetUid);
+    batch.set(userRef, {
+      uid: targetUid,
+      id: targetUid,
+      correo: targetEmail,
+      email: targetEmail,
+      nombre: therapistData.nombre || "Terapeuta",
+      apellidos: therapistData.apellidos || "",
+      nombreCompleto: `${therapistData.nombre || "Terapeuta"} ${therapistData.apellidos || ""}`.trim(),
+      rol: "terapeuta",
+      role: "terapeuta",
+      estado: status,
+      isActive: status === "activo",
+      fechaActualizacion: nowIso,
+      ...(status === "activo" ? {
+        fechaAprobacion: nowIso,
+        aprobadoPor: adminEmail
+      } : {})
+    }, { merge: true });
+
+    // 5. Sincronizar 'terapeutas_publicos'
+    const publicRef = db.collection("terapeutas_publicos").doc(targetUid);
+    if (status === "activo") {
+      batch.set(publicRef, {
+        id: targetUid,
+        name: `${therapistData.nombre || "Terapeuta"} ${therapistData.apellidos || ""}`.trim(),
+        nombre: `${therapistData.nombre || "Terapeuta"} ${therapistData.apellidos || ""}`.trim(),
+        photo: therapistData.fotografia || "",
+        fotografia: therapistData.fotografia || "",
+        phone: therapistData.telefono || "",
+        telefono: therapistData.telefono || "",
+        rating: therapistData.puntuacion || 5.0,
+        puntuacion: therapistData.puntuacion || 5.0,
+        reviewCount: therapistData.resenasCount || 0,
+        resenasCount: therapistData.resenasCount || 0,
+        specialties: therapistData.especialidades || ["Masaje Tejido Profundo"],
+        especialidades: therapistData.especialidades || ["Masaje Tejido Profundo"],
+        status: "disponible",
+        estado: "activo",
+        coverageZones: therapistData.zonasCobertura || ["Polanco", "Lomas de Chapultepec"],
+        zonasCobertura: therapistData.zonasCobertura || ["Polanco", "Lomas de Chapultepec"],
+        completedServicesCount: therapistData.serviciosCompletados || 0,
+        serviciosCompletados: therapistData.serviciosCompletados || 0,
+        bio: therapistData.biografia || "Terapeuta certificada ESSENYA.",
+        biografia: therapistData.biografia || "Terapeuta certificada ESSENYA.",
+        updatedAt: nowIso
+      }, { merge: true });
+    } else {
+      batch.set(publicRef, {
+        status: "desconectado",
+        estado: status,
+        updatedAt: nowIso
+      }, { merge: true });
+    }
+
+    // 6. Registro en auditoría
+    const auditRef = db.collection("audit_logs").doc();
+    batch.set(auditRef, {
+      actorId: (req as any).user?.uid || "admin",
+      actorEmail: adminEmail,
+      actorRole: "administrador",
+      action: status === "activo" ? "ALTA_TERAPEUTA_APROBADA" : `CAMBIO_ESTADO_TERAPEUTA_${status.toUpperCase()}`,
+      details: `Administración actualizó el estado de la terapeuta ${therapistData.nombre} ${therapistData.apellidos || ""} a "${status}". Motivo: ${reason || "Aprobación oficial"}`,
+      timestamp: adminFirestore.FieldValue.serverTimestamp(),
+      createdAt: nowIso,
+      ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown"
+    });
+
+    await batch.commit();
+
+    return res.json({
+      success: true,
+      therapistId: targetUid,
+      status,
+      generatedPassword,
+      message: `El estado de la terapeuta ha sido actualizado a "${status}" exitosamente.`
+    });
+  } catch (error: any) {
+    console.error("Error en /api/admin/therapist/status:", error);
+    return res.status(500).json({ success: false, error: error.message || "Error interno al actualizar estado." });
+  }
+});
+
+// Endpoint para eliminar terapeuta
+app.delete("/api/admin/therapist/:id", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const db = getAdminFirestore();
+    const batch = db.batch();
+
+    batch.delete(db.collection("terapeutas").doc(id));
+    batch.delete(db.collection("users").doc(id));
+    batch.delete(db.collection("terapeutas_publicos").doc(id));
+
+    const auditRef = db.collection("audit_logs").doc();
+    batch.set(auditRef, {
+      actorId: (req as any).user?.uid || "admin",
+      actorEmail: (req as any).user?.email || "admin@essenya.mx",
+      actorRole: "administrador",
+      action: "ELIMINACION_TERAPEUTA",
+      details: `Terapeuta con ID ${id} eliminada permanentemente del sistema por administración.`,
+      timestamp: adminFirestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString()
+    });
+
+    await batch.commit();
+    return res.json({ success: true, message: "Terapeuta eliminada exitosamente." });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 

@@ -86,6 +86,15 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const { sessions } = useAuth();
+  let refreshTherapists: (() => Promise<void>) | undefined = undefined;
+  try {
+    const therapistCtx = useTherapistContext();
+    refreshTherapists = therapistCtx?.refreshTherapists;
+  } catch {
+    // context may not be available if rendered outside provider
+  }
+
   const toggleSpecialty = (spec: string) => {
     if (especialidades.includes(spec)) {
       setEspecialidades(especialidades.filter(s => s !== spec));
@@ -163,7 +172,42 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
       documentos: uploadedDocuments || []
     };
 
-    // Registro directo y seguro vía Firebase Client SDK
+    // 1. Prioridad: Registro seguro y atómico mediante API Backend
+    try {
+      const response = await fetch('/api/therapist/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(registrationPayload)
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok && data.success) {
+        if (refreshTherapists) {
+          try {
+            await refreshTherapists();
+          } catch {
+            // Non-blocking
+          }
+        }
+        setIsSubmitting(false);
+        onSuccess();
+        return;
+      }
+
+      // Si el servidor retornó un error por correo ya existente
+      if (data.error && (data.error.includes('registrado') || data.error.includes('already in use'))) {
+        setIsSubmitting(false);
+        setErrorMessage(data.error);
+        return;
+      }
+    } catch (apiErr) {
+      console.warn('[TherapistRegistration] Backend endpoint no disponible, procediendo con fallback cliente:', apiErr);
+    }
+
+    // 2. Fallback de contingencia: Firebase Client SDK
     try {
       // 1. Crear usuario en Firebase Authentication
       const userCredential = await createUserWithEmailAndPassword(auth, registrationPayload.correo, password);
@@ -275,11 +319,21 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
         updatedAt: new Date().toISOString()
       });
 
-      // 6. Cerrar la sesión activa para que el usuario regrese a la pantalla de login con aviso de revisión
-      try {
-        await signOut(auth);
-      } catch {
-        // Non-blocking
+      // 6. Si no es una sesión de administración previa, cerrar sesión del nuevo usuario
+      if (!sessions.administrador) {
+        try {
+          await signOut(auth);
+        } catch {
+          // Non-blocking
+        }
+      }
+
+      if (refreshTherapists) {
+        try {
+          await refreshTherapists();
+        } catch {
+          // Non-blocking
+        }
       }
 
       setIsSubmitting(false);

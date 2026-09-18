@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   LayoutDashboard, Calendar, UserCheck, Users, 
   Sparkles, CreditCard, BarChart2, Settings, FileCheck,
-  Code
+  Code, DollarSign
 } from 'lucide-react';
 import { useTherapistContext } from '../../../shared/context/TherapistContext';
 
@@ -13,6 +13,7 @@ export type AdminRoutePath =
   | '/clientes' 
   | '/servicios' 
   | '/pagos' 
+  | '/finanzas'
   | '/reportes' 
   | '/configuracion'
   | '/developer';
@@ -35,6 +36,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ currentRoute, onNavi
     { path: '/clientes' as AdminRoutePath, label: 'Socios VIP', icon: Users },
     { path: '/servicios' as AdminRoutePath, label: 'Servicios & Tarifas', icon: Sparkles },
     { path: '/pagos' as AdminRoutePath, label: 'Pagos & Comprobantes', icon: CreditCard },
+    { path: '/finanzas' as AdminRoutePath, label: 'Finanzas', icon: DollarSign },
     { path: '/reportes' as AdminRoutePath, label: 'Reportes & Métricas', icon: BarChart2 },
     { path: '/configuracion' as AdminRoutePath, label: 'Zonas & Seguridad', icon: Settings },
   ];
