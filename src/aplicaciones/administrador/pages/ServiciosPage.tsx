@@ -68,14 +68,21 @@ export const ServiciosPage: React.FC = () => {
 
   // Filtered services
   const filteredServices = useMemo(() => {
-    return services.filter(srv => {
+    return (services || []).filter(srv => {
+      if (!srv) return false;
+      const anySrv = srv as any;
+      const name = String(anySrv.name || anySrv.nombre || '');
+      const tagline = String(anySrv.tagline || '');
+      const description = String(anySrv.description || anySrv.descripcion || '');
+      const id = String(anySrv.id || '');
+
       // 1. Text search
       const term = searchQuery.toLowerCase().trim();
       const matchesSearch = !term || 
-        srv.name.toLowerCase().includes(term) ||
-        (srv.tagline && srv.tagline.toLowerCase().includes(term)) ||
-        (srv.description && srv.description.toLowerCase().includes(term)) ||
-        srv.id.toLowerCase().includes(term);
+        name.toLowerCase().includes(term) ||
+        tagline.toLowerCase().includes(term) ||
+        description.toLowerCase().includes(term) ||
+        id.toLowerCase().includes(term);
 
       if (!matchesSearch) return false;
 
