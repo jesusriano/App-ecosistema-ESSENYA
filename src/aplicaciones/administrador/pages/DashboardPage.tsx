@@ -12,6 +12,7 @@ import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { Booking, Therapist, BookingState } from '../../../shared/types';
 import { ReservasMap } from '../components/ReservasMap';
 import { AdminStatsPanel } from '../components/AdminStatsPanel';
+import { AdminRechartsDashboard } from '../components/AdminRechartsDashboard';
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -627,8 +628,10 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* Analytics & Monthly Volume / Therapist Occupancy Charts */}
-      <div className="pt-4 border-t border-[var(--border-color)]">
-        <div className="mb-4">
+      <div className="pt-4 border-t border-[var(--border-color)] space-y-6">
+        <AdminRechartsDashboard bookings={bookings} therapists={therapists} zones={zones} />
+        
+        <div className="mb-4 pt-4 border-t border-[var(--border-color)]">
           <h2 className="text-xl font-serif font-bold text-[var(--text-primary)]">Analítica Ejecutiva & Rendimiento</h2>
           <p className="text-xs text-[var(--text-muted)]">Volumen de reservas mensuales y porcentaje de ocupación por terapeuta.</p>
         </div>

@@ -127,42 +127,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Portal Switcher Selector */}
-        <div className="flex items-center bg-[#FAF8F5] dark:bg-[#1A1A1A] p-1 rounded-2xl border border-[#E5DFD3] dark:border-[#2A2A2A] shadow-xs">
-          <button
-            type="button"
-            onClick={() => onSelectPortal('client')}
-            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold transition-all cursor-pointer ${
-              currentPortal === 'client'
-                ? 'bg-white dark:bg-[#262626] text-[#806020] dark:text-[#C9A55B] font-bold shadow-xs'
-                : 'text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white'
-            }`}
-          >
-            Cliente
-          </button>
-          <button
-            type="button"
-            onClick={() => onSelectPortal('therapist')}
-            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold transition-all cursor-pointer ${
-              currentPortal === 'therapist'
-                ? 'bg-white dark:bg-[#262626] text-[#806020] dark:text-[#C9A55B] font-bold shadow-xs'
-                : 'text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white'
-            }`}
-          >
-            Terapeuta
-          </button>
-          <button
-            type="button"
-            onClick={() => onSelectPortal('admin')}
-            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold transition-all cursor-pointer ${
-              currentPortal === 'admin'
-                ? 'bg-[#C9A55B] text-black font-bold shadow-xs'
-                : 'text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white'
-            }`}
-          >
-            Admin
-          </button>
-        </div>
+
 
         {/* Panel Actions / Website Link & Status */}
         <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">

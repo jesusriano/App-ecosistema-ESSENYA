@@ -27,6 +27,8 @@ export const useAdmin = () => {
     handleAddService: ecosystem.handleAddService,
     handleEditService: ecosystem.handleEditService,
     handleDeleteService: ecosystem.handleDeleteService,
+    handleToggleServiceActive: ecosystem.handleToggleServiceActive,
+    handleBulkToggleServices: ecosystem.handleBulkToggleServices,
     handleAddClient: ecosystem.handleAddClient,
     handleEditClient: ecosystem.handleEditClient,
     handleToggleBlockClient: ecosystem.handleToggleBlockClient,

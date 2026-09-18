@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
-import { collection, onSnapshot, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, runTransaction, arrayUnion } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, limit, orderBy, runTransaction, arrayUnion } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { db, auth } from '../../lib/firebase';
 import { useAuth } from './AuthContext';
@@ -11,6 +11,7 @@ import {
   INITIAL_SERVICES, INITIAL_THERAPISTS, INITIAL_CLIENT, 
   INITIAL_BOOKINGS, INITIAL_INVOICES, INITIAL_COVERAGE_ZONES, INITIAL_AUDIT_LOGS 
 } from '../data/mockData';
+import { OFFICIAL_SERVICES } from '../data/catalog';
 import { getServiceImage } from '../utils/serviceImage';
 
 interface EcosystemContextType {
@@ -52,6 +53,8 @@ interface EcosystemContextType {
   handleAddService: (newService: ServiceItem) => void;
   handleEditService: (updatedService: ServiceItem) => void;
   handleDeleteService: (serviceId: string) => void;
+  handleToggleServiceActive: (serviceId: string, isActive: boolean) => Promise<void>;
+  handleBulkToggleServices: (serviceIds: string[], isActive: boolean) => Promise<void>;
   
   handleAddClient: (newClient: ClientUser) => void;
   handleEditClient: (updatedClient: ClientUser) => void;
@@ -320,25 +323,75 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [bookings, client?.id, client?.membershipTier]);
 
+  // Primitive flags for listener stability (prevents frequent tear-down on unrelated session ref changes)
+  const currentUserId = firebaseUser?.uid;
+  const isUserAdmin = Boolean(sessions?.administrador || currentPortal === 'admin');
+  const isUserTherapist = Boolean(sessions?.terapeuta || currentPortal === 'therapist');
+
   // Firestore Realtime Subscriptions (Catalogs always public; user data queried by role / UID)
   useEffect(() => {
     // 1. Public Catalogs (Services, Therapists, Zones)
     const unsubServicios = onSnapshot(collection(db, 'servicios'), (snap) => {
+      // 1. Initialize map with OFFICIAL_SERVICES defaults (ensures all 6 base rituals always exist)
+      const serviceMap = new Map<string, ServiceItem>();
+      OFFICIAL_SERVICES.forEach(s => {
+        serviceMap.set(s.id, { ...s, isActive: s.isActive !== false });
+        if (s.id === 'SRB-relajante') {
+          serviceMap.set('srv-relajante', { ...s, id: 'srv-relajante', isActive: s.isActive !== false });
+        }
+      });
+
+      // 2. Overlay Firestore documents (customized by admin or newly created)
       if (!snap.empty) {
-        const list = snap.docs.map(doc => {
-          const data = doc.data();
-          const id = doc.id;
+        snap.docs.forEach(docSnap => {
+          const data = docSnap.data();
+          const id = docSnap.id;
+          const existing = serviceMap.get(id) || serviceMap.get(id === 'SRB-relajante' ? 'srv-relajante' : id === 'srv-relajante' ? 'SRB-relajante' : '');
           const image = (data.image && typeof data.image === 'string' && data.image.trim().length > 5 && !data.image.includes('photo-1512290900672'))
             ? data.image.trim()
-            : getServiceImage({ id, name: data.name || data.nombre, image: data.image });
-          return {
-            id,
+            : existing?.image || getServiceImage({ id, name: data.name || data.nombre, image: data.image });
+
+          const merged: ServiceItem = {
+            ...(existing || {}),
             ...data,
+            id,
+            name: data.name || data.nombre || existing?.name || 'Servicio ESSENYA',
+            tagline: data.tagline || existing?.tagline || '',
+            description: data.description || existing?.description || '',
+            basePrice: Number(data.basePrice ?? existing?.basePrice ?? 1100),
+            price90: Number(data.price90 ?? existing?.price90 ?? 1650),
+            price120: Number(data.price120 ?? existing?.price120 ?? 2200),
+            category: (data.category as any) || existing?.category || 'Holístico',
+            iconName: data.iconName || existing?.iconName || 'Sparkles',
             image,
-          } as ServiceItem;
+            benefits: Array.isArray(data.benefits) ? data.benefits : (existing?.benefits || []),
+            recommendedFor: data.recommendedFor || existing?.recommendedFor || '',
+            allowedDurations: Array.isArray(data.allowedDurations) && data.allowedDurations.length > 0
+              ? data.allowedDurations
+              : (existing?.allowedDurations || [60, 90, 120]),
+            isActive: data.isActive !== false && data.active !== false && data.estado !== 'inactivo',
+            isVipFeatured: Boolean(data.isVipFeatured ?? data.featured),
+            discountPercent: Number(data.discountPercent ?? 0),
+            requiresDualTherapist: Boolean(data.requiresDualTherapist ?? existing?.requiresDualTherapist),
+            therapistAssignmentNote: data.therapistAssignmentNote || existing?.therapistAssignmentNote
+          };
+          serviceMap.set(id, merged);
         });
-        setServices(list);
       }
+
+      // 3. Deduplicate aliases, keeping official order
+      const finalServices: ServiceItem[] = [];
+      const seenNames = new Set<string>();
+
+      serviceMap.forEach((srv) => {
+        const normName = (srv.name || '').toLowerCase().trim();
+        if (!seenNames.has(normName)) {
+          seenNames.add(normName);
+          finalServices.push(srv);
+        }
+      });
+
+      setServices(finalServices);
     }, err => handleFirestoreError(err, OperationType.LIST, 'servicios'));
 
     const unsubTerapeuta = onSnapshot(collection(db, 'terapeutas_publicos'), (snap) => {
@@ -372,8 +425,6 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     const uid = firebaseUser.uid;
-    const isUserAdmin = Boolean(sessions?.administrador || currentPortal === 'admin');
-    const isUserTherapist = Boolean(sessions?.terapeuta || currentPortal === 'therapist');
 
     let unsubReservas = () => {};
     let unsubPending = () => {};
@@ -383,8 +434,9 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     let unsubPanic = () => {};
 
     if (isUserAdmin) {
-      // Administrator: Full visibility
-      unsubReservas = onSnapshot(collection(db, 'reservas'), (snap) => {
+      // Administrator: Queries with safe limits to prevent unbounded memory churn and re-render cascading
+      const qReservas = query(collection(db, 'reservas'), limit(200));
+      unsubReservas = onSnapshot(qReservas, (snap) => {
         if (!snap.empty) {
           const list = snap.docs.map(doc => {
             const d = (doc.data() || {}) as any;
@@ -424,7 +476,8 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
       }, err => handleFirestoreError(err, OperationType.LIST, 'reservas'));
 
-      unsubClientes = onSnapshot(collection(db, 'clientes'), (snap) => {
+      const qClientes = query(collection(db, 'clientes'), limit(150));
+      unsubClientes = onSnapshot(qClientes, (snap) => {
         if (!snap.empty) {
           const list = snap.docs.map(doc => {
             const d = (doc.data() || {}) as any;
@@ -449,7 +502,8 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
       }, err => handleFirestoreError(err, OperationType.LIST, 'clientes'));
 
-      unsubInvoices = onSnapshot(collection(db, 'invoices'), (snap) => {
+      const qInvoices = query(collection(db, 'invoices'), limit(100));
+      unsubInvoices = onSnapshot(qInvoices, (snap) => {
         if (!snap.empty) {
           const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice));
           setInvoices(list);
@@ -458,7 +512,8 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
       }, err => handleFirestoreError(err, OperationType.LIST, 'invoices'));
 
-      unsubAudit = onSnapshot(collection(db, 'audit_logs'), (snap) => {
+      const qAudit = query(collection(db, 'audit_logs'), limit(50));
+      unsubAudit = onSnapshot(qAudit, (snap) => {
         if (!snap.empty) {
           const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SystemAuditLog));
           setAuditLogs(list);
@@ -467,7 +522,8 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
       }, err => handleFirestoreError(err, OperationType.LIST, 'audit_logs'));
 
-      unsubPanic = onSnapshot(collection(db, 'alertas_panico'), (snap) => {
+      const qPanic = query(collection(db, 'alertas_panico'), limit(50));
+      unsubPanic = onSnapshot(qPanic, (snap) => {
         if (!snap.empty) {
           const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as PanicAlert)).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
           setPanicAlerts(list);
@@ -569,7 +625,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       unsubPanic();
       unsubConfig();
     };
-  }, [firebaseUser, sessions, currentPortal]);
+  }, [currentUserId, isUserAdmin, isUserTherapist, currentPortal]);
 
   // Add Audit Log to State & Firestore
   const addLog = async (userRole: string, userName: string, action: string, details: string) => {
@@ -1255,36 +1311,118 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     );
   };
 
-  // Service CRUD Handlers
+  // Service CRUD & Status Handlers
   const handleAddService = async (newService: ServiceItem) => {
-    setServices(prev => [...prev, newService]);
+    const validated: ServiceItem = {
+      ...newService,
+      isActive: newService.isActive !== false,
+      isVipFeatured: Boolean(newService.isVipFeatured),
+      discountPercent: Number(newService.discountPercent || 0),
+      basePrice: Number(newService.basePrice || 1100),
+      price90: Number(newService.price90 || 1650),
+      price120: Number(newService.price120 || 2200),
+      allowedDurations: Array.isArray(newService.allowedDurations) && newService.allowedDurations.length > 0 
+        ? newService.allowedDurations 
+        : [60, 90, 120]
+    };
+
+    setServices(prev => [...prev.filter(s => s.id !== validated.id), validated]);
     try {
-      await setDoc(doc(db, 'servicios', newService.id), cleanForFirestore(newService));
+      await setDoc(doc(db, 'servicios', validated.id), cleanForFirestore(validated), { merge: true });
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `servicios/${newService.id}`, newService);
+      handleFirestoreError(err, OperationType.CREATE, `servicios/${validated.id}`, validated);
     }
 
     addLog(
       'Administrador',
       'Panel Admin',
       'Alta de Servicio',
-      `Nuevo servicio "${newService.name}" registrado con precio base $${newService.basePrice} MXN.`
+      `Nuevo servicio "${validated.name}" registrado con precio base $${validated.basePrice} MXN.`
     );
   };
 
   const handleEditService = async (updatedService: ServiceItem) => {
-    setServices(prev => prev.map(s => s.id === updatedService.id ? updatedService : s));
+    const previous = services.find(s => s.id === updatedService.id);
+    const validated: ServiceItem = {
+      ...updatedService,
+      isActive: updatedService.isActive !== false,
+      isVipFeatured: Boolean(updatedService.isVipFeatured),
+      discountPercent: Number(updatedService.discountPercent || 0),
+      basePrice: Number(updatedService.basePrice || 1100),
+      price90: Number(updatedService.price90 || 1650),
+      price120: Number(updatedService.price120 || 2200),
+      allowedDurations: Array.isArray(updatedService.allowedDurations) && updatedService.allowedDurations.length > 0 
+        ? updatedService.allowedDurations 
+        : [60, 90, 120]
+    };
+
+    // Optimistic update
+    setServices(prev => prev.map(s => s.id === validated.id ? validated : s));
     try {
-      await setDoc(doc(db, 'servicios', updatedService.id), cleanForFirestore(updatedService));
+      await setDoc(doc(db, 'servicios', validated.id), cleanForFirestore(validated), { merge: true });
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `servicios/${updatedService.id}`, updatedService);
+      if (previous) {
+        setServices(prev => prev.map(s => s.id === validated.id ? previous : s));
+      }
+      handleFirestoreError(err, OperationType.UPDATE, `servicios/${validated.id}`, validated);
+      throw err;
     }
 
     addLog(
       'Administrador',
       'Panel Admin',
       'Edición de Servicio',
-      `Servicio "${updatedService.name}" actualizado (Precio: $${updatedService.basePrice} MXN).`
+      `Servicio "${validated.name}" actualizado (Precio: $${validated.basePrice} MXN, Estado: ${validated.isActive ? 'Activo' : 'Inactivo'}).`
+    );
+  };
+
+  const handleToggleServiceActive = async (serviceId: string, isActive: boolean) => {
+    const target = services.find(s => s.id === serviceId);
+    if (!target) return;
+
+    // Optimistic immediate UI reflection
+    setServices(prev => prev.map(s => s.id === serviceId ? { ...s, isActive } : s));
+
+    try {
+      await setDoc(doc(db, 'servicios', serviceId), { isActive, active: isActive, estado: isActive ? 'activo' : 'inactivo' }, { merge: true });
+    } catch (err) {
+      // Revert upon failure
+      setServices(prev => prev.map(s => s.id === serviceId ? { ...s, isActive: !isActive } : s));
+      handleFirestoreError(err, OperationType.UPDATE, `servicios/${serviceId}`, { isActive });
+      throw err;
+    }
+
+    addLog(
+      'Administrador',
+      'Panel Admin',
+      isActive ? 'Activación de Servicio' : 'Desactivación de Servicio',
+      `Servicio "${target.name}" marcado como ${isActive ? 'ACTIVO' : 'INACTIVO'} en el catálogo.`
+    );
+  };
+
+  const handleBulkToggleServices = async (serviceIds: string[], isActive: boolean) => {
+    if (!serviceIds.length) return;
+    const idSet = new Set(serviceIds);
+
+    // Optimistic immediate UI reflection
+    setServices(prev => prev.map(s => idSet.has(s.id) ? { ...s, isActive } : s));
+
+    try {
+      await Promise.all(
+        serviceIds.map(id => 
+          setDoc(doc(db, 'servicios', id), { isActive, active: isActive, estado: isActive ? 'activo' : 'inactivo' }, { merge: true })
+        )
+      );
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `servicios/bulk`, { serviceIds, isActive });
+      throw err;
+    }
+
+    addLog(
+      'Administrador',
+      'Panel Admin',
+      'Modificación Masiva de Servicios',
+      `${serviceIds.length} servicios marcados como ${isActive ? 'ACTIVOS' : 'INACTIVOS'}.`
     );
   };
 
@@ -1294,6 +1432,9 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     try {
       await deleteDoc(doc(db, 'servicios', serviceId));
     } catch (err) {
+      if (target) {
+        setServices(prev => [...prev, target]);
+      }
       handleFirestoreError(err, OperationType.DELETE, `servicios/${serviceId}`);
     }
 
@@ -1624,6 +1765,8 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     handleAddService,
     handleEditService,
     handleDeleteService,
+    handleToggleServiceActive,
+    handleBulkToggleServices,
     handleAddClient,
     handleEditClient,
     handleToggleBlockClient,
@@ -1651,6 +1794,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     handleEditTherapist, handleDeleteTherapist, handleAddZone,
     handleEditZone, handleDeleteZone, handleSendMessage, handleRateBooking,
     handleAddService, handleEditService, handleDeleteService,
+    handleToggleServiceActive, handleBulkToggleServices,
     handleAddClient, handleEditClient, handleToggleBlockClient, handleDeleteClient,
     handleRescheduleBooking, handleCancelBooking, handleConfirmPayment,
     handleRejectPayment, handleDataCleanup, handleUpdateLiveLocation,

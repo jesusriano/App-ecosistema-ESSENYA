@@ -25,7 +25,10 @@ export const OFFICIAL_SERVICES: ServiceItem[] = [
     image: imgRelaxing,
     benefits: ['Alivio inmediato del estrés y tensión', 'Inducción al sueño reparador', 'Mejora de la circulación celular'],
     recommendedFor: 'Estrés mental, cansancio acumulado e insomnio.',
-    allowedDurations: [60, 90, 120]
+    allowedDurations: [60, 90, 120],
+    isActive: true,
+    isVipFeatured: false,
+    discountPercent: 0
   },
   {
     id: 'srv-descontracturante',
@@ -40,7 +43,10 @@ export const OFFICIAL_SERVICES: ServiceItem[] = [
     image: imgTension,
     benefits: ['Disolución de contracturas profundas', 'Restauración del rango de movimiento', 'Alivio del dolor de cuello y espalda'],
     recommendedFor: 'Tensión laboral, rigidez física y dolor muscular localizado.',
-    allowedDurations: [60, 90, 120]
+    allowedDurations: [60, 90, 120],
+    isActive: true,
+    isVipFeatured: false,
+    discountPercent: 0
   },
   {
     id: 'srv-deportivo',
@@ -55,7 +61,10 @@ export const OFFICIAL_SERVICES: ServiceItem[] = [
     image: imgSports,
     benefits: ['Aceleración del drenaje del ácido láctico', 'Prevención de lesiones atléticas', 'Optimización de flexibilidad muscular'],
     recommendedFor: 'Deportistas, entrenamiento constante y recuperación articular.',
-    allowedDurations: [60, 90, 120]
+    allowedDurations: [60, 90, 120],
+    isActive: true,
+    isVipFeatured: false,
+    discountPercent: 0
   },
   {
     id: 'srv-tejido-profundo',
@@ -70,7 +79,10 @@ export const OFFICIAL_SERVICES: ServiceItem[] = [
     image: imgDeepTissue,
     benefits: ['Liberación de nudos crónicos', 'Alineación de fibras de colágeno', 'Alivio sostenido de fatiga articular'],
     recommendedFor: 'Contracturas persistentes, mala postura y tensión crónica profunda.',
-    allowedDurations: [60, 90, 120]
+    allowedDurations: [60, 90, 120],
+    isActive: true,
+    isVipFeatured: false,
+    discountPercent: 0
   },
   {
     id: 'srv-prenatal',
@@ -85,7 +97,10 @@ export const OFFICIAL_SERVICES: ServiceItem[] = [
     image: imgPrenatal,
     benefits: ['Reducción de inflamación en piernas y pies', 'Alivio de sobrecarga lumbar y pélvica', 'Conexión serena entre mamá y bebé'],
     recommendedFor: 'Mujeres gestantes a partir del primer trimestre.',
-    allowedDurations: [60, 90, 120]
+    allowedDurations: [60, 90, 120],
+    isActive: true,
+    isVipFeatured: false,
+    discountPercent: 0
   },
   {
     id: 'srv-pareja',
@@ -101,6 +116,9 @@ export const OFFICIAL_SERVICES: ServiceItem[] = [
     benefits: ['Asignación automática de 2 Masajistas', 'Conexión y relajación coordinada', 'Montaje de Suite Spa Dúo VIP'],
     recommendedFor: 'Aniversarios, fechas especiales y parejas.',
     allowedDurations: [60, 90, 120],
+    isActive: true,
+    isVipFeatured: true,
+    discountPercent: 0,
     requiresDualTherapist: true,
     therapistAssignmentNote: '2 Masajistas asignados automáticamente (1 para cada persona)'
   }
