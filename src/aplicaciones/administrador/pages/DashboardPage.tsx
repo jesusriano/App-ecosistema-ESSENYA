@@ -29,11 +29,13 @@ export const DashboardPage: React.FC = () => {
   }, [panicAlerts]);
   const [selectedPanicAlert, setSelectedPanicAlert] = useState<any>(null);
 
+  const panicIdsKey = useMemo(() => activePanicAlerts.map(a => a.id).join(','), [activePanicAlerts]);
+
   useEffect(() => {
     if (activePanicAlerts.length > 0 && (!selectedPanicAlert || !activePanicAlerts.some(a => a.id === selectedPanicAlert.id))) {
       setSelectedPanicAlert(activePanicAlerts[0]);
     }
-  }, [activePanicAlerts, selectedPanicAlert]);
+  }, [panicIdsKey]);
 
   const pendingTherapistsCount = fullTherapists.filter(t => t.estado === 'pendiente').length;
   const approvedTherapistsCount = fullTherapists.filter(t => t.estado === 'activo').length;
@@ -64,17 +66,20 @@ export const DashboardPage: React.FC = () => {
     activeServicesOnTrack.length > 0 ? activeServicesOnTrack[0].id : bookings[0]?.id || ''
   );
 
+  const activeIdsKey = useMemo(() => activeServicesOnTrack.map(b => b.id).join(','), [activeServicesOnTrack]);
+  const bookingsIdsKey = useMemo(() => (bookings || []).map(b => b.id).join(','), [bookings]);
+
   // Auto-focus on active tracking booking whenever a masseuse starts route or arrives
   useEffect(() => {
     if (activeServicesOnTrack.length > 0) {
       const isCurrentActive = activeServicesOnTrack.some(b => b.id === selectedTrackBookingId);
-      if (!isCurrentActive) {
+      if (!isCurrentActive || !selectedTrackBookingId) {
         setSelectedTrackBookingId(activeServicesOnTrack[0].id);
       }
     } else if (bookings.length > 0 && !selectedTrackBookingId) {
       setSelectedTrackBookingId(bookings[0].id);
     }
-  }, [activeServicesOnTrack, bookings, selectedTrackBookingId]);
+  }, [activeIdsKey, bookingsIdsKey]);
 
   const currentTrackBooking = bookings.find(b => b.id === selectedTrackBookingId) || bookings[0];
 
