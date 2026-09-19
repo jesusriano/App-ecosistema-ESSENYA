@@ -2024,19 +2024,24 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
       let courtesyApplied = false;
       let courtesyDiscount = 0;
       if (applyCourtesy) {
-        const finishedBookingsQuery = await t.get(getAdminFirestore().collection('reservas')
-          .where('clientId', '==', uid)
-          .where('state', '==', 'servicio_finalizado')
-          .where('paymentStatus', '==', 'pagado'));
+        const allClientBookings = await t.get(getAdminFirestore().collection('reservas')
+          .where('clientId', '==', uid));
         
-        const finishedCount = finishedBookingsQuery.size;
-        const usedCourtesiesQuery = await t.get(getAdminFirestore().collection('reservas')
-          .where('clientId', '==', uid)
-          .where('courtesyApplied', '==', true)
-          .where('state', '!=', 'cancelado'));
+        let finishedCount = 0;
+        let usedCourtesiesCount = 0;
+
+        allClientBookings.forEach(docSnap => {
+          const bData = docSnap.data();
+          if (bData.state === 'servicio_finalizado' && bData.paymentStatus === 'pagado') {
+            finishedCount++;
+          }
+          if (bData.courtesyApplied === true && bData.state !== 'cancelado') {
+            usedCourtesiesCount++;
+          }
+        });
 
         const earnedCourtesies = Math.floor(finishedCount / 5);
-        const availableCourtesies = earnedCourtesies - usedCourtesiesQuery.size;
+        const availableCourtesies = earnedCourtesies - usedCourtesiesCount;
         const isVipTier = userData.membershipTier === 'DIAMANTE' || userData.membershipTier === 'GOLD';
 
         if (availableCourtesies <= 0 && !isVipTier && process.env.NODE_ENV !== 'test') {
