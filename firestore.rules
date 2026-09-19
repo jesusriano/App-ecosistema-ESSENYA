@@ -257,14 +257,16 @@ service cloud.firestore {
       allow get: if isSignedIn() && isValidId(reservaId) && (
         resource.data.clientId == request.auth.uid || 
         resource.data.therapistId == request.auth.uid || 
+        resource.data.state == 'pendiente' ||
         isAdmin()
       );
       allow list: if isSignedIn() && (
         resource.data.clientId == request.auth.uid || 
         resource.data.therapistId == request.auth.uid || 
+        resource.data.state == 'pendiente' ||
         isAdmin()
       );
-      allow create: if isAdmin();
+      allow create: if isSignedIn();
       allow update: if isSignedIn() && isValidId(reservaId) && (
         isAdmin() ||
         (!isTerminalState(existing().state) && (
@@ -279,7 +281,7 @@ service cloud.firestore {
            incoming().diff(existing()).affectedKeys().hasOnly(['state', 'liveLat', 'liveLng', 'updatedAt']) &&
            isValidStateTransition(existing().state, incoming().state)) ||
           // Action: Unassigned Booking Acceptance
-          (existing().state == 'pendiente' && get(/databases/$(database)/documents/terapeutas/$(request.auth.uid)).data.estado == 'activo' &&
+          (existing().state == 'pendiente' && 
            incoming().therapistId == request.auth.uid &&
            incoming().diff(existing()).affectedKeys().hasOnly(['state', 'therapistId', 'therapistName', 'therapistPhoto', 'therapistPhone', 'acceptedAt', 'updatedAt']))
         ))
