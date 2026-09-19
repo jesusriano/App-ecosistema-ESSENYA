@@ -4,6 +4,7 @@ import fs from "fs";
 import * as adminApp from "firebase-admin/app";
 import * as adminAuth from "firebase-admin/auth";
 import * as adminFirestore from "firebase-admin/firestore";
+import { getServiceById } from "./services/serviceCatalog";
 
 
 function sanitizePromptInput(input: any, maxLength: number = 500): string {
@@ -586,45 +587,8 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
     const finalClientName = clientData?.nombreCompleto || clientData?.name || email;
     const finalClientPhone = clientData?.telefono || clientData?.phone || "";
 
-    // Get service official pricing with robust ID mapping fallback and official catalog guarantee
-    let srvDoc: adminFirestore.DocumentSnapshot | null = null;
-    let srvData: any = null;
-
-    try {
-      srvDoc = await getAdminFirestore().collection("servicios").doc(serviceId).get();
-      if (!srvDoc.exists) {
-        if (serviceId === "SRB-relajante") {
-          srvDoc = await getAdminFirestore().collection("servicios").doc("srv-relajante").get();
-        } else if (serviceId === "srv-relajante") {
-          srvDoc = await getAdminFirestore().collection("servicios").doc("SRB-relajante").get();
-        }
-      }
-      if (srvDoc && srvDoc.exists) {
-        srvData = srvDoc.data();
-      }
-    } catch (e) {
-      console.warn("Error fetching service document from Firestore:", e);
-    }
-
-    // Fallback to canonical official catalog if not found in Firestore collection
-    if (!srvData) {
-      const fallbackSrv = OFFICIAL_SERVICES_CATALOG[serviceId] ||
-        (serviceId === "SRB-relajante" ? OFFICIAL_SERVICES_CATALOG["srv-relajante"] : null) ||
-        (serviceId === "srv-relajante" ? OFFICIAL_SERVICES_CATALOG["SRB-relajante"] : null);
-
-      if (fallbackSrv) {
-        srvData = fallbackSrv;
-        // Asynchronously persist to Firestore collection so it exists for future direct queries
-        try {
-          getAdminFirestore().collection("servicios").doc(serviceId).set(fallbackSrv, { merge: true }).catch(() => {});
-          if (serviceId === "SRB-relajante") {
-            getAdminFirestore().collection("servicios").doc("srv-relajante").set({ ...fallbackSrv, id: "srv-relajante" }, { merge: true }).catch(() => {});
-          }
-        } catch (seedErr) {
-          console.warn("Non-fatal: Failed to auto-persist service to Firestore:", seedErr);
-        }
-      }
-    }
+    // Get service official pricing using the cached service catalog layer (Firestore + TTL cache + static fallback)
+    const srvData = await getServiceById(db, serviceId);
 
     if (!srvData) {
       const errRes = { success: false, error: "El servicio solicitado no existe." };
