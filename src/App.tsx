@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { InvoiceModal } from './components/InvoiceModal';
+import { InvoiceModal } from './shared/components/InvoiceModal';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
 import { EcosystemProvider, useEcosystem } from './shared/context/EcosystemContext';
