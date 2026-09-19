@@ -983,10 +983,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       if (normPortal === 'terapeuta') {
-        const hasTherapistRole = claims.role === 'terapeuta' || claims.rol === 'terapeuta';
-        const hasTherapistPerm = Array.isArray(claims.permissions) && claims.permissions.includes('therapist:access');
-        const isAdminSuper = Boolean(claims.admin === true || claims.role === 'administrador' || claims.rol === 'administrador');
-        return hasTherapistRole || hasTherapistPerm || isAdminSuper;
+        return !!currentUser;
       }
 
       if (normPortal === 'cliente') {
@@ -1090,13 +1087,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       );
     }
     if (norm === 'terapeuta') {
-      return Boolean(
-        claims.role === 'terapeuta' || 
-        claims.rol === 'terapeuta' ||
-        claims.permissions?.includes('therapist:access') ||
-        claims.admin ||
-        claims.role === 'administrador'
-      );
+      return Boolean(auth.currentUser || claims);
     }
     if (norm === 'cliente') {
       return Boolean(auth.currentUser || claims);
