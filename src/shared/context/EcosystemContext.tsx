@@ -425,8 +425,10 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
     }, err => handleFirestoreError(err, OperationType.GET, 'configuraciones/global'));
 
-    // 2. Private Subscriptions (Require active authenticated Firebase User)
-    if (!firebaseUser) {
+    const uid = firebaseUser?.uid || authTherapist?.id || sessions?.terapeuta?.id || sessions?.administrador?.id || 'demo-user-id';
+
+    // 2. Private Subscriptions (Require active authenticated Firebase User or active portal role)
+    if (!firebaseUser && !isUserAdmin && !isUserTherapist) {
       return () => {
         unsubServicios();
         unsubTerapeuta();
@@ -434,8 +436,6 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         unsubConfig();
       };
     }
-
-    const uid = firebaseUser.uid;
 
     let unsubReservas = () => {};
     let unsubPending = () => {};
