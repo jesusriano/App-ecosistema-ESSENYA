@@ -444,44 +444,48 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     let unsubAudit = () => {};
     let unsubPanic = () => {};
 
+    const parseBookingDoc = (docSnap: any): Booking => {
+      const d = (docSnap.data ? docSnap.data() : docSnap) || {};
+      return {
+        ...d,
+        id: docSnap.id || d.id || '',
+        code: d.code || d.folio || `ESS-${(docSnap.id || d.id || '0000').substring(0, 6).toUpperCase()}`,
+        clientId: d.clientId || '',
+        clientName: d.clientName || d.nombreCliente || 'Cliente VIP',
+        clientPhone: d.clientPhone || d.telefono || '',
+        clientAddress: d.clientAddress || d.direccion || '',
+        cityZone: d.cityZone || d.zona || d.ciudad || 'Ciudad de México',
+        serviceId: d.serviceId || 'serv-1',
+        serviceName: d.serviceName || d.servicioNombre || 'Masaje Holístico',
+        durationMinutes: Number(d.durationMinutes || 60),
+        price: Number(d.price || 0),
+        tip: Number(d.tip || 0),
+        total: Number(d.total || (Number(d.price || 0) + Number(d.tip || 0))),
+        date: d.date || d.fecha || new Date().toISOString().split('T')[0],
+        time: d.time || d.hora || '12:00',
+        preferences: {
+          genderPreference: d.preferences?.genderPreference || 'sin_preferencia',
+          pressureLevel: d.preferences?.pressureLevel || 'Media',
+          essentialOil: d.preferences?.essentialOil || 'Lavanda Francesa',
+          musicStyle: d.preferences?.musicStyle || 'Acoustic Zen',
+          painPoints: d.preferences?.painPoints || d.painPoints || '',
+          arrivalInstructions: d.preferences?.arrivalInstructions || '',
+          specialInstructions: d.preferences?.specialInstructions || ''
+        },
+        state: d.state || d.estado || 'pendiente',
+        etaMinutes: Number(d.etaMinutes || 20),
+        paymentMethod: d.paymentMethod || 'Tarjeta de Crédito / Débito',
+        paymentStatus: d.paymentStatus || 'pendiente',
+        createdAt: d.createdAt || new Date().toISOString()
+      } as Booking;
+    };
+
     if (isUserAdmin) {
       // Administrator: Queries with safe limits to prevent unbounded memory churn and re-render cascading
       const qReservas = query(collection(db, 'reservas'), limit(200));
       unsubReservas = onSnapshot(qReservas, (snap) => {
         if (!snap.empty) {
-          const list = snap.docs.map(doc => {
-            const d = (doc.data() || {}) as any;
-            return {
-              ...d,
-              id: doc.id,
-              code: d.code || d.folio || `ESS-${doc.id.substring(0, 6).toUpperCase()}`,
-              clientId: d.clientId || '',
-              clientName: d.clientName || d.nombreCliente || 'Cliente VIP',
-              clientPhone: d.clientPhone || d.telefono || '',
-              clientAddress: d.clientAddress || d.direccion || '',
-              cityZone: d.cityZone || d.zona || d.ciudad || 'Ciudad de México',
-              serviceId: d.serviceId || 'serv-1',
-              serviceName: d.serviceName || d.servicioNombre || 'Masaje Holístico',
-              durationMinutes: Number(d.durationMinutes || 60),
-              price: Number(d.price || 0),
-              tip: Number(d.tip || 0),
-              total: Number(d.total || (Number(d.price || 0) + Number(d.tip || 0))),
-              date: d.date || d.fecha || new Date().toISOString().split('T')[0],
-              time: d.time || d.hora || '12:00',
-              preferences: {
-                genderPreference: d.preferences?.genderPreference || 'sin_preferencia',
-                pressureLevel: d.preferences?.pressureLevel || 'Media',
-                essentialOil: d.preferences?.essentialOil || 'Lavanda Francesa',
-                musicStyle: d.preferences?.musicStyle || 'Acoustic Zen',
-                specialInstructions: d.preferences?.specialInstructions || ''
-              },
-              state: d.state || d.estado || 'pendiente',
-              etaMinutes: Number(d.etaMinutes || 20),
-              paymentMethod: d.paymentMethod || 'Tarjeta de Crédito / Débito',
-              paymentStatus: d.paymentStatus || 'pendiente',
-              createdAt: d.createdAt || new Date().toISOString()
-            } as Booking;
-          }).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+          const list = snap.docs.map(doc => parseBookingDoc(doc)).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
           setBookings(list);
         } else {
           setBookings([]);
@@ -560,14 +564,14 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       const qTherapistBookings = query(collection(db, 'reservas'), where('therapistId', '==', uid));
       unsubReservas = onSnapshot(qTherapistBookings, (snap) => {
-        assignedBookings = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking));
+        assignedBookings = snap.docs.map(doc => parseBookingDoc(doc));
         syncTherapistBookings();
       }, err => handleFirestoreError(err, OperationType.LIST, 'reservas'));
 
       try {
         const qPendingBookings = query(collection(db, 'reservas'), where('state', '==', 'pendiente'));
         unsubPending = onSnapshot(qPendingBookings, (snap) => {
-          pendingBookings = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking));
+          pendingBookings = snap.docs.map(doc => parseBookingDoc(doc));
           syncTherapistBookings();
         }, () => {
           // Fallback gracefully if rules require active activation
@@ -589,7 +593,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       const qClientBookings = query(collection(db, 'reservas'), where('clientId', '==', uid));
       unsubReservas = onSnapshot(qClientBookings, (snap) => {
         if (!snap.empty) {
-          const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking)).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+          const list = snap.docs.map(doc => parseBookingDoc(doc)).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
           setBookings(list);
         } else {
           setBookings([]);

@@ -11,9 +11,16 @@ const DEFAULT_THERAPIST: Therapist = {
   specialties: ['Masaje Holístico', 'Relajante', 'Tejido Profundo'],
   rating: 5.0,
   reviewCount: 0,
-  isActive: true,
+  totalServices: 10,
+  gender: 'femenino',
+  bio: 'Terapeuta profesional certificada ESSENYA.',
+  certifications: ['Certificación Profesional ESSENYA'],
+  status: 'disponible',
   currentZone: 'Ciudad de México',
-  tier: 'Diamond'
+  coverageZones: ['Ciudad de México'],
+  vehicleType: 'Auto Ejecutivo',
+  lat: 19.4326,
+  lng: -99.1332
 };
 
 export const useTerapeuta = () => {
