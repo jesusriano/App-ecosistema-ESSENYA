@@ -7,6 +7,7 @@ import { useCliente } from '../hooks/useCliente';
 import { useAuth } from '../../../shared/context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 import { calculateMembershipTier, getCompletedAndPaidBookings } from '../services/membershipService';
+import { NotificationSoundSettings } from '../../../shared/components/NotificationSoundSettings';
 
 export const PerfilPage: React.FC = () => {
   const { client, bookings } = useCliente();
@@ -389,6 +390,8 @@ export const PerfilPage: React.FC = () => {
             Preferencia habitual: Presión Firme / Descontracturante con aroma a Ylang Ylang Dorado. Atención especial requerida en zona lumbar y cervicales por actividad ejecutiva intensa.
           </p>
         </div>
+
+        <NotificationSoundSettings role="client" />
       </div>
     </div>
   );

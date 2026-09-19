@@ -10,6 +10,7 @@ import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { TherapistDocument, TherapistFullProfile } from '../../../shared/types/auth';
 import { DocumentVerificationSection } from '../components/DocumentVerificationSection';
 import { TechSupportWhatsAppButton } from '../../../shared/components/TechSupportWhatsAppButton';
+import { NotificationSoundSettings } from '../../../shared/components/NotificationSoundSettings';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../../lib/firebase';
 
@@ -643,6 +644,9 @@ export const PerfilPage: React.FC = () => {
                 </LuxuryButton>
               </div>
             )}
+            <div className="pt-4">
+              <NotificationSoundSettings role="therapist" />
+            </div>
           </form>
         )}
 

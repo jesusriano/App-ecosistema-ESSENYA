@@ -1229,10 +1229,37 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, []);
 
-  const handleSendMessage = (bookingId: string, text: string) => {
+  const handleSendMessage = async (bookingId: string, text: string, customSender?: string) => {
+    const senderName = customSender || client?.name || (authTherapist as any)?.nombre || (authTherapist as any)?.name || 'Usuario VIP';
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const timestamp = new Date().toISOString();
+    const newMessage = { sender: senderName, text, time: timeStr, timestamp, read: false };
+
+    setBookings(prev => prev.map(b => {
+      if (b.id === bookingId) {
+        const existing = b.messages || [];
+        return { ...b, messages: [...existing, newMessage] };
+      }
+      return b;
+    }));
+
+    try {
+      const bookingRef = doc(db, 'reservas', bookingId);
+      const bookingSnap = await getDoc(bookingRef);
+      if (bookingSnap.exists()) {
+        const data = bookingSnap.data();
+        const existing = data.messages || [];
+        await updateDoc(bookingRef, {
+          messages: [...existing, newMessage]
+        });
+      }
+    } catch (err) {
+      console.error("Error saving chat message to Firestore:", err);
+    }
+
     addLog(
       'Mensajería',
-      client.name,
+      senderName,
       'Envío de Mensaje',
       `Mensaje enviado en chat de reserva ${bookingId}.`
     );
@@ -1242,9 +1269,9 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         new CustomEvent('essenya_chat_message', {
           detail: {
             bookingId,
-            sender: client.name || 'Cliente VIP',
+            sender: senderName,
             text,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            time: timeStr
           }
         })
       );
@@ -1633,11 +1660,35 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const handleConfirmPayment = async (bookingId: string) => {
     const nowIso = new Date().toISOString();
-    const updatePayload: { paymentStatus: 'pagado'; paid: boolean; updatedAt: string } = {
+    const targetBooking = bookings.find(b => b.id === bookingId);
+    
+    let paidMassageCounted = targetBooking?.paidMassageCounted || false;
+    const updatePayload: any = {
       paymentStatus: 'pagado',
       paid: true,
       updatedAt: nowIso
     };
+
+    if (targetBooking && !paidMassageCounted && targetBooking.clientId) {
+      const clientRef = doc(db, 'clientes', targetBooking.clientId);
+      try {
+        const clientSnap = await getDoc(clientRef);
+        if (clientSnap.exists()) {
+          const cData = clientSnap.data();
+          const currentTotal = Number(cData.totalBookings || cData.completedMassages || 0) + 1;
+          await updateDoc(clientRef, {
+            totalBookings: currentTotal,
+            completedMassages: currentTotal,
+            updatedAt: nowIso
+          });
+          setClients(prev => prev.map(c => c.id === targetBooking.clientId ? { ...c, totalBookings: currentTotal, completedMassages: currentTotal } : c));
+        }
+      } catch (err) {
+        console.error("Error updating client massage count on payment confirmation:", err);
+      }
+      updatePayload.paidMassageCounted = true;
+      paidMassageCounted = true;
+    }
 
     setBookings(prev => prev.map(b => {
       if (b.id === bookingId) {
@@ -1653,18 +1704,17 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     // Sync corresponding invoice if exists
-    const targetBooking = bookings.find(b => b.id === bookingId);
     const relatedInvoice = invoices.find(inv => inv.bookingId === bookingId || inv.id === targetBooking?.invoiceId);
     if (relatedInvoice) {
-      const invPayload: { paymentStatus: 'pagado'; status: 'pagada'; paidAt: string; updatedAt: string } = {
-        paymentStatus: 'pagado',
-        status: 'pagada',
+      const invPayload = {
+        paymentStatus: 'pagado' as const,
+        status: 'pagada' as const,
         paidAt: nowIso,
         updatedAt: nowIso
       };
       setInvoices(prev => prev.map(inv => {
         if (inv.id === relatedInvoice.id) {
-          return { ...inv, status: 'pagada' as const, paymentStatus: 'pagado' as const };
+          return { ...inv, ...invPayload };
         }
         return inv;
       }));
@@ -1677,7 +1727,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       'Administrador',
       'Módulo Finanzas',
       'Confirmación de Pago SPEI/Efectivo',
-      `Pago de la reserva ${bookingId} verificado y acreditado.`
+      `Pago de la reserva ${bookingId} verificado y acreditado. Contador de masajes incrementado.`
     );
   };
 

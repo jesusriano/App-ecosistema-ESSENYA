@@ -149,6 +149,8 @@ export interface Booking {
   motivoRechazo?: string;
   paymentProofUrl?: string;
   rejectedBy?: string[];
+  messages?: Array<{ sender: string; text: string; time: string; timestamp?: string; read?: boolean }>;
+  paidMassageCounted?: boolean;
 }
 
 export interface CoverageZone {

@@ -1,7 +1,37 @@
 /**
  * Utility for subtle audio chimes and tactile vibration notifications
- * specifically crafted for therapist real-time chat interactions in ESSENYA.
+ * specifically crafted for real-time interactions in ESSENYA.
  */
+
+export interface SoundOption {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export const NOTIFICATION_SOUND_OPTIONS: SoundOption[] = [
+  { id: 'campanilla', name: 'Campanilla Spa', description: 'Campanilla sutil de relajación de dos tonos' },
+  { id: 'arpa', name: 'Arpa Zen', description: 'Arpegio ascendente de tres tonos armoniosos' },
+  { id: 'cristal', name: 'Cristal Tibetano', description: 'Pulso de cristal claro y penetrante' },
+  { id: 'suave', name: 'Melodía Suave', description: 'Acorde ambiental cálido y delicado' },
+  { id: 'ejecutiva', name: 'Alerta Ejecutiva', description: 'Señal corporativa de dos tonos claros' },
+];
+
+export function getStoredSoundPreference(role: string): string {
+  if (typeof window === 'undefined') return 'campanilla';
+  try {
+    return localStorage.getItem(`essenya_sound_${role}`) || 'campanilla';
+  } catch {
+    return 'campanilla';
+  }
+}
+
+export function setStoredSoundPreference(role: string, soundId: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(`essenya_sound_${role}`, soundId);
+  } catch {}
+}
 
 // Common keywords indicating priority or urgent customer requests
 const URGENT_KEYWORDS = [
@@ -41,24 +71,22 @@ function getAudioContext(): AudioContext | null {
 }
 
 /**
- * Plays a tranquil, spa-calibrated harmonic chime using the Web Audio API.
- * Uses pure sine oscillators with exponential fade-out for a non-startling, luxurious tone.
+ * Plays a tranquil, spa-calibrated harmonic chime using the Web Audio API based on selected sound ID.
  */
-export function playChatChime(isUrgent: boolean = false, volumeMultiplier: number = 1): void {
+export function playNotificationSoundById(soundId: string = 'campanilla', isUrgent: boolean = false, volumeMultiplier: number = 1): void {
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
 
     const startTime = ctx.currentTime;
 
-    const playHarmonic = (freq: number, offset: number, duration: number, peakGain: number) => {
+    const playTone = (freq: number, offset: number, duration: number, peakGain: number) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, startTime + offset);
 
-      // Smooth attack to avoid clicking, exponential decay for soft chime resonance
       const effectiveGain = Math.max(0.01, Math.min(peakGain * volumeMultiplier, 0.4));
       gain.gain.setValueAtTime(0.0001, startTime + offset);
       gain.gain.exponentialRampToValueAtTime(effectiveGain, startTime + offset + 0.02);
@@ -71,19 +99,39 @@ export function playChatChime(isUrgent: boolean = false, volumeMultiplier: numbe
       osc.stop(startTime + offset + duration + 0.05);
     };
 
-    if (isUrgent) {
-      // Distinctive, attentive 3-note ascending spa chime (E6 -> G6 -> C7)
-      playHarmonic(1318.51, 0.00, 0.45, 0.14); // E6
-      playHarmonic(1567.98, 0.10, 0.55, 0.14); // G6
-      playHarmonic(2093.00, 0.22, 0.70, 0.16); // C7
+    if (soundId === 'arpa') {
+      playTone(523.25, 0.0, 0.4, 0.12); // C5
+      playTone(659.25, 0.1, 0.4, 0.12); // E5
+      playTone(783.99, 0.2, 0.5, 0.14); // G5
+    } else if (soundId === 'cristal') {
+      playTone(1318.51, 0.0, 0.35, 0.12); // E6
+      playTone(1567.98, 0.12, 0.4, 0.13); // G6
+      playTone(2093.00, 0.24, 0.5, 0.14); // C7
+    } else if (soundId === 'suave') {
+      playTone(349.23, 0.0, 0.6, 0.10); // F4
+      playTone(440.00, 0.05, 0.6, 0.10); // A4
+      playTone(523.25, 0.1, 0.7, 0.12); // C5
+    } else if (soundId === 'ejecutiva') {
+      playTone(880.00, 0.0, 0.3, 0.15);  // A5
+      playTone(1760.00, 0.15, 0.4, 0.15); // A6
     } else {
-      // Gentle 2-note harmonic Tibetan chime (C6 -> E6)
-      playHarmonic(1046.50, 0.00, 0.50, 0.10); // C6
-      playHarmonic(1318.51, 0.08, 0.60, 0.09); // E6
+      // Campanilla default
+      if (isUrgent) {
+        playTone(1318.51, 0.00, 0.45, 0.14);
+        playTone(1567.98, 0.10, 0.55, 0.14);
+        playTone(2093.00, 0.22, 0.70, 0.16);
+      } else {
+        playTone(1046.50, 0.00, 0.50, 0.10);
+        playTone(1318.51, 0.08, 0.60, 0.09);
+      }
     }
   } catch (err) {
-    console.debug('[AudioNotification] Could not play synthesized chime:', err);
+    console.debug('[AudioNotification] Could not play synthesized sound:', err);
   }
+}
+
+export function playChatChime(isUrgent: boolean = false, volumeMultiplier: number = 1): void {
+  playNotificationSoundById('campanilla', isUrgent, volumeMultiplier);
 }
 
 /**
@@ -93,10 +141,8 @@ export function triggerChatVibration(isUrgent: boolean = false): boolean {
   try {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator && typeof navigator.vibrate === 'function') {
       if (isUrgent) {
-        // Urgent pattern: triple pulse with clear cadence [vibrate, pause, vibrate, pause, vibrate]
         return navigator.vibrate([100, 60, 120, 60, 180]);
       } else {
-        // Subtle dual pulse for standard incoming messages
         return navigator.vibrate([60, 45, 75]);
       }
     }
@@ -111,12 +157,11 @@ export interface ChatNotificationOptions {
   vibrationEnabled?: boolean;
   isUrgent?: boolean;
   volumeMultiplier?: number;
+  role?: string;
+  soundId?: string;
 }
 
-/**
- * Combined handler to notify therapist of an incoming message from the client.
- */
-export function notifyTherapistNewMessage(options: ChatNotificationOptions = {}): {
+export function notifyRoleNewEvent(options: ChatNotificationOptions = {}): {
   playedSound: boolean;
   vibrated: boolean;
 } {
@@ -124,14 +169,18 @@ export function notifyTherapistNewMessage(options: ChatNotificationOptions = {})
     soundEnabled = true,
     vibrationEnabled = true,
     isUrgent = false,
-    volumeMultiplier = 1
+    volumeMultiplier = 1,
+    role = 'client',
+    soundId
   } = options;
 
   let playedSound = false;
   let vibrated = false;
 
+  const effectiveSoundId = soundId || getStoredSoundPreference(role);
+
   if (soundEnabled) {
-    playChatChime(isUrgent, volumeMultiplier);
+    playNotificationSoundById(effectiveSoundId, isUrgent, volumeMultiplier);
     playedSound = true;
   }
 
@@ -141,3 +190,11 @@ export function notifyTherapistNewMessage(options: ChatNotificationOptions = {})
 
   return { playedSound, vibrated };
 }
+
+export function notifyTherapistNewMessage(options: ChatNotificationOptions = {}): {
+  playedSound: boolean;
+  vibrated: boolean;
+} {
+  return notifyRoleNewEvent({ role: 'therapist', ...options });
+}
+

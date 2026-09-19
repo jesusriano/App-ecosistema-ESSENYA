@@ -8,6 +8,7 @@ import { useAdmin } from '../hooks/useAdmin';
 import { useToast } from '../../../shared/context/ToastContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { CoverageZone } from '../../../shared/types';
+import { NotificationSoundSettings } from '../../../shared/components/NotificationSoundSettings';
 
 export const ConfiguracionPage: React.FC = () => {
   const { 
@@ -230,6 +231,8 @@ export const ConfiguracionPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <NotificationSoundSettings role="admin" />
 
       {/* Wipe Test Data Section */}
       <div className="bg-red-500/5 dark:bg-red-500/10 border border-red-500/30 rounded-3xl p-6 space-y-4">
