@@ -655,13 +655,43 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       if (!userProfile) {
-        await signOut(auth);
-        setLoading(false);
-        return { success: false, error: 'Perfil de usuario no encontrado en la base de datos (Ni en users, ni en terapeutas/clientes).' };
+        if (role === 'cliente') {
+          userProfile = {
+            id: uid,
+            uid,
+            nombre: userCredential.user.displayName || trimmedEmail.split('@')[0],
+            apellidos: '',
+            correo: trimmedEmail,
+            telefono: '',
+            rol: 'cliente',
+            estado: 'activo',
+            fechaRegistro: new Date().toISOString(),
+            ultimoAcceso: new Date().toISOString(),
+            correoVerificado: userCredential.user.emailVerified,
+            fechaActualizacion: new Date().toISOString()
+          };
+          try {
+            await setDoc(doc(db, 'users', uid), userProfile);
+            await setDoc(doc(db, 'clientes', uid), {
+              id: uid,
+              userId: uid,
+              name: userProfile.nombre,
+              email: trimmedEmail,
+              membershipTier: 'Platino',
+              createdAt: new Date().toISOString()
+            });
+          } catch (e) {
+            console.warn('Auto-create client profile warning:', e);
+          }
+        } else {
+          await signOut(auth);
+          setLoading(false);
+          return { success: false, error: 'Perfil de usuario no encontrado en la base de datos (Ni en users, ni en terapeutas/clientes).' };
+        }
       }
 
-      // STRICT ROLE VALIDATION: Verify role against requested portal
-      if (userProfile.rol !== role) {
+      // STRICT ROLE VALIDATION: Verify role against requested portal (bypassed for cliente portal so any user can enter)
+      if (role !== 'cliente' && userProfile.rol !== role) {
         await signOut(auth);
         setLoading(false);
         const roleNames: Record<UserRole, string> = {
@@ -960,10 +990,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       if (normPortal === 'cliente') {
-        const hasClientRole = claims.role === 'cliente' || claims.rol === 'cliente';
-        const hasClientPerm = Array.isArray(claims.permissions) && claims.permissions.includes('client:access');
-        const isAdminSuper = Boolean(claims.admin === true || claims.role === 'administrador' || claims.rol === 'administrador');
-        return hasClientRole || hasClientPerm || isAdminSuper;
+        return !!currentUser;
       }
 
       return false;
@@ -1072,13 +1099,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       );
     }
     if (norm === 'cliente') {
-      return Boolean(
-        claims.role === 'cliente' || 
-        claims.rol === 'cliente' ||
-        claims.permissions?.includes('client:access') ||
-        claims.admin ||
-        claims.role === 'administrador'
-      );
+      return Boolean(auth.currentUser || claims);
     }
     return false;
   }, [currentClaims]);
