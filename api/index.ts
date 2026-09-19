@@ -4,7 +4,7 @@ import fs from "fs";
 import * as adminApp from "firebase-admin/app";
 import * as adminAuth from "firebase-admin/auth";
 import * as adminFirestore from "firebase-admin/firestore";
-import { getServiceById } from "./services/service-catalog";
+import { getServiceById } from "./services/service-catalog.js";
 
 
 function sanitizePromptInput(input: any, maxLength: number = 500): string {
