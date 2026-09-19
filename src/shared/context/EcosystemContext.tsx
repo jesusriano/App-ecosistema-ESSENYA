@@ -100,16 +100,27 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
   useEffect(() => {
     if (authClient) {
       const fullName = `${authClient.nombre} ${authClient.apellidos}`.trim();
-      setClient(prev => ({
-        ...prev,
-        id: authClient.id,
-        name: fullName || prev.name,
-        email: authClient.correo || prev.email,
-        phone: authClient.telefono || prev.phone,
-        membershipTier: authClient.membershipTier || prev.membershipTier || 'Platino',
-      }));
+      setClient(prev => {
+        if (
+          prev.id === authClient.id &&
+          prev.name === (fullName || prev.name) &&
+          prev.email === (authClient.correo || prev.email) &&
+          prev.phone === (authClient.telefono || prev.phone) &&
+          prev.membershipTier === (authClient.membershipTier || prev.membershipTier || 'Platino')
+        ) {
+          return prev;
+        }
+        return {
+          ...prev,
+          id: authClient.id,
+          name: fullName || prev.name,
+          email: authClient.correo || prev.email,
+          phone: authClient.telefono || prev.phone,
+          membershipTier: authClient.membershipTier || prev.membershipTier || 'Platino',
+        };
+      });
     }
-  }, [authClient]);
+  }, [authClient?.id, authClient?.nombre, authClient?.apellidos, authClient?.correo, authClient?.telefono, authClient?.membershipTier]);
 
   const [therapists, setTherapists] = useState<Therapist[]>(INITIAL_THERAPISTS);
 
@@ -313,7 +324,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     else computedTier = 'Platino';
 
     if (client.membershipTier !== computedTier) {
-      setClient(prev => ({ ...prev, membershipTier: computedTier }));
+      setClient(prev => prev.membershipTier === computedTier ? prev : ({ ...prev, membershipTier: computedTier }));
       // Intentar sincronizar en Firestore si el cliente existe
       try {
         updateDoc(doc(db, 'clientes', client.id), { membershipTier: computedTier }).catch(() => {});
@@ -321,7 +332,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         // Silenciar errores de sincronización offline
       }
     }
-  }, [bookings, client?.id, client?.membershipTier]);
+  }, [bookings, client?.id]);
 
   // Primitive flags for listener stability (prevents frequent tear-down on unrelated session ref changes)
   const currentUserId = firebaseUser?.uid;

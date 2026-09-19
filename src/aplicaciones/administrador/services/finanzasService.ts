@@ -5,7 +5,7 @@ import { db } from '../../../lib/firebase';
 import { Expense } from '../types/finanzas';
 import { Booking } from '../../../shared/types';
 
-const EXPENSES_COLLECTION = 'expenses';
+const EXPENSES_COLLECTION = 'gastos';
 
 export async function getExpenses(): Promise<Expense[]> {
   try {
@@ -54,7 +54,7 @@ export async function deleteExpense(id: string): Promise<void> {
 // Read existing bookings to calculate revenue without duplicating
 export async function getBookingsRevenue(): Promise<Booking[]> {
   try {
-    const snap = await getDocs(collection(db, 'bookings'));
+    const snap = await getDocs(collection(db, 'reservas'));
     return snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking));
   } catch (e) {
     console.error('Error fetching bookings revenue:', e);

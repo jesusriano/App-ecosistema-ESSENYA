@@ -270,24 +270,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 });
               }
             }
+          }, (err) => {
+            console.warn('Live user listener error (ignored):', err);
           });
 
           // Also listen to terapeutas doc if role is terapeuta
-          const unsubLiveTherapist = onSnapshot(doc(db, 'terapeutas', firebaseUser.uid), (tSnap) => {
-            if (tSnap.exists()) {
-              const tData = tSnap.data();
-              if (tData.estado) {
-                setSessions(prev => {
-                  const current = prev.terapeuta;
-                  if (current && current.estado !== tData.estado) {
-                    const updated = { ...current, estado: tData.estado, motivoRechazoAccount: tData.motivoRechazoAccount };
-                    return { ...prev, terapeuta: updated };
-                  }
-                  return prev;
-                });
+          let unsubLiveTherapist = () => {};
+          if (profile.rol === 'terapeuta') {
+            unsubLiveTherapist = onSnapshot(doc(db, 'terapeutas', firebaseUser.uid), (tSnap) => {
+              if (tSnap.exists()) {
+                const tData = tSnap.data();
+                if (tData.estado) {
+                  setSessions(prev => {
+                    const current = prev.terapeuta;
+                    if (current && current.estado !== tData.estado) {
+                      const updated = { ...current, estado: tData.estado, motivoRechazoAccount: tData.motivoRechazoAccount };
+                      return { ...prev, terapeuta: updated };
+                    }
+                    return prev;
+                  });
+                }
               }
-            }
-          });
+            }, (err) => {
+              console.warn('Live therapist listener error (ignored):', err);
+            });
+          }
 
           return () => {
             unsubLiveUser();

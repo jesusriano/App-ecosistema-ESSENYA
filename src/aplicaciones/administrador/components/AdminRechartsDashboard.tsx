@@ -23,21 +23,54 @@ export const AdminRechartsDashboard: React.FC<AdminRechartsDashboardProps> = ({
   // 1. Daily Booking Volume
   const dailyVolumeData = useMemo(() => {
     const counts: Record<string, number> = {};
-    (bookings || []).forEach(b => {
-      const dateStr = b.date || b.createdAt?.substring(0, 10) || 'Recientes';
-      const shortDate = dateStr.length >= 10 ? dateStr.substring(5) : dateStr;
-      counts[shortDate] = (counts[shortDate] || 0) + 1;
+    if (!Array.isArray(bookings)) {
+      return [
+        { fecha: '01/09', reservas: 2 },
+        { fecha: '02/09', reservas: 5 },
+        { fecha: '03/09', reservas: 3 },
+        { fecha: '04/09', reservas: 8 }
+      ];
+    }
+
+    bookings.forEach(b => {
+      if (!b) return;
+      let rawDate: any = b.date || b.createdAt;
+      
+      // Handle Firestore Timestamp or Date object
+      if (rawDate && typeof rawDate === 'object') {
+        if (typeof rawDate.toDate === 'function') {
+          rawDate = rawDate.toDate().toISOString();
+        } else if (rawDate instanceof Date) {
+          rawDate = rawDate.toISOString();
+        }
+      }
+
+      let dateStr = typeof rawDate === 'string' ? rawDate : 'Recientes';
+      if (dateStr.length >= 10) {
+        const sub = dateStr.substring(0, 10); // "YYYY-MM-DD"
+        const parts = sub.split('-');
+        if (parts.length === 3) {
+          dateStr = `${parts[2]}`; // Day or DD/MM
+          dateStr = `${parts[2]}/${parts[1]}`;
+        } else {
+          dateStr = sub.substring(5, 10);
+        }
+      } else {
+        dateStr = dateStr || 'Recientes';
+      }
+
+      counts[dateStr] = (counts[dateStr] || 0) + 1;
     });
 
     const result = Object.entries(counts)
-      .sort((a, b) => a[0].localeCompare(b[0]))
+      .sort((a, b) => (a[0] || '').localeCompare(b[0] || ''))
       .slice(-7)
       .map(([date, count]) => ({
-        fecha: date,
-        reservas: count
+        fecha: date || 'N/D',
+        reservas: typeof count === 'number' && !isNaN(count) ? count : 0
       }));
 
-    if (result.length === 0) {
+    if (result.length === 0 || result.every(r => r.reservas === 0)) {
       return [
         { fecha: '01/09', reservas: 2 },
         { fecha: '02/09', reservas: 5 },
@@ -52,24 +85,30 @@ export const AdminRechartsDashboard: React.FC<AdminRechartsDashboardProps> = ({
   const revenuePerTherapist = useMemo(() => {
     const revMap: Record<string, { name: string; revenue: number; servicesCount: number }> = {};
     
-    (therapists || []).forEach(t => {
-      revMap[t.id] = { name: t.name || 'Terapeuta', revenue: 0, servicesCount: 0 };
-    });
+    if (Array.isArray(therapists)) {
+      therapists.forEach(t => {
+        if (!t || !t.id) return;
+        revMap[t.id] = { name: t.name || 'Terapeuta', revenue: 0, servicesCount: 0 };
+      });
+    }
 
-    (bookings || []).forEach(b => {
-      if (b.state === 'cancelado') return;
-      const tid = b.therapistId;
-      const amount = Number(b.total || b.price || 1200);
-      if (tid && revMap[tid]) {
-        revMap[tid].revenue += amount;
-        revMap[tid].servicesCount += 1;
-      } else if (tid) {
-        revMap[tid] = { name: b.therapistName || tid, revenue: amount, servicesCount: 1 };
-      }
-    });
+    if (Array.isArray(bookings)) {
+      bookings.forEach(b => {
+        if (!b || b.state === 'cancelado') return;
+        const tid = b.therapistId;
+        const amount = Number(b.total || b.price || 1200);
+        const validAmount = !isNaN(amount) ? amount : 1200;
+        if (tid && revMap[tid]) {
+          revMap[tid].revenue += validAmount;
+          revMap[tid].servicesCount += 1;
+        } else if (tid) {
+          revMap[tid] = { name: b.therapistName || tid, revenue: validAmount, servicesCount: 1 };
+        }
+      });
+    }
 
     const result = Object.values(revMap)
-      .sort((a, b) => b.revenue - a.revenue)
+      .sort((a, b) => (b.revenue || 0) - (a.revenue || 0))
       .slice(0, 6);
 
     if (result.length === 0 || result.every(r => r.revenue === 0)) {
@@ -85,19 +124,24 @@ export const AdminRechartsDashboard: React.FC<AdminRechartsDashboardProps> = ({
   // 3. Zone Occupancy Rate / Bookings per Zone
   const zoneOccupancyData = useMemo(() => {
     const zoneMap: Record<string, number> = {};
-    (zones || []).forEach(z => {
-      zoneMap[z.name || z.id] = 0;
-    });
+    if (Array.isArray(zones)) {
+      zones.forEach(z => {
+        if (!z) return;
+        zoneMap[z.name || z.id || 'Zona General'] = 0;
+      });
+    }
 
-    (bookings || []).forEach(b => {
-      if (b.state === 'cancelado') return;
-      const zName = b.cityZone || 'Polanco / CDMX';
-      zoneMap[zName] = (zoneMap[zName] || 0) + 1;
-    });
+    if (Array.isArray(bookings)) {
+      bookings.forEach(b => {
+        if (!b || b.state === 'cancelado') return;
+        const zName = b.cityZone || 'Polanco / CDMX';
+        zoneMap[zName] = (zoneMap[zName] || 0) + 1;
+      });
+    }
 
     const list = Object.entries(zoneMap).map(([name, count]) => ({
-      name,
-      value: count
+      name: name || 'Zona General',
+      value: typeof count === 'number' && !isNaN(count) ? count : 0
     })).filter(item => item.value > 0);
 
     if (list.length === 0) {

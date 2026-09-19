@@ -27,15 +27,15 @@ export const DashboardPage: React.FC = () => {
   const activePanicAlerts = useMemo(() => {
     return (panicAlerts || []).filter(a => a && (a.status === 'activa' || a.status === 'en_atencion'));
   }, [panicAlerts]);
-  const [selectedPanicAlert, setSelectedPanicAlert] = useState<any>(null);
+  const [userSelectedPanicAlertId, setUserSelectedPanicAlertId] = useState<string | null>(null);
 
-  const panicIdsKey = useMemo(() => activePanicAlerts.map(a => a.id).join(','), [activePanicAlerts]);
-
-  useEffect(() => {
-    if (activePanicAlerts.length > 0 && (!selectedPanicAlert || !activePanicAlerts.some(a => a.id === selectedPanicAlert.id))) {
-      setSelectedPanicAlert(activePanicAlerts[0]);
+  const selectedPanicAlert = useMemo(() => {
+    if (activePanicAlerts.length === 0) return null;
+    if (userSelectedPanicAlertId && activePanicAlerts.some(a => a.id === userSelectedPanicAlertId)) {
+      return activePanicAlerts.find(a => a.id === userSelectedPanicAlertId) || activePanicAlerts[0];
     }
-  }, [panicIdsKey]);
+    return activePanicAlerts[0];
+  }, [activePanicAlerts, userSelectedPanicAlertId]);
 
   const pendingTherapistsCount = fullTherapists.filter(t => t.estado === 'pendiente').length;
   const approvedTherapistsCount = fullTherapists.filter(t => t.estado === 'activo').length;
@@ -62,24 +62,17 @@ export const DashboardPage: React.FC = () => {
     );
   }, [bookings]);
 
-  const [selectedTrackBookingId, setSelectedTrackBookingId] = useState<string>(
-    activeServicesOnTrack.length > 0 ? activeServicesOnTrack[0].id : bookings[0]?.id || ''
-  );
+  const [userSelectedTrackBookingId, setUserSelectedTrackBookingId] = useState<string>('');
 
-  const activeIdsKey = useMemo(() => activeServicesOnTrack.map(b => b.id).join(','), [activeServicesOnTrack]);
-  const bookingsIdsKey = useMemo(() => (bookings || []).map(b => b.id).join(','), [bookings]);
-
-  // Auto-focus on active tracking booking whenever a masseuse starts route or arrives
-  useEffect(() => {
-    if (activeServicesOnTrack.length > 0) {
-      const isCurrentActive = activeServicesOnTrack.some(b => b.id === selectedTrackBookingId);
-      if (!isCurrentActive || !selectedTrackBookingId) {
-        setSelectedTrackBookingId(activeServicesOnTrack[0].id);
-      }
-    } else if (bookings.length > 0 && !selectedTrackBookingId) {
-      setSelectedTrackBookingId(bookings[0].id);
+  const selectedTrackBookingId = useMemo(() => {
+    if (userSelectedTrackBookingId && (bookings || []).some(b => b.id === userSelectedTrackBookingId)) {
+      return userSelectedTrackBookingId;
     }
-  }, [activeIdsKey, bookingsIdsKey]);
+    if (activeServicesOnTrack.length > 0) {
+      return activeServicesOnTrack[0].id;
+    }
+    return bookings[0]?.id || '';
+  }, [bookings, activeServicesOnTrack, userSelectedTrackBookingId]);
 
   const currentTrackBooking = bookings.find(b => b.id === selectedTrackBookingId) || bookings[0];
 
@@ -592,7 +585,7 @@ export const DashboardPage: React.FC = () => {
               {bookings.map((b) => (
                 <div
                   key={b.id}
-                  onClick={() => setSelectedTrackBookingId(b.id)}
+                  onClick={() => setUserSelectedTrackBookingId(b.id)}
                   className={`p-3 rounded-2xl border transition-all cursor-pointer ${
                     selectedTrackBookingId === b.id
                       ? 'bg-[#C9A55B]/15 border-[#C9A55B]'

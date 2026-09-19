@@ -42,6 +42,8 @@ export const ConfiguracionPage: React.FC = () => {
 
   const [showZoneModal, setShowZoneModal] = useState(false);
   const [editingZone, setEditingZone] = useState<CoverageZone | null>(null);
+  const [showCleanupModal, setShowCleanupModal] = useState(false);
+  const [isCleaningAction, setIsCleaningAction] = useState(false);
 
   const [zoneForm, setZoneForm] = useState<{
     name: string;
@@ -245,23 +247,61 @@ export const ConfiguracionPage: React.FC = () => {
           <LuxuryButton
             variant="outline"
             size="sm"
-            onClick={async () => {
-              if (window.confirm('¿Estás seguro de que deseas eliminar TODOS los datos de prueba de la NUBE (Reservas, Clientes de Prueba, Facturas) y cachés locales? Esta acción dejará el sistema en blanco para producción.')) {
-                try {
-                  await handleDataCleanup();
-                  showToast('¡Base de datos limpia! Sistema restablecido.');
-                  setTimeout(() => window.location.reload(), 1500);
-                } catch (err) {
-                  showToast('Error al limpiar la base de datos.', 'error');
-                }
-              }
-            }}
+            onClick={() => setShowCleanupModal(true)}
           >
             <Trash2 className="w-4 h-4 mr-1.5 text-red-500" />
             <span className="text-red-600 dark:text-red-400 font-bold">Limpiar Todos los Datos de Prueba</span>
           </LuxuryButton>
         </div>
       </div>
+
+      {/* Cleanup Confirmation Modal */}
+      {showCleanupModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[var(--bg-card)] border border-red-500/40 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center space-x-3 text-red-500">
+              <AlertTriangle className="w-6 h-6 shrink-0" />
+              <h3 className="font-serif font-bold text-lg text-[var(--text-primary)]">
+                Confirmar Limpieza Total
+              </h3>
+            </div>
+            <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+              ¿Estás seguro de que deseas eliminar TODOS los datos de prueba de la NUBE (Reservas, Clientes de Prueba, Facturas, Alertas) y cachés locales? Esta acción dejará el sistema en blanco para producción y no se puede deshacer.
+            </p>
+            <div className="flex justify-end space-x-2 pt-3 border-t border-[var(--border-color)]">
+              <button
+                type="button"
+                disabled={isCleaningAction}
+                onClick={() => setShowCleanupModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <LuxuryButton
+                variant="gold"
+                size="sm"
+                disabled={isCleaningAction}
+                onClick={async () => {
+                  setIsCleaningAction(true);
+                  try {
+                    await handleDataCleanup();
+                    showToast('¡Base de datos limpia! Sistema restablecido.', 'success');
+                    setShowCleanupModal(false);
+                    setTimeout(() => window.location.reload(), 1500);
+                  } catch (err) {
+                    console.error('Data cleanup error:', err);
+                    showToast('Error al limpiar la base de datos: Permisos insuficientes.', 'error');
+                  } finally {
+                    setIsCleaningAction(false);
+                  }
+                }}
+              >
+                {isCleaningAction ? 'Limpiando...' : 'Sí, borrar todo'}
+              </LuxuryButton>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add / Edit Zone Modal */}
       {showZoneModal && (
