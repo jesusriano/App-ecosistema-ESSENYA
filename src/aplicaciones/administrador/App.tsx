@@ -8,6 +8,8 @@ export const AdminAppModule: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
+  console.log('[AdminAppModule Render] pathname:', location.pathname);
+
   // Derive sub-route from URL path (e.g. /admin/terapeutas or /admin -> /dashboard)
   const currentRoute: AdminRoutePath = useMemo(() => {
     const rawPath = location.pathname;
@@ -29,12 +31,17 @@ export const AdminAppModule: React.FC = () => {
     ];
 
     const matched = validRoutes.find(r => path === r || path.startsWith(r + '/'));
-    return matched || '/dashboard';
+    const resolved = matched || '/dashboard';
+    console.log('[AdminAppModule useMemo] rawPath:', rawPath, '-> resolved route:', resolved);
+    return resolved;
   }, [location.pathname]);
 
   const handleNavigate = (route: AdminRoutePath) => {
+    console.log('[AdminAppModule handleNavigate] requested route:', route);
     const cleanRoute = route.startsWith('/') ? route : `/${route}`;
-    navigate(`/admin${cleanRoute === '/dashboard' ? '' : cleanRoute}`);
+    const targetUrl = `/admin${cleanRoute === '/dashboard' ? '' : cleanRoute}`;
+    console.log('[AdminAppModule handleNavigate] navigating via navigate to:', targetUrl);
+    navigate(targetUrl);
   };
 
   return (

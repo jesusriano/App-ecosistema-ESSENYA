@@ -59,6 +59,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ currentRoute, onNavi
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                console.log(`[AdminSidebar Click] Navigating to: ${item.path}`);
                 onNavigate(item.path);
               }}
               className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer w-full text-left relative z-10 ${

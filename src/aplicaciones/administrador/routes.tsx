@@ -1,5 +1,6 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { AdminRoutePath } from './components/AdminSidebar';
+import { ErrorBoundary } from '../../shared/components/ErrorBoundary';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
 const ReservasPage = lazy(() => import('./pages/ReservasPage').then(m => ({ default: m.ReservasPage })));
@@ -30,32 +31,80 @@ const PageFallback: React.FC = () => (
 export const AdminRoutes: React.FC<AdminRoutesProps> = ({ currentRoute }) => {
   const normalizedRoute = (currentRoute || '').replace(/^\/admin/, '') || '/dashboard';
 
+  useEffect(() => {
+    console.log(`[AdminRoutes Debug] Active route changed to: ${normalizedRoute}`);
+  }, [normalizedRoute]);
+
   return (
     <Suspense fallback={<PageFallback />}>
       {(() => {
         switch (normalizedRoute) {
           case '/dashboard':
-            return <DashboardPage />;
+            return (
+              <ErrorBoundary fallbackTitle="Error en Dashboard Administrativo" onReset={() => console.log('[ErrorBoundary] Reset Dashboard')}>
+                <DashboardPage />
+              </ErrorBoundary>
+            );
           case '/reservas':
-            return <ReservasPage />;
+            return (
+              <ErrorBoundary fallbackTitle="Error en Módulo de Reservas" onReset={() => console.log('[ErrorBoundary] Reset Reservas')}>
+                <ReservasPage />
+              </ErrorBoundary>
+            );
           case '/terapeutas':
-            return <TerapeutasPage />;
+            return (
+              <ErrorBoundary fallbackTitle="Error en Módulo de Terapeutas" onReset={() => console.log('[ErrorBoundary] Reset Terapeutas')}>
+                <TerapeutasPage />
+              </ErrorBoundary>
+            );
           case '/clientes':
-            return <ClientesPage />;
+            return (
+              <ErrorBoundary fallbackTitle="Error en Módulo de Clientes" onReset={() => console.log('[ErrorBoundary] Reset Clientes')}>
+                <ClientesPage />
+              </ErrorBoundary>
+            );
           case '/servicios':
-            return <ServiciosPage />;
+            return (
+              <ErrorBoundary fallbackTitle="Error en Módulo de Servicios" onReset={() => console.log('[ErrorBoundary] Reset Servicios')}>
+                <ServiciosPage />
+              </ErrorBoundary>
+            );
           case '/pagos':
-            return <PagosPage />;
+            return (
+              <ErrorBoundary fallbackTitle="Error en Módulo de Pagos" onReset={() => console.log('[ErrorBoundary] Reset Pagos')}>
+                <PagosPage />
+              </ErrorBoundary>
+            );
           case '/finanzas':
-            return <FinanzasDashboard />;
+            return (
+              <ErrorBoundary fallbackTitle="Error en Módulo de Finanzas" onReset={() => console.log('[ErrorBoundary] Reset Finanzas')}>
+                <FinanzasDashboard />
+              </ErrorBoundary>
+            );
           case '/reportes':
-            return <ReportesPage />;
+            return (
+              <ErrorBoundary fallbackTitle="Error en Módulo de Reportes" onReset={() => console.log('[ErrorBoundary] Reset Reportes')}>
+                <ReportesPage />
+              </ErrorBoundary>
+            );
           case '/configuracion':
-            return <ConfiguracionPage />;
+            return (
+              <ErrorBoundary fallbackTitle="Error en Módulo de Configuración" onReset={() => console.log('[ErrorBoundary] Reset Configuracion')}>
+                <ConfiguracionPage />
+              </ErrorBoundary>
+            );
           case '/developer':
-            return <DeveloperPage />;
+            return (
+              <ErrorBoundary fallbackTitle="Error en Developer Dashboard" onReset={() => console.log('[ErrorBoundary] Reset Developer')}>
+                <DeveloperPage />
+              </ErrorBoundary>
+            );
           default:
-            return <DashboardPage />;
+            return (
+              <ErrorBoundary fallbackTitle="Error en Dashboard Administrativo" onReset={() => console.log('[ErrorBoundary] Reset Default')}>
+                <DashboardPage />
+              </ErrorBoundary>
+            );
         }
       })()}
     </Suspense>
