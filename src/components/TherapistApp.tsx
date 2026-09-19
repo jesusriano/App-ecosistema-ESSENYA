@@ -818,7 +818,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                   <Star className="w-3.5 h-3.5 text-[#C9A55B]" />
                   <span>Preferencias & Molestias</span>
                 </span>
-                <p className="text-[#C9A55B] font-semibold">Presión: {activePending.preferences.pressureLevel} • {activePending.preferences.essentialOil}</p>
+                <p className="text-[#C9A55B] font-semibold">Presión: {activePending.preferences?.pressureLevel ?? 'Media'} • {activePending.preferences?.essentialOil ?? 'Lavanda Francesa'}</p>
                 {activePending.painPoints && (
                   <p className="text-[11px] text-amber-300 font-medium truncate">Puntos dolor: {activePending.painPoints}</p>
                 )}
@@ -911,9 +911,9 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                 <div className="space-y-1">
                   <span className="text-[#888888] block">Preferencias de la Sesión:</span>
                   <p className="text-[#C9A55B] font-semibold">
-                    Presión: {currentBooking.preferences.pressureLevel} • Aceite: {currentBooking.preferences.essentialOil}
+                    Presión: {currentBooking.preferences?.pressureLevel ?? 'Media'} • Aceite: {currentBooking.preferences?.essentialOil ?? 'Lavanda Francesa'}
                   </p>
-                  <p className="text-[11px] text-[#AAAAAA] italic mt-1">"{currentBooking.preferences.specialInstructions || 'Sin instrucciones adicionales'}"</p>
+                  <p className="text-[11px] text-[#AAAAAA] italic mt-1">"{currentBooking.preferences?.specialInstructions || 'Sin instrucciones adicionales'}"</p>
                 </div>
               </div>
 

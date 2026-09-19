@@ -468,11 +468,12 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
               total: Number(d.total || (Number(d.price || 0) + Number(d.tip || 0))),
               date: d.date || d.fecha || new Date().toISOString().split('T')[0],
               time: d.time || d.hora || '12:00',
-              preferences: d.preferences || {
-                genderPreference: 'sin_preferencia',
-                pressureLevel: 'Media',
-                essentialOil: 'Lavanda Francesa',
-                musicStyle: 'Acoustic Zen'
+              preferences: {
+                genderPreference: d.preferences?.genderPreference || 'sin_preferencia',
+                pressureLevel: d.preferences?.pressureLevel || 'Media',
+                essentialOil: d.preferences?.essentialOil || 'Lavanda Francesa',
+                musicStyle: d.preferences?.musicStyle || 'Acoustic Zen',
+                specialInstructions: d.preferences?.specialInstructions || ''
               },
               state: d.state || d.estado || 'pendiente',
               etaMinutes: Number(d.etaMinutes || 20),
