@@ -2308,7 +2308,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                   </button>
                 </div>
               </div>
-            ) : (!activeBooking.therapistId || activeBooking.state === 'pendiente' || activeBooking.state === 'aceptada') ? (
+            ) : (!activeBooking.therapistId || activeBooking.state === 'pendiente') ? (
               <div className="bg-white dark:bg-[#141414] p-8 sm:p-10 rounded-2xl border-2 border-dashed border-[#C9A55B]/40 text-center space-y-5 shadow-sm">
                 <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
                   <div className="absolute inset-0 rounded-full bg-[#C9A55B]/20 animate-ping"></div>
