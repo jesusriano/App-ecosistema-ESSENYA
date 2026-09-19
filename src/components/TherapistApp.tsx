@@ -1259,6 +1259,14 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                               <X className="w-3.5 h-3.5" />
                             </button>
                           </motion.div>
+                        ) : bk.state === 'servicio_finalizado' ? (
+                          <WhatsAppButton
+                            phoneNumber="525512345678"
+                            message={`Hola Concierge ESSENYA, envío mi comprobante de pago para la reserva ${bk.code || bk.id} (${bk.serviceName}, $${bk.total || bk.price || 0} MXN).`}
+                            buttonText="Enviar Comprobante"
+                            variant="outline"
+                            size="sm"
+                          />
                         ) : (
                           <motion.span
                             key={`badge-${bk.id}-${bk.state}`}
@@ -1267,9 +1275,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                             exit={{ opacity: 0, scale: 0.9 }}
                             transition={{ duration: 0.2 }}
                             className={`text-xs font-bold px-3 py-1 rounded-full border uppercase ${
-                              bk.state === 'servicio_finalizado'
-                                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                                : bk.state === 'servicio_iniciado'
+                              bk.state === 'servicio_iniciado'
                                 ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
                                 : bk.state === 'en_camino' || bk.state === 'llegue'
                                 ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
