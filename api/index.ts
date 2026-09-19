@@ -1937,11 +1937,32 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
 
     // Atomic transaction
     const result = await getAdminFirestore().runTransaction(async (t) => {
-      // 1. Validate User
+      // 1. Validate User / Auto-provision client doc if missing
       const userRef = getAdminFirestore().collection('clientes').doc(uid);
       const userDoc = await t.get(userRef);
-      if (!userDoc.exists) throw new Error("Usuario cliente no encontrado.");
-      const userData = userDoc.data() || {};
+      let userData: any = {};
+
+      if (!userDoc.exists) {
+        const authUserDoc = await t.get(getAdminFirestore().collection('users').doc(uid));
+        const authData = authUserDoc.exists ? authUserDoc.data() : {};
+        userData = {
+          id: uid,
+          userId: uid,
+          name: authData.nombre ? `${authData.nombre} ${authData.apellidos || ''}`.trim() : (clientName || 'Cliente ESSENYA'),
+          email: authData.correo || authData.email || '',
+          phone: clientPhone || authData.telefono || '',
+          membershipTier: 'Platino',
+          address: clientAddress || '',
+          cityZone: cityZone || 'Polanco / Reforma',
+          spentTotal: 0,
+          totalBookings: 0,
+          isBlocked: false,
+          createdAt: new Date().toISOString()
+        };
+        t.set(userRef, userData);
+      } else {
+        userData = userDoc.data() || {};
+      }
 
       // 2. Validate Service & Official Pricing (NEVER default to 1100 if service is nonexistent)
       let srvDoc = await t.get(getAdminFirestore().collection("servicios").doc(serviceId));
