@@ -139,9 +139,9 @@ export const AdminRechartsDashboard: React.FC<AdminRechartsDashboardProps> = ({
             </div>
           </div>
 
-          <div className="h-56 w-full">
+          <div className="w-full" style={{ height: '220px' }}>
             {dailyVolumeData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height="100%" debounce={100}>
                 <AreaChart data={dailyVolumeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorReservas" x1="0" y1="0" x2="0" y2="1">
@@ -182,9 +182,9 @@ export const AdminRechartsDashboard: React.FC<AdminRechartsDashboardProps> = ({
             </div>
           </div>
 
-          <div className="h-56 w-full">
+          <div className="w-full" style={{ height: '220px' }}>
             {revenuePerTherapist.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height="100%" debounce={100}>
                 <BarChart data={revenuePerTherapist} margin={{ top: 10, right: 10, left: -10, bottom: 25 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" opacity={0.4} />
                   <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={9} tickLine={false} angle={-25} textAnchor="end" />
@@ -220,9 +220,9 @@ export const AdminRechartsDashboard: React.FC<AdminRechartsDashboardProps> = ({
             </div>
           </div>
 
-          <div className="h-56 w-full flex items-center justify-center">
+          <div className="w-full flex items-center justify-center" style={{ height: '220px' }}>
             {zoneOccupancyData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height="100%" debounce={100}>
                 <PieChart>
                   <Pie
                     data={zoneOccupancyData}
