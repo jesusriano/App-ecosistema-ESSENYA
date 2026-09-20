@@ -164,8 +164,9 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
   const uploadFileToStorage = (file: File): Promise<{ url: string; path: string }> => {
     return new Promise((resolve, reject) => {
       const timestamp = Date.now();
-      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const storagePath = `terapeutas/${therapistId}/documentos/${timestamp}-${safeName}`;
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const docTypeSlug = (docNombre || 'documento').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const storagePath = `terapeutas/${therapistId}/documentos/${docTypeSlug}_${timestamp}_${safeName}`;
 
       setUploadProgress(0);
       setUploadError(null);
@@ -193,7 +194,7 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
           },
           async () => {
             try {
-              const downloadUrl = storagePath;
+              const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
               setUploadProgress(100);
               resolve({ url: downloadUrl, path: storagePath });
             } catch (err: any) {

@@ -432,14 +432,6 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
 
               <div className="pt-2 flex flex-col items-center space-y-2.5">
                 <button
-                  type="button"
-                  onClick={() => navigate('/admin')}
-                  className="w-full py-2.5 px-4 bg-[#C9A55B] hover:bg-[#D8B46B] text-black text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Shield className="w-4 h-4" />
-                  <span>Abrir Panel de Administrador (/admin)</span>
-                </button>
-                <button
                   onClick={() => logout('terapeuta')}
                   className="text-xs text-[#888888] hover:text-red-400 font-semibold underline cursor-pointer"
                 >
@@ -885,16 +877,7 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
               <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
               <span className="leading-relaxed font-medium">{successMessage}</span>
             </div>
-            {role === 'terapeuta' && (
-              <button
-                type="button"
-                onClick={() => navigate('/admin')}
-                className="w-full py-2 px-3 bg-[#C9A55B] hover:bg-[#D8B46B] text-black font-bold text-xs rounded-xl transition-all shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer"
-              >
-                <Shield className="w-3.5 h-3.5" />
-                <span>Abrir Panel de Administrador para Evaluar Solicitud</span>
-              </button>
-            )}
+
           </div>
         )}
 
