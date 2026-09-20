@@ -199,7 +199,7 @@ export const PanicModal: React.FC<PanicModalProps> = ({
   };
 
   const emergencyPhone = "911";
-  const whatsappNumber = "525512345678"; // Official ESSENYA Security desk
+  const whatsappNumber = "525539469253"; // Official ESSENYA Security desk
   const whatsappMsg = encodeURIComponent(
     `🚨 ¡ALERTA DE PÁNICO SOS ESSENYA!\nUsuario: ${userName} (${displayRoleLabel})\nCódigo Reserva: ${bookingCode}\nUbicación GPS: ${userLocation} [Lat: ${currentCoords.latitude.toFixed(5)}, Lng: ${currentCoords.longitude.toFixed(5)} ±${Math.round(currentCoords.accuracy)}m]\nTipo de Emergencia: ${emergencyType}\nSolicito asistencia inmediata.`
   );

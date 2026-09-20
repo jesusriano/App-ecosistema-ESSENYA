@@ -30,7 +30,7 @@ export const WhatsAppButton: React.FC<WhatsAppButtonProps> = ({
   const displayLabel = label || buttonText || 'WhatsApp Directo';
 
   // Clean phone number safely (strip non-digits)
-  const cleanPhone = targetPhone ? String(targetPhone).replace(/[^0-9]/g, '') : '525512345678';
+  const cleanPhone = targetPhone ? String(targetPhone).replace(/[^0-9]/g, '') : '525539469253';
   const encodedMsg = encodeURIComponent(targetMsg);
   const waUrl = `https://wa.me/${cleanPhone.startsWith('52') ? cleanPhone : '52' + cleanPhone}?text=${encodedMsg}`;
 

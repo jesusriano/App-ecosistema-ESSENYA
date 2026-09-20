@@ -606,108 +606,40 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
     return <>{children}</>;
   }
 
-  // 2. Middleware Check: Detect active foreign session in another role (Insufficient Permissions)
-  const activeOtherRoles = (['administrador', 'terapeuta', 'cliente'] as UserRole[])
-    .filter(r => r !== role)
-    .map(r => ({ roleKey: r, user: sessions[r] }))
-    .filter(item => item.user !== null);
+  // 2. Middleware Check: Automatic redirection if session active in another role
+  const activeSessionRole: UserRole | null = sessions.administrador 
+    ? 'administrador' 
+    : sessions.terapeuta 
+      ? 'terapeuta' 
+      : sessions.cliente 
+        ? 'cliente' 
+        : null;
 
-  const activeOtherSession = activeOtherRoles.length > 0 ? activeOtherRoles[0] : null;
-
-  // If user has a session in another role, and hasn't explicitly clicked "Iniciar sesión con otra cuenta"
-  if (activeOtherSession && activeOtherSession.user && !forceShowLogin) {
-    const loggedUser = activeOtherSession.user;
-    const loggedRoleName = roleDisplayNames[activeOtherSession.roleKey];
-    const requiredRoleName = roleDisplayNames[role];
-    const destinationPath = rolePaths[activeOtherSession.roleKey];
+  if (activeSessionRole && activeSessionRole !== role && !forceShowLogin) {
+    const correctPath = rolePaths[activeSessionRole];
+    
+    useEffect(() => {
+      navigate(correctPath, { replace: true });
+    }, [correctPath, navigate]);
 
     return (
-      <div className="min-h-[85vh] flex items-center justify-center p-4 md:p-8 bg-[#FAF8F5] dark:bg-[#0D0D0D] transition-colors">
-        <motion.div 
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-lg bg-white dark:bg-[#141414] border border-[#C9A55B]/40 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden space-y-6"
-        >
-          <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-500 via-[#C9A55B] to-amber-700" />
-
-          {/* Header */}
-          <div className="text-center space-y-3 pt-2">
-            <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto shadow-inner">
-              <ShieldAlert className="w-8 h-8" />
-            </div>
-
-            <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] font-bold uppercase tracking-wider">
-              <Lock className="w-3.5 h-3.5" />
-              <span>Acceso Restringido por Rol</span>
-            </div>
-
-            <h2 className="text-xl font-serif font-bold text-[#1C1917] dark:text-white">
-              Privilegios Insuficientes para esta URL
-            </h2>
-
-            <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] leading-relaxed max-w-sm mx-auto">
-              La dirección actual <code className="px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10 font-mono text-[#C9A55B]">{location.pathname}</code> requiere privilegios exclusivos de <strong className="text-[#1C1917] dark:text-white">{requiredRoleName}</strong>.
+      <div className="min-h-[85vh] flex items-center justify-center p-4 bg-[#FAF8F5] dark:bg-[#0D0D0D]">
+        <div className="w-full max-w-md bg-white dark:bg-[#141414] border border-[#C9A55B]/40 rounded-3xl p-8 shadow-2xl text-center space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-[#C9A55B]/10 border border-[#C9A55B]/30 text-[#C9A55B] flex items-center justify-center mx-auto animate-spin">
+            <RefreshCw className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-[#C9A55B]">
+              ESSENYA Smart Navigation
+            </span>
+            <h3 className="font-serif font-bold text-lg text-[#1C1917] dark:text-white">
+              Redirigiendo a tu Portal...
+            </h3>
+            <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA]">
+              Detectada sesión activa ({roleDisplayNames[activeSessionRole]}). Redirigiendo automáticamente...
             </p>
           </div>
-
-          {/* Active Session Info Box */}
-          <div className="bg-[#FAF8F5] dark:bg-[#1C1C1C] p-4 rounded-2xl border border-[#E5DFD3] dark:border-[#2E2E2E] space-y-2 text-xs">
-            <div className="flex justify-between items-center text-[11px] text-[#888888]">
-              <span>Sesión activa detectada:</span>
-              <span className="font-semibold px-2 py-0.5 rounded-full bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B]">
-                {loggedRoleName}
-              </span>
-            </div>
-            <p className="font-bold text-[#1C1917] dark:text-white text-sm">
-              {loggedUser.nombre} {loggedUser.apellidos}
-            </p>
-            <p className="text-[#6B655F] dark:text-[#AAAAAA] text-[11px]">
-              {loggedUser.correo}
-            </p>
-          </div>
-
-          {/* Action Options */}
-          <div className="space-y-3 pt-2">
-            <LuxuryButton
-              onClick={() => {
-                if (role === 'administrador') {
-                  setForceShowLogin(true);
-                } else {
-                  navigate(destinationPath);
-                }
-              }}
-              variant="gold"
-              className="w-full py-3 text-xs tracking-wider font-bold shadow-lg flex items-center justify-center space-x-2 cursor-pointer"
-            >
-              {role === 'administrador' ? (
-                <>
-                  <Shield className="w-4 h-4" />
-                  <span>Acceder como Administrador</span>
-                </>
-              ) : (
-                <>
-                  <span>Ir a mi Portal ({loggedRoleName})</span>
-                  <ExternalLink className="w-4 h-4" />
-                </>
-              )}
-            </LuxuryButton>
-
-            <button
-              onClick={() => setForceShowLogin(true)}
-              className="w-full py-2.5 px-4 text-xs font-bold rounded-xl border border-[#E5DFD3] dark:border-[#333333] hover:border-[#C9A55B] text-[#1C1917] dark:text-white bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-all text-center cursor-pointer"
-            >
-              Iniciar sesión con cuenta de {requiredRoleName}
-            </button>
-
-            <button
-              onClick={() => logout(activeOtherSession.roleKey)}
-              className="w-full text-center text-xs text-red-500 hover:text-red-600 font-semibold py-1 flex items-center justify-center space-x-1.5 transition-colors"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Cerrar sesión de {loggedRoleName}</span>
-            </button>
-          </div>
-        </motion.div>
+        </div>
       </div>
     );
   }

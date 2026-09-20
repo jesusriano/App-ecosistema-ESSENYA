@@ -42,8 +42,8 @@ export const TechSupportWhatsAppButton: React.FC<TechSupportWhatsAppButtonProps>
   }, [isOpen]);
 
   // Support phone number: prioritize systemConfig, fallback to official ESSENYA support line
-  const configuredPhone = (systemConfig as any)?.whatsappSupport || (systemConfig as any)?.soporteTelefono || '525512345678';
-  const cleanPhone = String(configuredPhone).replace(/[^0-9]/g, '') || '525512345678';
+  const configuredPhone = (systemConfig as any)?.whatsappSupport || (systemConfig as any)?.soporteTelefono || '525539469253';
+  const cleanPhone = String(configuredPhone).replace(/[^0-9]/g, '') || '525539469253';
   const fullPhone = cleanPhone.startsWith('52') ? cleanPhone : `52${cleanPhone}`;
 
   // Identify user name
