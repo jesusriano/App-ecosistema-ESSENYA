@@ -4,12 +4,15 @@ import { InvoiceModal } from './shared/components/InvoiceModal';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
 import { EcosystemProvider, useEcosystem } from './shared/context/EcosystemContext';
-import { AuthProvider } from './shared/context/AuthContext';
+import { AuthProvider, useAuth } from './shared/context/AuthContext';
 import { TherapistProvider } from './shared/context/TherapistContext';
 import { PortalAuthGuard } from './shared/components/auth/PortalAuthGuard';
 import { ThemeToggle } from './shared/components/ThemeToggle';
 import { Header } from './shared/components/Header';
 import { PortalType } from './shared/types';
+import { PushNotifications } from '@capacitor/push-notifications';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from './lib/firebase';
 
 import { ConfigValidator } from './shared/components/ConfigValidator';
 import { ErrorBoundary } from './shared/components/ErrorBoundary';
@@ -39,8 +42,63 @@ function MainAppContent() {
     setCurrentPortal,
   } = useEcosystem();
 
+  const { firebaseUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Initialize Capacitor Push Notifications and save device push token to Firestore
+  React.useEffect(() => {
+    const initPushNotifications = async () => {
+      try {
+        const permStatus = await PushNotifications.requestPermissions();
+        if (permStatus.receive === 'granted') {
+          await PushNotifications.register();
+        }
+
+        PushNotifications.addListener('registration', async (token) => {
+          console.log('[PushNotifications] Registration success, device token:', token.value);
+          if (firebaseUser?.uid) {
+            try {
+              // Save push token in terapeutas collection and users collection for personalized service request notifications
+              const therapistRef = doc(db, 'terapeutas', firebaseUser.uid);
+              await setDoc(therapistRef, {
+                pushToken: token.value,
+                fcmToken: token.value,
+                fechaActualizacion: new Date().toISOString()
+              }, { merge: true });
+
+              const userRef = doc(db, 'users', firebaseUser.uid);
+              await setDoc(userRef, {
+                pushToken: token.value,
+                fcmToken: token.value,
+                fechaActualizacion: new Date().toISOString()
+              }, { merge: true });
+
+              console.log('[PushNotifications] Push token successfully saved to Firestore for user/therapist:', firebaseUser.uid);
+            } catch (firestoreErr) {
+              console.error('[PushNotifications] Error saving push token to Firestore:', firestoreErr);
+            }
+          }
+        });
+
+        PushNotifications.addListener('registrationError', (error: any) => {
+          console.error('[PushNotifications] Error on registration: ', error);
+        });
+
+        PushNotifications.addListener('pushNotificationReceived', (notification) => {
+          console.log('[PushNotifications] Push notification received (incoming service request): ', notification);
+        });
+
+        PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
+          console.log('[PushNotifications] Push action performed: ', notification);
+        });
+      } catch (e) {
+        console.warn('[PushNotifications] Push notifications not supported in current browser environment:', e);
+      }
+    };
+
+    initPushNotifications();
+  }, [firebaseUser?.uid]);
 
   const currentPortal: PortalType = location.pathname.startsWith('/admin')
     ? 'admin'

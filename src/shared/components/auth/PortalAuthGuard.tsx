@@ -88,6 +88,17 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
     administrador: '/admin'
   };
 
+  // Strict role redirection effect: ensure automatic redirection (Admin -> /admin, Terapeutas -> /terapeuta, Clientes -> /cliente) occurs before any restricted screen render
+  useEffect(() => {
+    if (!isAuthReady) return;
+    if (currentUser && currentUser.rol && currentUser.rol !== role) {
+      const targetPath = rolePaths[currentUser.rol as UserRole];
+      if (targetPath && location.pathname !== targetPath) {
+        navigate(targetPath, { replace: true });
+      }
+    }
+  }, [isAuthReady, currentUser, role, location.pathname, navigate]);
+
   // Explicit client-side Claim Verification effect
   useEffect(() => {
     let isMounted = true;
