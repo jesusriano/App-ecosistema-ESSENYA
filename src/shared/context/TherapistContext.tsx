@@ -259,29 +259,54 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [sensitiveInfo, setSensitiveInfo] = useState<Record<string, any>>({});
   const { firebaseUser, sessions } = useAuth();
 
+  // Diagnostic tracking module for document and profile persistence life-cycles
+  const logPersistenceDiagnostic = (operation: string, therapistId: string, stage: string, details: any, error?: any) => {
+    const timestamp = new Date().toISOString();
+    if (error) {
+      console.error(`[DIAGNOSTICO ESSENYA] ❌ [${stage}] OP: ${operation} | TherapistID: ${therapistId} | Time: ${timestamp}`, {
+        error: {
+          code: error?.code,
+          message: error?.message,
+          stack: error?.stack,
+          raw: error
+        },
+        details
+      });
+    } else {
+      console.log(`[DIAGNOSTICO ESSENYA] ✅ [${stage}] OP: ${operation} | TherapistID: ${therapistId} | Time: ${timestamp}`, details);
+    }
+  };
+
   // Helper to fetch therapists from backend API (guarantees administrative visibility)
   const fetchTherapistsFromBackend = useCallback(async () => {
+    console.log('[TherapistContext] Fetching therapists from backend API /api/admin/therapists...');
     try {
       const res = await fetch('/api/admin/therapists');
       if (res.ok) {
         const data = await res.json();
+        console.log('[TherapistContext] Backend response for therapists:', data);
         if (data.success && Array.isArray(data.therapists)) {
           const loaded: TherapistFullProfile[] = data.therapists
             .map((raw: any) => {
               try {
                 return sanitizeTherapist(raw);
               } catch (e) {
-                console.error('Error sanitizing therapist profile from backend:', raw?.id, e);
+                console.error('[TherapistContext] Error sanitizing therapist profile from backend:', raw?.id, e);
                 return null;
               }
             })
             .filter((t): t is TherapistFullProfile => t !== null);
+          console.log('[TherapistContext] Successfully sanitized and loaded therapists from backend:', loaded.length);
           setTherapists(loaded);
           setFirestoreError(null);
+        } else {
+          console.warn('[TherapistContext] Backend response did not contain valid therapists array:', data);
         }
+      } else {
+        console.warn('[TherapistContext] Backend API response not ok:', res.status, res.statusText);
       }
     } catch (apiErr) {
-      console.warn('Backend API fallback for therapists encountered an error:', apiErr);
+      console.warn('[TherapistContext] Backend API fallback for therapists encountered an error:', apiErr);
     } finally {
       setLoading(false);
     }
@@ -399,18 +424,22 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []);
 
   const loadSensitiveInfo = useCallback(async (id: string) => {
+    console.log('[TherapistContext] loadSensitiveInfo called for therapist ID:', id);
     try {
       const privateInfoRef = doc(db, 'terapeutas', id, 'private_info', 'sensitive');
       const snap = await getDoc(privateInfoRef);
       if (snap.exists() && snap.data() && Object.keys(snap.data() || {}).length > 0) {
+        console.log('[TherapistContext] Sensitive info successfully found in private_info/sensitive for ID:', id, snap.data());
         setSensitiveInfo(prev => ({
           ...prev,
           [id]: snap.data()
         }));
       } else {
+        console.log('[TherapistContext] private_info/sensitive not found for ID:', id, '. Checking master doc fallback...');
         const tSnap = await getDoc(doc(db, 'terapeutas', id));
         if (tSnap.exists()) {
           const tData = tSnap.data();
+          console.log('[TherapistContext] Sensitive info successfully loaded from master doc fallback for ID:', id);
           setSensitiveInfo(prev => ({
             ...prev,
             [id]: {
@@ -422,10 +451,12 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
               titularCuenta: tData.titularCuenta || ''
             }
           }));
+        } else {
+          console.warn('[TherapistContext] Therapist document does not exist for ID:', id);
         }
       }
     } catch (err) {
-      console.error('Error loading sensitive info for therapist:', id, err);
+      console.error('[TherapistContext ERROR] Error loading sensitive info for therapist:', id, err);
     }
   }, []);
 
@@ -620,9 +651,13 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Admin Operation: Update Therapist
   const updateTherapist = async (id: string, updates: Partial<TherapistFullProfile>): Promise<{ success: boolean; error?: string }> => {
+    console.log('[TherapistContext] updateTherapist called for ID:', id, 'with updates:', updates);
     let updatedName = '';
     const target = therapists.find(t => t.id === id);
-    if (!target) return { success: false, error: 'Terapeuta no encontrada.' };
+    if (!target) {
+      console.warn('[TherapistContext] updateTherapist: Therapist not found in local state for ID:', id);
+      return { success: false, error: 'Terapeuta no encontrada.' };
+    }
 
     updatedName = `${updates.nombre || target.nombre} ${updates.apellidos || target.apellidos}`;
 
@@ -633,9 +668,11 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     try {
       await updateDoc(doc(db, 'terapeutas', id), cleanForFirestore(updatePayload));
+      console.log('[TherapistContext] updateTherapist: Master document successfully updated in Firestore for ID:', id);
 
       // Update sensitive info if provided
       if (updates.curp || updates.ineNumber || updates.cuentaBancariaCLABE) {
+        console.log('[TherapistContext] updateTherapist: Updating sensitive info subcollection for ID:', id);
         const privateInfoRef = doc(db, 'terapeutas', id, 'private_info', 'sensitive');
         const sensitiveUpdates: any = {};
         if (updates.curp) sensitiveUpdates.curp = updates.curp;
@@ -644,6 +681,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         sensitiveUpdates.updatedAt = new Date().toISOString();
         
         await setDoc(privateInfoRef, sensitiveUpdates, { merge: true });
+        console.log('[TherapistContext] updateTherapist: Sensitive info subcollection updated successfully for ID:', id);
         
         setSensitiveInfo(prev => ({
           ...prev,
@@ -655,7 +693,9 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         await updateDoc(doc(db, 'users', id), cleanForFirestore({
           fechaActualizacion: new Date().toISOString()
         }));
-      } catch {}
+      } catch (userErr) {
+        console.warn('[TherapistContext] updateTherapist: Error updating users collection:', userErr);
+      }
 
       setTherapists(prev => prev.map(t => {
         if (t.id === id) {
@@ -687,12 +727,15 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         };
         try {
           await updateDoc(doc(db, 'terapeutas_publicos', id), cleanForFirestore(publicUpdates));
-        } catch {}
+        } catch (pubErr) {
+          console.warn('[TherapistContext] updateTherapist: Error syncing terapeutas_publicos:', pubErr);
+        }
       }
 
       logAudit(id, updatedName, 'Modificación de Expediente', 'Perfil actualizado por la Administradora.');
       return { success: true };
     } catch (err: any) {
+      console.error('[TherapistContext ERROR] updateTherapist failed for ID:', id, err);
       handleFirestoreError(err, OperationType.UPDATE, `terapeutas/${id}`, updatePayload);
       return { success: false, error: err?.message || 'Error al actualizar terapeuta en Firestore.' };
     }
@@ -1127,16 +1170,22 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     therapistId: string, 
     docData: Omit<TherapistDocument, 'id' | 'estado' | 'fechaSubida'>
   ): Promise<{ success: boolean; error?: string }> => {
+    logPersistenceDiagnostic('uploadDocument', therapistId, 'START_UPLOAD', { docData });
     const target = therapists.find(t => t.id === therapistId);
-    if (!target) return { success: false, error: 'Terapeuta no encontrada.' };
+    if (!target) {
+      logPersistenceDiagnostic('uploadDocument', therapistId, 'ERROR_NOT_FOUND', { error: 'Terapeuta no encontrada' });
+      return { success: false, error: 'Terapeuta no encontrada.' };
+    }
 
     const inferredMime = docData.fileType === 'pdf' ? 'application/pdf' : (docData.fileType === 'png' ? 'image/png' : 'image/jpeg');
     const timestamp = Date.now();
-    const cleanFileName = docData.nombreDocumento.replace(/[^a-zA-Z0-9.-]/g, '_') + '.' + docData.fileType;
+    const cleanFileName = `${(docData.nombreDocumento || 'doc').replace(/[^a-zA-Z0-9.-]/g, '_')}_${timestamp}.${docData.fileType || 'pdf'}`;
+    const uniqueStoragePath = `therapists/${therapistId}/documents/${cleanFileName}`;
 
     const newDoc: TherapistDocument = {
       ...docData,
       id: `doc-${timestamp}`,
+      storagePath: docData.storagePath || uniqueStoragePath,
       estado: 'pendiente',
       fechaSubida: new Date().toISOString(),
       nombreArchivo: cleanFileName,
@@ -1144,15 +1193,18 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       fechaCarga: new Date().toISOString(),
       estadoRevision: 'pendiente'
     };
+    logPersistenceDiagnostic('uploadDocument', therapistId, 'METADATA_GENERATED', { newDoc, storagePath: uniqueStoragePath });
 
     const updatedDocs = [...target.documentos, newDoc];
     const updatePayload = {
       documentos: updatedDocs,
       fechaActualizacion: new Date().toISOString()
     };
+    logPersistenceDiagnostic('uploadDocument', therapistId, 'FIRESTORE_UPDATE_SENT', { updatePayload });
 
     try {
       await updateDoc(doc(db, 'terapeutas', therapistId), cleanForFirestore(updatePayload));
+      logPersistenceDiagnostic('uploadDocument', therapistId, 'FIRESTORE_UPDATE_SUCCESS', { documentId: newDoc.id, totalDocs: updatedDocs.length, storagePath: uniqueStoragePath });
 
       setTherapists(prev => prev.map(t => {
         if (t.id === therapistId) {
@@ -1167,6 +1219,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       return { success: true };
     } catch (err: any) {
+      logPersistenceDiagnostic('uploadDocument', therapistId, 'FIRESTORE_UPDATE_ERROR', { updatePayload }, err);
       handleFirestoreError(err, OperationType.UPDATE, `terapeutas/${therapistId}`, updatePayload);
       return { success: false, error: err?.message || 'Error al subir documento.' };
     }
@@ -1269,13 +1322,16 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     therapistId: string, 
     updates: Partial<TherapistFullProfile>
   ): Promise<{ success: boolean; error?: string }> => {
+    logPersistenceDiagnostic('updateSelfProfile', therapistId, 'START_UPDATE_SELF', { updates });
     const updatePayload = {
       ...updates,
       fechaActualizacion: new Date().toISOString()
     };
+    logPersistenceDiagnostic('updateSelfProfile', therapistId, 'FIRESTORE_UPDATE_SENT', { updatePayload });
 
     try {
       await updateDoc(doc(db, 'terapeutas', therapistId), cleanForFirestore(updatePayload));
+      logPersistenceDiagnostic('updateSelfProfile', therapistId, 'FIRESTORE_UPDATE_SUCCESS', { therapistId, updatedKeys: Object.keys(updates) });
 
       // Also save sensitive info in subcollection if present
       const sensitiveUpdates: Record<string, any> = {};
@@ -1287,12 +1343,14 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       if (updates.titularCuenta !== undefined) sensitiveUpdates.titularCuenta = updates.titularCuenta;
 
       if (Object.keys(sensitiveUpdates).length > 0) {
+        logPersistenceDiagnostic('updateSelfProfile', therapistId, 'SENSITIVE_UPDATE_SENT', { sensitiveUpdates });
         try {
           const privateInfoRef = doc(db, 'terapeutas', therapistId, 'private_info', 'sensitive');
           await setDoc(privateInfoRef, {
             ...sensitiveUpdates,
             updatedAt: new Date().toISOString()
           }, { merge: true });
+          logPersistenceDiagnostic('updateSelfProfile', therapistId, 'SENSITIVE_UPDATE_SUCCESS', { therapistId });
           setSensitiveInfo(prev => ({
             ...prev,
             [therapistId]: {
@@ -1300,8 +1358,9 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
               ...sensitiveUpdates
             }
           }));
-        } catch (err) {
-          console.warn('Error updating private_info/sensitive:', err);
+        } catch (err: any) {
+          logPersistenceDiagnostic('updateSelfProfile', therapistId, 'SENSITIVE_UPDATE_ERROR', { sensitiveUpdates }, err);
+          console.warn('[TherapistContext] updateSelfProfile: Error updating private_info/sensitive:', err);
         }
       }
 
@@ -1343,6 +1402,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       return { success: true };
     } catch (err: any) {
+      logPersistenceDiagnostic('updateSelfProfile', therapistId, 'FIRESTORE_UPDATE_ERROR', { updatePayload }, err);
       handleFirestoreError(err, OperationType.UPDATE, `terapeutas/${therapistId}`, updatePayload);
       return { success: false, error: err?.message || 'Error al actualizar perfil.' };
     }
