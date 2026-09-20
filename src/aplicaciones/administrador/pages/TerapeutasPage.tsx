@@ -1001,13 +1001,18 @@ export const TerapeutasPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-xs font-mono bg-[var(--bg-card)] p-3 rounded-xl border border-[var(--border-color)]">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono bg-[var(--bg-card)] p-3 rounded-xl border border-[var(--border-color)]">
                       <p><strong className="text-[var(--text-muted)]">Fecha Registro:</strong> <span className="text-[var(--text-primary)]">{formatSafeDate(modalData.fechaAlta)}</span></p>
+                      <p><strong className="text-[var(--text-muted)]">Fecha Nacimiento:</strong> <span className="text-[var(--text-primary)]">{modalData.fechaNacimiento || 'No registrado'}</span></p>
+                      <p><strong className="text-[var(--text-muted)]">Dirección:</strong> <span className="text-[var(--text-primary)]">{modalData.direccion || 'No registrado'}</span></p>
                       <p><strong className="text-[var(--text-muted)]">Experiencia:</strong> <span className="text-[var(--text-primary)]">{modalData.experienciaAnos ? `${modalData.experienciaAnos} años` : 'No registrado'}</span></p>
                       <p><strong className="text-[var(--text-muted)]">CURP:</strong> <span className="text-[var(--text-primary)]">{modalData.curp || 'No registrado'}</span></p>
                       <p><strong className="text-[var(--text-muted)]">Folio INE:</strong> <span className="text-[var(--text-primary)]">{modalData.ineNumber || 'No registrado'}</span></p>
-                      <p><strong className="text-[var(--text-muted)]">CLABE Banco:</strong> <span className="text-[var(--text-primary)]">{modalData.cuentaBancariaCLABE || 'No registrado'}</span></p>
-                      <p><strong className="text-[var(--text-muted)]">Contacto Emergencia:</strong> <span className="text-[var(--text-primary)]">{modalData.contactoEmergencia && typeof modalData.contactoEmergencia === 'object' && modalData.contactoEmergencia.nombre ? `${modalData.contactoEmergencia.nombre} (${modalData.contactoEmergencia.telefono || 'Sin teléfono'})` : 'No registrado'}</span></p>
+                      <p><strong className="text-[var(--text-muted)]">Banco:</strong> <span className="text-[var(--text-primary)]">{modalData.banco || 'No registrado'}</span></p>
+                      <p><strong className="text-[var(--text-muted)]">Núm. Cuenta:</strong> <span className="text-[var(--text-primary)]">{modalData.numeroCuenta || 'No registrado'}</span></p>
+                      <p><strong className="text-[var(--text-muted)]">CLABE Interbancaria:</strong> <span className="text-[var(--text-primary)]">{modalData.cuentaBancariaCLABE || 'No registrado'}</span></p>
+                      <p><strong className="text-[var(--text-muted)]">Titular Cuenta:</strong> <span className="text-[var(--text-primary)]">{modalData.titularCuenta || 'No registrado'}</span></p>
+                      <p className="sm:col-span-2"><strong className="text-[var(--text-muted)]">Contacto Emergencia:</strong> <span className="text-[var(--text-primary)]">{modalData.contactoEmergencia && typeof modalData.contactoEmergencia === 'object' && modalData.contactoEmergencia.nombre ? `${modalData.contactoEmergencia.nombre} (${modalData.contactoEmergencia.parentesco || 'Familiar'}) - Tel: ${modalData.contactoEmergencia.telefono || 'Sin teléfono'}` : 'No registrado'}</span></p>
                     </div>
 
                     <div className="space-y-1.5 text-xs">

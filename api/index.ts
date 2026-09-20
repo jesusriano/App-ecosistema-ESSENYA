@@ -759,6 +759,9 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
       ineNumber,
       certificacionesInfo,
       cuentaBancariaCLABE,
+      banco,
+      numeroCuenta,
+      titularCuenta,
       contactoEmergencia,
       especialidades,
       experienciaAnos,
@@ -889,6 +892,9 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
         ineNumber: ineNumber || "",
         certificacionesInfo: certificacionesInfo || "",
         cuentaBancariaCLABE: cuentaBancariaCLABE || "",
+        banco: banco || "",
+        numeroCuenta: numeroCuenta || "",
+        titularCuenta: titularCuenta || "",
         contactoEmergencia: contactoEmergencia || { nombre: "", parentesco: "", telefono: "" },
         especialidades: Array.isArray(especialidades) && especialidades.length > 0 ? especialidades : ["Masaje Tejido Profundo"],
         experienciaAnos: Number(experienciaAnos) || 0,
@@ -906,6 +912,17 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         solicitudRegistroFecha: new Date().toISOString()
+      }, { merge: true });
+
+      // Guardar datos sensibles y bancarios en subcolección privada
+      batch.set(db.collection("terapeutas").doc(uid).collection("private_info").doc("sensitive"), {
+        curp: (curp || "").toUpperCase().trim(),
+        ineNumber: ineNumber || "",
+        cuentaBancariaCLABE: cuentaBancariaCLABE || "",
+        banco: banco || "",
+        numeroCuenta: numeroCuenta || "",
+        titularCuenta: titularCuenta || "",
+        updatedAt: new Date().toISOString()
       }, { merge: true });
 
       // Registro en log de auditoría

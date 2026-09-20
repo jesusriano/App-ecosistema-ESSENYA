@@ -221,6 +221,9 @@ export const sanitizeTherapist = (raw: any): TherapistFullProfile => {
     curp: raw.curp || raw.CURP || undefined,
     ineNumber: raw.ineNumber || raw.ine || raw.INE || undefined,
     cuentaBancariaCLABE: raw.cuentaBancariaCLABE || raw.clabe || raw.CLABE || undefined,
+    banco: raw.banco || raw.bankName || undefined,
+    numeroCuenta: raw.numeroCuenta || raw.accountNumber || undefined,
+    titularCuenta: raw.titularCuenta || raw.accountHolder || undefined,
     direccion: raw.direccion || undefined,
     fechaNacimiento: raw.fechaNacimiento || undefined,
     certificacionesInfo: raw.certificacionesInfo || undefined,
@@ -408,11 +411,27 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     try {
       const privateInfoRef = doc(db, 'terapeutas', id, 'private_info', 'sensitive');
       const snap = await getDoc(privateInfoRef);
-      if (snap.exists()) {
+      if (snap.exists() && snap.data() && Object.keys(snap.data() || {}).length > 0) {
         setSensitiveInfo(prev => ({
           ...prev,
           [id]: snap.data()
         }));
+      } else {
+        const tSnap = await getDoc(doc(db, 'terapeutas', id));
+        if (tSnap.exists()) {
+          const tData = tSnap.data();
+          setSensitiveInfo(prev => ({
+            ...prev,
+            [id]: {
+              curp: tData.curp || '',
+              ineNumber: tData.ineNumber || '',
+              cuentaBancariaCLABE: tData.cuentaBancariaCLABE || '',
+              banco: tData.banco || '',
+              numeroCuenta: tData.numeroCuenta || '',
+              titularCuenta: tData.titularCuenta || ''
+            }
+          }));
+        }
       }
     } catch (err) {
       console.error('Error loading sensitive info for therapist:', id, err);

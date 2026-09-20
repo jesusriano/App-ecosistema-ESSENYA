@@ -47,6 +47,9 @@ export interface TherapistFullProfile {
   certificacionesInfo?: string;
   horarioAtencion?: string;
   cuentaBancariaCLABE?: string;
+  banco?: string;
+  numeroCuenta?: string;
+  titularCuenta?: string;
   contactoEmergencia?: EmergencyContact;
   motivoRechazoAccount?: string;
   biografia?: string;

@@ -1350,10 +1350,10 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                   </p>
                 </div>
 
-                <div className="flex justify-between items-center pt-6 border-t border-[#E5DFD3] dark:border-[#C9A55B]/15">
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-between items-stretch sm:items-center gap-3 pt-6 border-t border-[#E5DFD3] dark:border-[#C9A55B]/15">
                   <button
                     onClick={() => setStep(1)}
-                    className="px-5 py-2.5 rounded-xl border border-[#E5DFD3] dark:border-[#333333] text-xs text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white"
+                    className="px-5 py-2.5 rounded-xl border border-[#E5DFD3] dark:border-[#333333] text-xs text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white text-center"
                   >
                     Atrás
                   </button>
@@ -1540,10 +1540,10 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                   ></textarea>
                 </div>
 
-                <div className="flex justify-between items-center pt-6 border-t border-[#E5DFD3] dark:border-[#C9A55B]/15">
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-between items-stretch sm:items-center gap-3 pt-6 border-t border-[#E5DFD3] dark:border-[#C9A55B]/15">
                   <button
                     onClick={() => setStep(2)}
-                    className="px-5 py-2.5 rounded-xl border border-[#E5DFD3] dark:border-[#333333] text-xs text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white"
+                    className="px-5 py-2.5 rounded-xl border border-[#E5DFD3] dark:border-[#333333] text-xs text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white text-center"
                   >
                     Atrás
                   </button>
@@ -1664,10 +1664,10 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center pt-6">
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-between items-stretch sm:items-center gap-3 pt-6">
                   <button
                     onClick={() => setStep(3)}
-                    className="px-5 py-2.5 rounded-xl border border-[#333333] text-xs text-[#AAAAAA] hover:text-white"
+                    className="px-5 py-2.5 rounded-xl border border-[#333333] text-xs text-[#AAAAAA] hover:text-white text-center"
                   >
                     Atrás
                   </button>
@@ -2128,10 +2128,10 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center pt-4">
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-between items-stretch sm:items-center gap-3 pt-4">
                   <button
                     onClick={() => setStep(4)}
-                    className="px-5 py-2.5 rounded-xl border border-[#E5DFD3] dark:border-[#333333] text-xs text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white"
+                    className="px-5 py-2.5 rounded-xl border border-[#E5DFD3] dark:border-[#333333] text-xs text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white text-center"
                   >
                     Atrás
                   </button>
