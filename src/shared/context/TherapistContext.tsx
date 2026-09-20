@@ -1177,10 +1177,13 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       return { success: false, error: 'Terapeuta no encontrada.' };
     }
 
-    const inferredMime = docData.fileType === 'pdf' ? 'application/pdf' : (docData.fileType === 'png' ? 'image/png' : 'image/jpeg');
+    const documentType = (docData.tipo || docData.nombreDocumento || 'doc').toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const ext = docData.fileType || 'pdf';
     const timestamp = Date.now();
-    const cleanFileName = `${(docData.nombreDocumento || 'doc').replace(/[^a-zA-Z0-9.-]/g, '_')}_${timestamp}.${docData.fileType || 'pdf'}`;
-    const uniqueStoragePath = `therapists/${therapistId}/documents/${cleanFileName}`;
+    const cleanFileName = `${documentType}_${timestamp}.${ext}`;
+    const uniqueStoragePath = `therapists/${therapistId}/docs/${cleanFileName}`;
+
+    const inferredMime = ext === 'pdf' ? 'application/pdf' : (ext === 'png' ? 'image/png' : 'image/jpeg');
 
     const newDoc: TherapistDocument = {
       ...docData,
@@ -1198,6 +1201,9 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     const updatedDocs = [...target.documentos, newDoc];
     const updatePayload = {
       documentos: updatedDocs,
+      [`documents.${documentType}Url`]: docData.fileUrl,
+      [`documents.${documentType}Path`]: uniqueStoragePath,
+      [`documents.${documentType}`]: newDoc,
       fechaActualizacion: new Date().toISOString()
     };
     logPersistenceDiagnostic('uploadDocument', therapistId, 'FIRESTORE_UPDATE_SENT', { updatePayload });
