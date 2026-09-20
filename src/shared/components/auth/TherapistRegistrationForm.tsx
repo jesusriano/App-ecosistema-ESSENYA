@@ -147,13 +147,48 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
 
     setIsSubmitting(true);
 
+    // 0. Subir archivos adjuntos a Firebase Cloud Storage primero para obtener URLs de descarga
+    let finalFotografia = fotografia || '';
+    let finalDocuments = [...(uploadedDocuments || [])];
+    try {
+      const tempId = `temp_${Date.now()}`;
+      if (rawFiles.photo) {
+        const safeName = rawFiles.photo.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const photoRef = ref(storage, `terapeutas/${tempId}/perfil/foto-perfil_${Date.now()}_${safeName}`);
+        await uploadBytes(photoRef, rawFiles.photo);
+        finalFotografia = await getDownloadURL(photoRef);
+      }
+      if (rawFiles.ine) {
+        const safeName = rawFiles.ine.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const ineRef = ref(storage, `terapeutas/${tempId}/documentos/INE_${Date.now()}_${safeName}`);
+        await uploadBytes(ineRef, rawFiles.ine);
+        const ineDownloadUrl = await getDownloadURL(ineRef);
+        finalDocuments = finalDocuments.map(d => d.tipo === 'INE' ? { ...d, url: ineDownloadUrl } : d);
+        if (!finalDocuments.some(d => d.tipo === 'INE')) {
+          finalDocuments.push({ id: `doc_ine_${Date.now()}`, tipo: 'INE', nombre: 'Credencial INE', url: ineDownloadUrl, estado: 'pendiente' });
+        }
+      }
+      if (rawFiles.cert) {
+        const safeName = rawFiles.cert.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const certRef = ref(storage, `terapeutas/${tempId}/documentos/Certificado_${Date.now()}_${safeName}`);
+        await uploadBytes(certRef, rawFiles.cert);
+        const certDownloadUrl = await getDownloadURL(certRef);
+        finalDocuments = finalDocuments.map(d => d.tipo === 'Certificado' ? { ...d, url: certDownloadUrl } : d);
+        if (!finalDocuments.some(d => d.tipo === 'Certificado')) {
+          finalDocuments.push({ id: `doc_cert_${Date.now()}`, tipo: 'Certificado', nombre: 'Certificado Profesional', url: certDownloadUrl, estado: 'pendiente' });
+        }
+      }
+    } catch (storageErr) {
+      console.warn('[Storage] Advertencia en subida previa de archivos:', storageErr);
+    }
+
     const registrationPayload = {
       nombre: nombre.trim(),
       apellidos: apellidos.trim(),
       correo: correo.trim().toLowerCase(),
       password,
       telefono: telefono.trim(),
-      fotografia: fotografia || '',
+      fotografia: finalFotografia,
       fechaNacimiento: fechaNacimiento || '',
       direccion: direccion.trim() || '',
       curp: (curp || '').trim().toUpperCase(),
@@ -169,7 +204,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
       experienciaAnos: Number(experienciaAnos) || 0,
       disponibilidad: disponibilidad.trim() || 'Lunes a Sábado, 09:00 - 19:00',
       zonasCobertura: zonasCobertura.length > 0 ? zonasCobertura : ['Polanco', 'Lomas de Chapultepec'],
-      documentos: uploadedDocuments || []
+      documentos: finalDocuments
     };
 
     // 1. Prioridad: Registro seguro y atómico mediante API Backend

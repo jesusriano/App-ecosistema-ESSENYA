@@ -384,15 +384,6 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [firebaseUser, sessions.administrador, sessions.terapeuta, fetchTherapistsFromBackend]);
 
-  // Sync state to LocalStorage - REMOVED for security
-  useEffect(() => {
-    // No-op for security
-  }, [therapists]);
-
-  useEffect(() => {
-    // No-op for security
-  }, [auditLogs]);
-
   // Log Audit Action
   const logAudit = useCallback((therapistId: string, therapistName: string, action: string, details?: string) => {
     const newLog: AuditLog = {
@@ -437,6 +428,15 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.error('Error loading sensitive info for therapist:', id, err);
     }
   }, []);
+
+  // Automatically load sensitive info for all therapists
+  useEffect(() => {
+    therapists.forEach(t => {
+      if (t && t.id && !sensitiveInfo[t.id]) {
+        loadSensitiveInfo(t.id);
+      }
+    });
+  }, [therapists, loadSensitiveInfo, sensitiveInfo]);
 
   // Admin Operation: Create Therapist with Temporary Credentials
   const createTherapist = async (data: {
@@ -1276,6 +1276,34 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     try {
       await updateDoc(doc(db, 'terapeutas', therapistId), cleanForFirestore(updatePayload));
+
+      // Also save sensitive info in subcollection if present
+      const sensitiveUpdates: Record<string, any> = {};
+      if (updates.curp !== undefined) sensitiveUpdates.curp = updates.curp;
+      if (updates.ineNumber !== undefined) sensitiveUpdates.ineNumber = updates.ineNumber;
+      if (updates.cuentaBancariaCLABE !== undefined) sensitiveUpdates.cuentaBancariaCLABE = updates.cuentaBancariaCLABE;
+      if (updates.banco !== undefined) sensitiveUpdates.banco = updates.banco;
+      if (updates.numeroCuenta !== undefined) sensitiveUpdates.numeroCuenta = updates.numeroCuenta;
+      if (updates.titularCuenta !== undefined) sensitiveUpdates.titularCuenta = updates.titularCuenta;
+
+      if (Object.keys(sensitiveUpdates).length > 0) {
+        try {
+          const privateInfoRef = doc(db, 'terapeutas', therapistId, 'private_info', 'sensitive');
+          await setDoc(privateInfoRef, {
+            ...sensitiveUpdates,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+          setSensitiveInfo(prev => ({
+            ...prev,
+            [therapistId]: {
+              ...(prev[therapistId] || {}),
+              ...sensitiveUpdates
+            }
+          }));
+        } catch (err) {
+          console.warn('Error updating private_info/sensitive:', err);
+        }
+      }
 
       // Sync photograph or basic fields with users and terapeutas_publicos collections
       if (updates.fotografia !== undefined) {

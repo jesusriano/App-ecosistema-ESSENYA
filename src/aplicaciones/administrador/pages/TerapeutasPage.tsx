@@ -217,6 +217,13 @@ export const TerapeutasPage: React.FC = () => {
     }
   };
 
+  const handleOpenDocModal = (t: TherapistFullProfile) => {
+    if (t && t.id) {
+      loadSensitiveInfo(t.id);
+    }
+    setShowDocModal(sanitizeTherapist(t));
+  };
+
   // Handle Delete
   const handleDeleteAccount = async () => {
     if (!showDeleteConfirm || !showDeleteConfirm.id) return;
@@ -670,7 +677,7 @@ export const TerapeutasPage: React.FC = () => {
                             </div>
 
                             <button
-                              onClick={() => setShowDocModal(sanitizeTherapist(t))}
+                              onClick={() => handleOpenDocModal(t)}
                               className="w-full py-1.5 bg-[var(--bg-subcard)] hover:bg-[var(--bg-active)] border border-[var(--border-color)] text-[var(--text-primary)] font-semibold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer text-[11px]"
                             >
                               <Eye className="w-3.5 h-3.5 text-[#C9A55B]" />
@@ -690,7 +697,7 @@ export const TerapeutasPage: React.FC = () => {
                     ) : (
                       <div className="grid grid-cols-2 gap-2">
                         <button
-                          onClick={() => setShowDocModal(sanitizeTherapist(t))}
+                          onClick={() => handleOpenDocModal(t)}
                           className="w-full py-2 bg-[var(--bg-subcard)] hover:bg-[var(--bg-active)] border border-[var(--border-color)] text-[var(--text-primary)] font-semibold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5 text-[#C9A55B]" />
@@ -938,7 +945,10 @@ export const TerapeutasPage: React.FC = () => {
 
       {/* DOCUMENT & APPLICATION EVALUATION MODAL */}
       {showDocModal && (() => {
-        const modalData = sanitizeTherapist(showDocModal);
+        const modalData = sanitizeTherapist({
+          ...showDocModal,
+          ...(sensitiveInfo[showDocModal.id] || {})
+        });
         const docs = Array.isArray(modalData.documentos) ? modalData.documentos : [];
         const specs = Array.isArray(modalData.especialidades) ? modalData.especialidades : [];
         const zones = Array.isArray(modalData.zonasCobertura) ? modalData.zonasCobertura : [];

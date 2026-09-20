@@ -285,31 +285,24 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
         </div>
       );
     }
-    // Security check: ensure user role matches expected portal role
-    if (currentUser.rol !== role) {
+    // Security check: ensure user role matches expected portal role - automatically redirect instead of showing error card
+    if (currentUser.rol && currentUser.rol !== role && rolePaths[currentUser.rol as UserRole]) {
+      const targetPath = rolePaths[currentUser.rol as UserRole];
+      navigate(targetPath, { replace: true });
       return (
         <div className="min-h-[85vh] flex items-center justify-center p-4 bg-[#FAF8F5] dark:bg-[#0D0D0D]">
-          <div className="w-full max-w-lg bg-white dark:bg-[#141414] border border-red-500/40 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 text-center">
-            <div className="w-16 h-16 rounded-3xl bg-red-500/10 border border-red-500/30 text-red-500 flex items-center justify-center mx-auto">
-              <ShieldAlert className="w-8 h-8" />
+          <div className="w-full max-w-md bg-white dark:bg-[#141414] border border-[#C9A55B]/40 rounded-3xl p-8 shadow-2xl text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-[#C9A55B]/10 border border-[#C9A55B]/30 text-[#C9A55B] flex items-center justify-center mx-auto animate-spin">
+              <RefreshCw className="w-6 h-6" />
             </div>
-            <div className="space-y-2">
-              <span className="bg-red-500/15 text-red-600 dark:text-red-400 text-xs font-bold px-3 py-1 rounded-full border border-red-500/30 uppercase tracking-widest">
-                Fallo de Integridad de Rol
+            <div className="space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-[#C9A55B]">
+                Redirección Automática
               </span>
-              <h2 className="text-xl font-serif font-bold text-[#1C1917] dark:text-white pt-2">
-                Inconsistencia de Permisos
-              </h2>
-              <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA]">
-                Se detectó una discrepancia entre tu perfil ({currentUser.rol}) y el rol exigido ({role}) para la ruta actual ({location.pathname}).
-              </p>
+              <h3 className="font-serif font-bold text-lg text-[#1C1917] dark:text-white">
+                Redirigiendo a tu portal independiente...
+              </h3>
             </div>
-            <button
-              onClick={() => logout(role)}
-              className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-all shadow-md"
-            >
-              Cerrar Sesión Insegura
-            </button>
           </div>
         </div>
       );
