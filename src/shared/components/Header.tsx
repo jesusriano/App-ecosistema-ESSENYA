@@ -6,6 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { EssenyaLogo } from './EssenyaLogo';
 import { TechSupportWhatsAppButton } from './TechSupportWhatsAppButton';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeaderProps {
   currentPortal: PortalType;
@@ -131,6 +132,8 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Panel Actions / Website Link & Status */}
         <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
+          <PWAInstallButton />
+
           <a
             href="https://essenyamexico.com"
             target="_blank"

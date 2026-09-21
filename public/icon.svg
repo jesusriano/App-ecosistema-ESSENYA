@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E2C98A" />
+      <stop offset="50%" stop-color="#C9A55B" />
+      <stop offset="100%" stop-color="#9A7B38" />
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="#1C1917" />
+  
+  <!-- Outer Luxury Ring -->
+  <circle cx="256" cy="256" r="210" fill="none" stroke="url(#goldGrad)" stroke-width="4" opacity="0.4" />
+  
+  <!-- Lotus Petals / Wellness Motif -->
+  <path d="M256 100 C 220 160, 180 200, 180 260 C 180 310, 214 350, 256 390 C 298 350, 332 310, 332 260 C 332 200, 292 160, 256 100 Z" fill="url(#goldGrad)" opacity="0.15" />
+  
+  <!-- Monogram Letter E -->
+  <g transform="translate(176, 146)">
+    <!-- Elegant E Stem & Bars -->
+    <path d="M40 20 H130 M40 20 V200 H130 M40 110 H110" fill="none" stroke="url(#goldGrad)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>

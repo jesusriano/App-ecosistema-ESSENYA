@@ -16,6 +16,7 @@ import { db } from './lib/firebase';
 
 import { ConfigValidator } from './shared/components/ConfigValidator';
 import { ErrorBoundary } from './shared/components/ErrorBoundary';
+import { OfflineNotice } from './shared/components/OfflineNotice';
 
 // Code-splitting via React.lazy for instant portal load performance
 const ClienteAppModule = React.lazy(() => import('./aplicaciones/cliente/App'));
@@ -190,6 +191,9 @@ function MainAppContent() {
 
       {/* Global Theme Toggle Button */}
       <ThemeToggle />
+
+      {/* Custom Offline Detection & Notice Modal */}
+      <OfflineNotice />
     </div>
   );
 }
