@@ -17,6 +17,7 @@ import { db } from './lib/firebase';
 import { ConfigValidator } from './shared/components/ConfigValidator';
 import { ErrorBoundary } from './shared/components/ErrorBoundary';
 import { OfflineNotice } from './shared/components/OfflineNotice';
+import { initGA, trackPageView } from './shared/utils/analytics';
 
 // Code-splitting via React.lazy for instant portal load performance
 const ClienteAppModule = React.lazy(() => import('./aplicaciones/cliente/App'));
@@ -46,6 +47,16 @@ function MainAppContent() {
   const { firebaseUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Initialize Google Analytics 4
+  React.useEffect(() => {
+    initGA();
+  }, []);
+
+  // Track SPA page views on route changes
+  React.useEffect(() => {
+    trackPageView(location.pathname + location.search);
+  }, [location]);
 
   // Initialize Capacitor Push Notifications and save device push token to Firestore
   React.useEffect(() => {
