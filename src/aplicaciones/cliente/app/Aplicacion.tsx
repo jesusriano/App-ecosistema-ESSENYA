@@ -2354,23 +2354,40 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                 {/* Acceptance Announcement Banner */}
                 <div className="bg-gradient-to-r from-[#FAF6EE] via-[#F5EEDD] to-[#FAF6EE] dark:from-[#1C1A14] dark:via-[#262218] dark:to-[#1C1A14] border-2 border-[#C9A55B] p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md">
                   <div className="flex items-center space-x-3.5">
-                    <img 
-                      src={activeBooking.therapistPhoto || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80'} 
-                      alt={activeBooking.therapistName}
-                      className="w-16 h-16 rounded-full object-cover border-2 border-[#C9A55B] shadow-md shadow-[#C9A55B]/30"
-                    />
+                    <div className="flex -space-x-3">
+                      <img 
+                        src={activeBooking.therapistPhoto || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80'} 
+                        alt={activeBooking.therapistName}
+                        className="w-16 h-16 rounded-full object-cover border-2 border-[#C9A55B] shadow-md shadow-[#C9A55B]/30 relative z-10"
+                      />
+                      {(activeBooking.requiresDualTherapist || activeBooking.serviceId === 'srv-pareja') && activeBooking.therapistName2 && (
+                        <img 
+                          src={activeBooking.therapistPhoto2 || 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=400&q=80'} 
+                          alt={activeBooking.therapistName2}
+                          className="w-16 h-16 rounded-full object-cover border-2 border-[#C9A55B] shadow-md shadow-[#C9A55B]/30 relative z-20"
+                        />
+                      )}
+                    </div>
                     <div>
                       <div className="flex items-center space-x-2">
                         <span className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
                           <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                          <span>¡Masaje Aceptado!</span>
+                          <span>
+                            {(activeBooking.requiresDualTherapist || activeBooking.serviceId === 'srv-pareja')
+                              ? (activeBooking.therapistName2 ? '¡2 Terapeutas Asignadas!' : '¡1ª Terapeuta Asignada!')
+                              : '¡Masaje Aceptado!'}
+                          </span>
                         </span>
                       </div>
                       <h4 className="text-lg sm:text-xl font-serif font-bold text-[#1C1917] dark:text-white mt-0.5">
-                        {activeBooking.therapistName}
+                        {(activeBooking.requiresDualTherapist || activeBooking.serviceId === 'srv-pareja') && activeBooking.therapistName2
+                          ? `${activeBooking.therapistName} & ${activeBooking.therapistName2}`
+                          : activeBooking.therapistName}
                       </h4>
                       <p className="text-xs text-[#806020] dark:text-[#C9A55B] font-semibold">
-                        Terapeuta Profesional Asignada • {activeBooking.therapistPhone || 'Atención VIP'}
+                        {(activeBooking.requiresDualTherapist || activeBooking.serviceId === 'srv-pareja')
+                          ? 'Dúo de Especialistas Certificadas en Masaje en Pareja'
+                          : `Terapeuta Profesional Asignada • ${activeBooking.therapistPhone || 'Atención VIP'}`}
                       </p>
                     </div>
                   </div>
@@ -2401,9 +2418,11 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                   {/* Therapist Details Sidebar */}
                   <div className="bg-white dark:bg-[#141414] rounded-2xl border border-[#E5DFD3] dark:border-[#C9A55B]/20 p-6 space-y-4 shadow-sm">
                     <div className="flex justify-between items-center border-b border-[#E5DFD3] dark:border-[#222222] pb-3">
-                      <h4 className="text-xs uppercase text-[#6B655F] dark:text-[#AAAAAA] tracking-wider font-semibold">Terapeuta Confirmada</h4>
+                      <h4 className="text-xs uppercase text-[#6B655F] dark:text-[#AAAAAA] tracking-wider font-semibold">
+                        {(activeBooking.requiresDualTherapist || activeBooking.serviceId === 'srv-pareja') ? 'Terapeutas Asignadas' : 'Terapeuta Confirmada'}
+                      </h4>
                       <span className="text-[10px] bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B] font-bold px-2 py-0.5 rounded-full">
-                        Certificada
+                        Certificadas
                       </span>
                     </div>
                       
@@ -2417,15 +2436,32 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                         <h5 className="font-bold text-[#1C1917] dark:text-white text-base">{activeBooking.therapistName}</h5>
                         <p className="text-xs text-[#806020] dark:text-[#C9A55B] flex items-center mt-0.5">
                           <Star className="w-3.5 h-3.5 fill-[#C9A55B] text-[#C9A55B] mr-1" />
-                          <span>4.98 • Fisioterapeuta Especialista</span>
+                          <span>4.98 • Fisioterapeuta Especialista 1</span>
                         </p>
                       </div>
                     </div>
 
+                    {(activeBooking.requiresDualTherapist || activeBooking.serviceId === 'srv-pareja') && activeBooking.therapistName2 && (
+                      <div className="flex items-center space-x-3 pt-2 border-t border-[#E5DFD3]/60 dark:border-[#222222]">
+                        <img 
+                          src={activeBooking?.therapistPhoto2 || 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=400&q=80'} 
+                          alt={activeBooking.therapistName2} 
+                          className="w-14 h-14 rounded-full object-cover border-2 border-[#C9A55B]"
+                        />
+                        <div>
+                          <h5 className="font-bold text-[#1C1917] dark:text-white text-base">{activeBooking.therapistName2}</h5>
+                          <p className="text-xs text-[#806020] dark:text-[#C9A55B] flex items-center mt-0.5">
+                            <Star className="w-3.5 h-3.5 fill-[#C9A55B] text-[#C9A55B] mr-1" />
+                            <span>4.97 • Fisioterapeuta Especialista 2</span>
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="border-t border-[#E5DFD3] dark:border-[#222222] pt-3 space-y-2 text-xs">
                       <div className="flex justify-between text-[#6B655F] dark:text-[#888888]">
-                        <span>Persona que aceptó:</span>
-                        <span className="text-[#1C1917] dark:text-white font-bold">{activeBooking.therapistName}</span>
+                        <span>Servicio:</span>
+                        <span className="text-[#1C1917] dark:text-white font-bold">{activeBooking.serviceName}</span>
                       </div>
                       <div className="flex justify-between text-[#6B655F] dark:text-[#888888]">
                         <span>Atención y Concierge:</span>

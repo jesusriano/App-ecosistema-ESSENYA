@@ -438,6 +438,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     let unsubReservas = () => {};
+    let unsubReservas2 = () => {};
     let unsubPending = () => {};
     let unsubClientes = () => {};
     let unsubInvoices = () => {};
@@ -446,6 +447,11 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     const parseBookingDoc = (docSnap: any): Booking => {
       const d = (docSnap.data ? docSnap.data() : docSnap) || {};
+      const therapistIds = Array.isArray(d.therapistIds) ? d.therapistIds : (d.therapistId ? [d.therapistId] : []);
+      const assignedCount = typeof d.assignedTherapistsCount === 'number' 
+        ? d.assignedTherapistsCount 
+        : therapistIds.length;
+
       return {
         ...d,
         id: docSnap.id || d.id || '',
@@ -476,6 +482,17 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         etaMinutes: Number(d.etaMinutes || 20),
         paymentMethod: d.paymentMethod || 'Tarjeta de Crédito / Débito',
         paymentStatus: d.paymentStatus || 'pendiente',
+        requiresDualTherapist: d.requiresDualTherapist === true || d.serviceId === 'srv-pareja',
+        therapistId: d.therapistId,
+        therapistName: d.therapistName,
+        therapistPhoto: d.therapistPhoto,
+        therapistPhone: d.therapistPhone,
+        therapistId2: d.therapistId2,
+        therapistName2: d.therapistName2,
+        therapistPhoto2: d.therapistPhoto2,
+        therapistPhone2: d.therapistPhone2,
+        therapistIds,
+        assignedTherapistsCount: assignedCount,
         createdAt: d.createdAt || new Date().toISOString()
       } as Booking;
     };
@@ -550,12 +567,13 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     } else if (isUserTherapist) {
       // Therapist role: bookings assigned to therapist + open pending bookings queue
-      let assignedBookings: Booking[] = [];
+      let assignedBookings1: Booking[] = [];
+      let assignedBookings2: Booking[] = [];
       let pendingBookings: Booking[] = [];
 
       const syncTherapistBookings = () => {
         const mergedMap = new Map<string, Booking>();
-        [...assignedBookings, ...pendingBookings].forEach(b => mergedMap.set(b.id, b));
+        [...assignedBookings1, ...assignedBookings2, ...pendingBookings].forEach(b => mergedMap.set(b.id, b));
         const list = Array.from(mergedMap.values()).sort(
           (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
         );
@@ -564,9 +582,17 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       const qTherapistBookings = query(collection(db, 'reservas'), where('therapistId', '==', uid));
       unsubReservas = onSnapshot(qTherapistBookings, (snap) => {
-        assignedBookings = snap.docs.map(doc => parseBookingDoc(doc));
+        assignedBookings1 = snap.docs.map(doc => parseBookingDoc(doc));
         syncTherapistBookings();
       }, err => handleFirestoreError(err, OperationType.LIST, 'reservas'));
+
+      try {
+        const qTherapistBookings2 = query(collection(db, 'reservas'), where('therapistId2', '==', uid));
+        unsubReservas2 = onSnapshot(qTherapistBookings2, (snap) => {
+          assignedBookings2 = snap.docs.map(doc => parseBookingDoc(doc));
+          syncTherapistBookings();
+        }, () => {});
+      } catch {}
 
       try {
         const qPendingBookings = query(collection(db, 'reservas'), where('state', '==', 'pendiente'));
@@ -634,6 +660,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       unsubTerapeuta();
       unsubZonas();
       unsubReservas();
+      unsubReservas2();
       unsubPending();
       unsubClientes();
       unsubInvoices();
@@ -768,6 +795,9 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     const bookingRef = doc(db, 'reservas', bookingId);
     
     try {
+      let isDualService = false;
+      let slotNumber = 1;
+
       await runTransaction(db, async (transaction) => {
         const bookingDoc = await transaction.get(bookingRef);
         if (!bookingDoc.exists()) {
@@ -779,15 +809,75 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
           throw new Error("Esta reserva ya fue aceptada por otra terapeuta o ya no está disponible.");
         }
 
-        const updatePayload = {
-          state: 'aceptada',
-          therapistId: updatedTherapistId,
-          therapistName: updatedTherapistName,
-          therapistPhoto: updatedTherapistPhoto,
-          therapistPhone: updatedTherapistPhone,
-          acceptedAt: nowIso,
-          updatedAt: nowIso,
-        };
+        const isDual = bookingData.requiresDualTherapist === true || bookingData.serviceId === 'srv-pareja';
+        isDualService = isDual;
+
+        const existingTherapistIds: string[] = Array.isArray(bookingData.therapistIds) 
+          ? bookingData.therapistIds 
+          : (bookingData.therapistId ? [bookingData.therapistId] : []);
+        
+        const assignedCount = typeof bookingData.assignedTherapistsCount === 'number'
+          ? bookingData.assignedTherapistsCount
+          : existingTherapistIds.length;
+
+        let updatePayload: Record<string, any> = {};
+
+        if (!isDual) {
+          // Normal single therapist booking
+          updatePayload = {
+            state: 'aceptada',
+            therapistId: updatedTherapistId,
+            therapistName: updatedTherapistName,
+            therapistPhoto: updatedTherapistPhoto,
+            therapistPhone: updatedTherapistPhone,
+            therapistIds: [updatedTherapistId],
+            assignedTherapistsCount: 1,
+            acceptedAt: nowIso,
+            updatedAt: nowIso,
+          };
+          slotNumber = 1;
+        } else {
+          // Dual therapist booking: needs 2 therapists
+          if (assignedCount >= 2 || existingTherapistIds.length >= 2) {
+            throw new Error("Esta reserva de masaje en pareja ya tiene sus dos terapeutas asignadas.");
+          }
+
+          if (existingTherapistIds.includes(updatedTherapistId) || bookingData.therapistId === updatedTherapistId) {
+            throw new Error("Ya has aceptado un cupo en esta reserva de masaje en pareja. No puedes ocupar ambos cupos.");
+          }
+
+          if (assignedCount === 0 || existingTherapistIds.length === 0) {
+            // First therapist accepting: assign slot 1, stay 'pendiente'
+            updatePayload = {
+              therapistId: updatedTherapistId,
+              therapistName: updatedTherapistName,
+              therapistPhoto: updatedTherapistPhoto,
+              therapistPhone: updatedTherapistPhone,
+              therapistIds: [updatedTherapistId],
+              assignedTherapistsCount: 1,
+              requiresDualTherapist: true,
+              acceptedAt: nowIso,
+              updatedAt: nowIso,
+            };
+            slotNumber = 1;
+          } else {
+            // Second therapist accepting: assign slot 2, mark 'aceptada'
+            const newTherapistIds = [...existingTherapistIds, updatedTherapistId];
+            updatePayload = {
+              therapistId2: updatedTherapistId,
+              therapistName2: updatedTherapistName,
+              therapistPhoto2: updatedTherapistPhoto,
+              therapistPhone2: updatedTherapistPhone,
+              therapistIds: newTherapistIds,
+              assignedTherapistsCount: 2,
+              requiresDualTherapist: true,
+              state: 'aceptada',
+              acceptedAt: nowIso,
+              updatedAt: nowIso,
+            };
+            slotNumber = 2;
+          }
+        }
 
         transaction.update(bookingRef, cleanForFirestore(updatePayload));
       });
@@ -795,26 +885,61 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Update local state ONLY on success
       setBookings(prev => prev.map(b => {
         if (b.id === bookingId) {
-          return {
-            ...b,
-            state: 'aceptada',
-            therapistId: updatedTherapistId,
-            therapistName: updatedTherapistName,
-            therapistPhoto: updatedTherapistPhoto,
-            therapistPhone: updatedTherapistPhone,
-            acceptedAt: nowIso,
-            updatedAt: nowIso,
-          };
+          if (!isDualService) {
+            return {
+              ...b,
+              state: 'aceptada',
+              therapistId: updatedTherapistId,
+              therapistName: updatedTherapistName,
+              therapistPhoto: updatedTherapistPhoto,
+              therapistPhone: updatedTherapistPhone,
+              therapistIds: [updatedTherapistId],
+              assignedTherapistsCount: 1,
+              acceptedAt: nowIso,
+              updatedAt: nowIso,
+            };
+          } else if (slotNumber === 1) {
+            return {
+              ...b,
+              therapistId: updatedTherapistId,
+              therapistName: updatedTherapistName,
+              therapistPhoto: updatedTherapistPhoto,
+              therapistPhone: updatedTherapistPhone,
+              therapistIds: [updatedTherapistId],
+              assignedTherapistsCount: 1,
+              requiresDualTherapist: true,
+              acceptedAt: nowIso,
+              updatedAt: nowIso,
+            };
+          } else {
+            const existingIds = b.therapistIds || (b.therapistId ? [b.therapistId] : []);
+            return {
+              ...b,
+              state: 'aceptada',
+              therapistId2: updatedTherapistId,
+              therapistName2: updatedTherapistName,
+              therapistPhoto2: updatedTherapistPhoto,
+              therapistPhone2: updatedTherapistPhone,
+              therapistIds: [...existingIds, updatedTherapistId],
+              assignedTherapistsCount: 2,
+              requiresDualTherapist: true,
+              acceptedAt: nowIso,
+              updatedAt: nowIso,
+            };
+          }
         }
         return b;
       }));
 
       const bk = bookings.find(b => b.id === bookingId);
+      const logMsg = isDualService 
+        ? `Terapeuta ${updatedTherapistName} aceptó el cupo ${slotNumber}/2 del masaje en pareja ${bk?.code || bookingId}.`
+        : `Terapeuta ${updatedTherapistName} aceptó la reserva ${bk?.code || bookingId}.`;
       addLog(
         'Terapeuta',
         updatedTherapistName,
         'Aceptación de Reserva',
-        `Terapeuta ${updatedTherapistName} aceptó la reserva ${bk?.code || bookingId}.`
+        logMsg
       );
     } catch (err: any) {
       console.error("Error accepting booking:", err);

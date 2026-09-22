@@ -110,6 +110,12 @@ export interface Booking {
   therapistName?: string;
   therapistPhoto?: string;
   therapistPhone?: string;
+  therapistId2?: string;
+  therapistName2?: string;
+  therapistPhoto2?: string;
+  therapistPhone2?: string;
+  therapistIds?: string[];
+  assignedTherapistsCount?: number;
   serviceId: string;
   serviceName: string;
   durationMinutes: number;

@@ -269,11 +269,17 @@ service cloud.firestore {
       allow get: if isSignedIn() && isValidId(reservaId) && (
         resource.data.clientId == request.auth.uid || 
         resource.data.therapistId == request.auth.uid || 
+        (resource.data.keys().hasAny(['therapistId2']) && resource.data.therapistId2 == request.auth.uid) ||
+        (resource.data.keys().hasAny(['therapistIds']) && request.auth.uid in resource.data.therapistIds) ||
+        resource.data.state == 'pendiente' ||
         isAdmin()
       );
       allow list: if isSignedIn() && (
         resource.data.clientId == request.auth.uid || 
         resource.data.therapistId == request.auth.uid || 
+        (resource.data.keys().hasAny(['therapistId2']) && resource.data.therapistId2 == request.auth.uid) ||
+        (resource.data.keys().hasAny(['therapistIds']) && request.auth.uid in resource.data.therapistIds) ||
+        resource.data.state == 'pendiente' ||
         isAdmin()
       );
       allow create: if false;
@@ -287,13 +293,20 @@ service cloud.firestore {
            isValidStateTransition(existing().state, incoming().state)) ||
           isValidBooking(incoming()) &&
           // Action: Therapist Update (Location or status change)
-          (isOwner(existing().therapistId) && incoming().total == existing().total && 
+          ((isOwner(existing().therapistId) || 
+            (existing().keys().hasAny(['therapistId2']) && isOwner(existing().therapistId2)) ||
+            (existing().keys().hasAny(['therapistIds']) && request.auth.uid in existing().therapistIds)) && 
+           incoming().total == existing().total && 
            incoming().diff(existing()).affectedKeys().hasOnly(['state', 'liveLat', 'liveLng', 'updatedAt']) &&
            isValidStateTransition(existing().state, incoming().state)) ||
-          // Action: Unassigned Booking Acceptance
+          // Action: Unassigned or Dual Booking Acceptance
           (existing().state == 'pendiente' && 
-           incoming().therapistId == request.auth.uid &&
-           incoming().diff(existing()).affectedKeys().hasOnly(['state', 'therapistId', 'therapistName', 'therapistPhoto', 'therapistPhone', 'acceptedAt', 'updatedAt']))
+           incoming().diff(existing()).affectedKeys().hasOnly([
+             'state', 'therapistId', 'therapistName', 'therapistPhoto', 'therapistPhone',
+             'therapistId2', 'therapistName2', 'therapistPhoto2', 'therapistPhone2',
+             'therapistIds', 'assignedTherapistsCount', 'requiresDualTherapist',
+             'acceptedAt', 'updatedAt'
+           ]))
         ))
       );
       allow delete: if isAdmin();

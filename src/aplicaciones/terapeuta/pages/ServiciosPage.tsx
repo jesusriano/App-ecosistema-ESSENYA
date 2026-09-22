@@ -17,9 +17,13 @@ export const ServiciosPage: React.FC = () => {
   const pendingBookings = bookings.filter(b => b.state === 'pendiente');
   const activeAndCompletedBookings = bookings.filter(b => b.state !== 'pendiente');
 
-  const onAccept = (bookingId: string) => {
-    handleAcceptBooking(bookingId, therapist);
-    showToast('Masaje Aceptado', 'Has aceptado la solicitud. El cliente ya puede ver tu nombre y perfil.', 'success');
+  const onAccept = async (bookingId: string) => {
+    try {
+      await handleAcceptBooking(bookingId, therapist);
+      showToast('Masaje Aceptado', 'Has aceptado la solicitud exitosamente.', 'success');
+    } catch (err: any) {
+      showToast('Aceptación de Reserva', err.message || 'No fue posible aceptar la reserva.', 'error');
+    }
   };
 
   const onDecline = (bookingId: string) => {
@@ -113,13 +117,25 @@ export const ServiciosPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {pendingBookings.map((booking) => {
                   const serviceImg = getServiceImage(booking.serviceId || booking.serviceName);
+                  const isDual = booking.requiresDualTherapist || booking.serviceId === 'srv-pareja';
+                  const currentTherapistId = therapist?.id || (therapist as any)?.uid;
+                  const existingTherapistIds = Array.isArray(booking.therapistIds)
+                    ? booking.therapistIds
+                    : (booking.therapistId ? [booking.therapistId] : []);
+                  const assignedCount = typeof booking.assignedTherapistsCount === 'number'
+                    ? booking.assignedTherapistsCount
+                    : existingTherapistIds.length;
+                  const alreadyAcceptedByMe = currentTherapistId && (
+                    booking.therapistId === currentTherapistId || existingTherapistIds.includes(currentTherapistId)
+                  );
+
                   return (
                     <div
                       key={booking.id}
                       className="bg-[#FAF6EE] dark:bg-[#1A1813] border-2 border-[#C9A55B] rounded-2xl p-5 space-y-4 shadow-md relative overflow-hidden"
                     >
                       <div className="absolute top-0 right-0 bg-[#C9A55B] text-black text-[10px] font-extrabold px-3 py-1 rounded-bl-xl uppercase tracking-wider">
-                        ¡Nueva Solicitud!
+                        {isDual ? `¡Pareja (${assignedCount}/2)!` : '¡Nueva Solicitud!'}
                       </div>
 
                       <div className="flex gap-4 items-start">
@@ -139,9 +155,16 @@ export const ServiciosPage: React.FC = () => {
                         <div className="flex-1 min-w-0">
                           <span className="font-mono font-bold text-xs text-[#806020] dark:text-[#C9A55B]">#{booking.code || booking.id}</span>
                           <h3 className="font-serif font-bold text-base text-[#1C1917] dark:text-white mt-0.5 truncate">{booking.serviceName}</h3>
-                          <span className="text-xs font-semibold text-[#806020] dark:text-[#C9A55B] block mt-1">
-                            ${(booking.total ?? booking.price ?? 0).toLocaleString()} MXN • {booking.paymentStatus === 'pagado' ? '✓ Pagado' : 'Pago al Recibir'}
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <span className="text-xs font-semibold text-[#806020] dark:text-[#C9A55B]">
+                              ${(booking.total ?? booking.price ?? 0).toLocaleString()} MXN • {booking.paymentStatus === 'pagado' ? '✓ Pagado' : 'Pago al Recibir'}
+                            </span>
+                            {isDual && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#C9A55B]/20 text-[#806020] dark:text-[#C9A55B] border border-[#C9A55B]/30">
+                                2 Terapeutas ({assignedCount}/2)
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -164,16 +187,32 @@ export const ServiciosPage: React.FC = () => {
                             <span>Molestias: <strong>{booking.painPoints}</strong></span>
                           </p>
                         )}
+                        {isDual && assignedCount === 1 && (
+                          <p className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 font-medium">
+                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                            <span>1ª Terapeuta asignada: <strong>{booking.therapistName || 'Compañera'}</strong></span>
+                          </p>
+                        )}
                       </div>
 
                       <div className="pt-3 border-t border-[#E5DFD3] dark:border-[#333333] flex items-center gap-2.5">
-                        <button
-                          onClick={() => onAccept(booking.id)}
-                          className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-[#E6CA65] via-[#C9A55B] to-[#9A7B38] text-black font-extrabold text-xs py-2.5 px-4 rounded-xl shadow hover:opacity-95 transition-all cursor-pointer"
-                        >
-                          <Check className="w-4 h-4 text-black" />
-                          <span>Aceptar Masaje</span>
-                        </button>
+                        {alreadyAcceptedByMe ? (
+                          <div className="flex-1 py-2 px-3 text-center bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B] border border-[#C9A55B]/40 rounded-xl text-xs font-bold">
+                            ✓ Ya aceptaste tu cupo • Esperando compañera
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => onAccept(booking.id)}
+                            className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-[#E6CA65] via-[#C9A55B] to-[#9A7B38] text-black font-extrabold text-xs py-2.5 px-4 rounded-xl shadow hover:opacity-95 transition-all cursor-pointer"
+                          >
+                            <Check className="w-4 h-4 text-black" />
+                            <span>
+                              {isDual 
+                                ? (assignedCount === 1 ? 'Aceptar 2º Cupo (Pareja)' : 'Aceptar Cupo (1 de 2)')
+                                : 'Aceptar Masaje'}
+                            </span>
+                          </button>
+                        )}
                         <button
                           onClick={() => onDecline(booking.id)}
                           className="flex items-center justify-center gap-1 bg-white dark:bg-[#262626] border border-[#E5DFD3] dark:border-[#444444] text-xs font-semibold text-[#6B655F] dark:text-[#AAAAAA] hover:text-red-500 py-2.5 px-3 rounded-xl transition-all cursor-pointer"
@@ -247,6 +286,12 @@ export const ServiciosPage: React.FC = () => {
                           <MapPin className="w-3.5 h-3.5 text-[#C9A55B]" />
                           <span>Ubicación: {booking.clientAddress} ({booking.cityZone})</span>
                         </p>
+                        {(booking.requiresDualTherapist || booking.serviceId === 'srv-pareja') && (
+                          <p className="flex items-center gap-2 text-[#806020] dark:text-[#C9A55B]">
+                            <Sparkles className="w-3.5 h-3.5 text-[#C9A55B]" />
+                            <span>Terapeutas: <strong>{booking.therapistName || '1ª Asignada'} & {booking.therapistName2 || '2ª Asignada'}</strong></span>
+                          </p>
+                        )}
                       </div>
 
                       <div className="pt-3 border-t border-[#E5DFD3] dark:border-[#262626] flex justify-between items-center">

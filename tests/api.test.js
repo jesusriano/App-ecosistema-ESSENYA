@@ -1,6 +1,8 @@
+process.env.NODE_ENV = 'test';
 import http from 'http';
 import express from 'express';
-import apiApp from '../api/index.js';
+import * as adminFirestore from 'firebase-admin/firestore';
+import apiApp, { getAdminFirestore } from '../api/index.js';
 
 async function runTests() {
   const app = express();
@@ -378,6 +380,232 @@ async function runTests() {
       console.log("✅ Test 15: Atomic Booking (Double Courtesy / Rollback) verified.");
     } else { passed = false; }
   } catch(e) { passed = false; }
+
+  // Test 16: Dual Therapist (Masaje en Pareja) Core Assignment & Concurrency
+  try {
+    const db = getAdminFirestore();
+    const testSingleBookingId = `test-single-${Date.now()}`;
+    const testDualBookingId = `test-dual-${Date.now()}`;
+
+    // 16a: Normal single therapist booking test
+    await db.collection('reservas').doc(testSingleBookingId).set({
+      id: testSingleBookingId,
+      code: 'ESS-SINGLE',
+      serviceId: 'serv-1',
+      serviceName: 'Masaje Sueco Relajante',
+      state: 'pendiente',
+      requiresDualTherapist: false,
+      therapistIds: [],
+      assignedTherapistsCount: 0,
+      createdAt: new Date().toISOString()
+    });
+
+    const resSingleAccept = await fetch("http://localhost:3001/api/bookings/accept", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer test-token-therapist-solo"
+      },
+      body: JSON.stringify({
+        bookingId: testSingleBookingId,
+        therapistName: "Terapeuta Solo"
+      })
+    });
+    const singleData = await resSingleAccept.json();
+    const singleDocAfter = (await db.collection('reservas').doc(testSingleBookingId).get()).data();
+    if (
+      singleData.success &&
+      singleDocAfter.state === 'aceptada' &&
+      singleDocAfter.assignedTherapistsCount === 1 &&
+      singleDocAfter.therapistId === 'therapist-solo'
+    ) {
+      console.log("✅ Test 16a: Normal single-therapist booking accepts and transitions to 'aceptada'.");
+    } else {
+      console.error("❌ Test 16a failed", singleData, singleDocAfter);
+      passed = false;
+    }
+
+    // 16b: Dual couples booking initialization
+    await db.collection('reservas').doc(testDualBookingId).set({
+      id: testDualBookingId,
+      code: 'ESS-PAREJA',
+      serviceId: 'srv-pareja',
+      serviceName: 'Masaje en Pareja',
+      state: 'pendiente',
+      requiresDualTherapist: true,
+      therapistIds: [],
+      assignedTherapistsCount: 0,
+      createdAt: new Date().toISOString()
+    });
+    const dualDocInit = (await db.collection('reservas').doc(testDualBookingId).get()).data();
+    if (
+      dualDocInit.requiresDualTherapist === true &&
+      dualDocInit.state === 'pendiente' &&
+      dualDocInit.assignedTherapistsCount === 0 &&
+      dualDocInit.therapistIds.length === 0
+    ) {
+      console.log("✅ Test 16b: Couples booking properly initialized with requiresDualTherapist: true, count: 0, state: 'pendiente'.");
+    } else {
+      console.error("❌ Test 16b failed", dualDocInit);
+      passed = false;
+    }
+
+    // 16c: 1st therapist accepts couple booking -> slot 1 assigned, state remains 'pendiente'
+    const resDualT1 = await fetch("http://localhost:3001/api/bookings/accept", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer test-token-therapist-alpha"
+      },
+      body: JSON.stringify({
+        bookingId: testDualBookingId,
+        therapistName: "Terapeuta Alpha"
+      })
+    });
+    const dualT1Data = await resDualT1.json();
+    const dualDocAfterT1 = (await db.collection('reservas').doc(testDualBookingId).get()).data();
+    if (
+      dualT1Data.success &&
+      dualT1Data.slotAssigned === 1 &&
+      dualDocAfterT1.assignedTherapistsCount === 1 &&
+      dualDocAfterT1.state === 'pendiente' &&
+      dualDocAfterT1.therapistId === 'therapist-alpha' &&
+      dualDocAfterT1.therapistIds.includes('therapist-alpha')
+    ) {
+      console.log("✅ Test 16c: 1st therapist accepts couples booking: slot 1 claimed, assignedTherapistsCount: 1, state remains 'pendiente'.");
+    } else {
+      console.error("❌ Test 16c failed", dualT1Data, dualDocAfterT1);
+      passed = false;
+    }
+
+    // 16d: Same therapist cannot claim slot 2 (duplicate assignment blocked)
+    const resDualT1Dupe = await fetch("http://localhost:3001/api/bookings/accept", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer test-token-therapist-alpha"
+      },
+      body: JSON.stringify({
+        bookingId: testDualBookingId,
+        therapistName: "Terapeuta Alpha"
+      })
+    });
+    const dualDupeData = await resDualT1Dupe.json();
+    if (resDualT1Dupe.status === 409 && dualDupeData.error && dualDupeData.error.includes("ambos cupos")) {
+      console.log("✅ Test 16d: Same therapist cannot claim both slots in couples booking (rejected 409).");
+    } else {
+      console.error("❌ Test 16d failed", resDualT1Dupe.status, dualDupeData);
+      passed = false;
+    }
+
+    // 16e: 2nd therapist accepts couple booking -> slot 2 assigned, state transitions to 'aceptada'
+    const resDualT2 = await fetch("http://localhost:3001/api/bookings/accept", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer test-token-therapist-beta"
+      },
+      body: JSON.stringify({
+        bookingId: testDualBookingId,
+        therapistName: "Terapeuta Beta"
+      })
+    });
+    const dualT2Data = await resDualT2.json();
+    const dualDocAfterT2 = (await db.collection('reservas').doc(testDualBookingId).get()).data();
+    if (
+      dualT2Data.success &&
+      dualT2Data.slotAssigned === 2 &&
+      dualDocAfterT2.assignedTherapistsCount === 2 &&
+      dualDocAfterT2.state === 'aceptada' &&
+      dualDocAfterT2.therapistId === 'therapist-alpha' &&
+      dualDocAfterT2.therapistId2 === 'therapist-beta' &&
+      dualDocAfterT2.therapistIds.includes('therapist-beta')
+    ) {
+      console.log("✅ Test 16e: 2nd therapist accepts couples booking: slot 2 claimed, assignedTherapistsCount: 2, state transitions to 'aceptada'.");
+    } else {
+      console.error("❌ Test 16e failed", dualT2Data, dualDocAfterT2);
+      passed = false;
+    }
+
+    // 16f: 3rd therapist tries to accept -> rejected (both slots filled)
+    const resDualT3 = await fetch("http://localhost:3001/api/bookings/accept", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer test-token-therapist-gamma"
+      },
+      body: JSON.stringify({
+        bookingId: testDualBookingId,
+        therapistName: "Terapeuta Gamma"
+      })
+    });
+    const dualT3Data = await resDualT3.json();
+    if (resDualT3.status === 409) {
+      console.log("✅ Test 16f: 3rd therapist blocked from accepting full couples booking (rejected 409).");
+    } else {
+      console.error("❌ Test 16f failed", resDualT3.status, dualT3Data);
+      passed = false;
+    }
+
+    // 16g: Concurrency simulation: 2 therapists simultaneously race for the 2nd slot
+    const raceBookingId = `test-race-${Date.now()}`;
+    await db.collection('reservas').doc(raceBookingId).set({
+      id: raceBookingId,
+      code: 'ESS-RACE',
+      serviceId: 'srv-pareja',
+      serviceName: 'Masaje en Pareja',
+      state: 'pendiente',
+      requiresDualTherapist: true,
+      therapistId: 'therapist-first',
+      therapistIds: ['therapist-first'],
+      assignedTherapistsCount: 1,
+      createdAt: new Date().toISOString()
+    });
+
+    const [raceRes1, raceRes2] = await Promise.all([
+      fetch("http://localhost:3001/api/bookings/accept", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer test-token-therapist-racer1"
+        },
+        body: JSON.stringify({ bookingId: raceBookingId, therapistName: "Racer 1" })
+      }),
+      fetch("http://localhost:3001/api/bookings/accept", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer test-token-therapist-racer2"
+        },
+        body: JSON.stringify({ bookingId: raceBookingId, therapistName: "Racer 2" })
+      })
+    ]);
+
+    const statuses = [raceRes1.status, raceRes2.status].sort();
+    const finalRaceDoc = (await db.collection('reservas').doc(raceBookingId).get()).data();
+    if (
+      statuses[0] === 200 &&
+      statuses[1] === 409 &&
+      finalRaceDoc.assignedTherapistsCount === 2 &&
+      finalRaceDoc.state === 'aceptada' &&
+      finalRaceDoc.therapistIds.length === 2
+    ) {
+      console.log("✅ Test 16g: Concurrency race condition: exactly one therapist won the 2nd slot (200), the other was cleanly rejected (409).");
+    } else {
+      console.error("❌ Test 16g failed", statuses, finalRaceDoc);
+      passed = false;
+    }
+
+    // Clean up test documents
+    await Promise.all([
+      db.collection('reservas').doc(testSingleBookingId).delete(),
+      db.collection('reservas').doc(testDualBookingId).delete(),
+      db.collection('reservas').doc(raceBookingId).delete()
+    ]);
+  } catch(e) {
+    console.error("Test 16 dual therapist error:", e);
+    passed = false;
+  }
 
   server.close();
   

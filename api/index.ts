@@ -227,7 +227,7 @@ async function ensureOfficialServicesSeeded(db: adminFirestore.Firestore) {
   }
 }
 
-function getAdminFirestore() {
+export function getAdminFirestore() {
   const apps = adminApp.getApps();
   const defaultApp = apps.length > 0 ? apps[0] : undefined;
   
@@ -2176,6 +2176,8 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
       const newBookingRef = getAdminFirestore().collection('reservas').doc();
       const bookingId = newBookingRef.id;
 
+      const isDualTherapist = serviceId === 'srv-pareja' || !!(srvData && srvData.requiresDualTherapist);
+
       const newBooking = {
         id: bookingId, // CRITICAL: REQUIRED FOR FIRESTORE RULES AND STATE PROGRESSION
         code,
@@ -2199,6 +2201,9 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
         courtesyApplied,
         courtesyDiscount,
         walletDeduction: amountDeductedFromWallet,
+        requiresDualTherapist: isDualTherapist,
+        therapistIds: [],
+        assignedTherapistsCount: 0,
         createdAt: new Date().toISOString()
       };
 
@@ -2254,7 +2259,11 @@ app.post("/api/bookings/cancel", requireAuth, async (req, res) => {
       if (!bookingDoc.exists) throw new Error("Reserva no encontrada.");
       const bookingData = bookingDoc.data()!;
       
-      if (bookingData.clientId !== uid && !isAdmin) {
+      const isTherapistAssigned = bookingData.therapistId === uid || 
+        (Array.isArray(bookingData.therapistIds) && bookingData.therapistIds.includes(uid)) || 
+        bookingData.therapistId2 === uid;
+
+      if (bookingData.clientId !== uid && !isAdmin && !isTherapistAssigned) {
         throw new Error("No tienes permiso para cancelar esta reserva.");
       }
       if (bookingData.state === 'cancelado') {
@@ -2313,6 +2322,131 @@ app.post("/api/bookings/cancel", requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error("Error en cancelación atómica:", err);
     res.status(400).json({ success: false, error: err.message || "Error interno al cancelar." });
+  }
+});
+
+// ========================================================
+// POST /api/bookings/accept - Atomic Acceptance (Single & Dual Therapist)
+// ========================================================
+app.post("/api/bookings/accept", requireAuth, async (req, res) => {
+  try {
+    const { bookingId } = req.body;
+    const user = (req as any).user;
+    const uid = user?.uid;
+    if (!uid) return res.status(401).json({ success: false, error: "No autorizado" });
+    if (!bookingId) return res.status(400).json({ success: false, error: "bookingId es obligatorio" });
+
+    // Lookup therapist info
+    const [therapistDoc, userDoc] = await Promise.all([
+      getAdminFirestore().collection('terapeutas').doc(uid).get(),
+      getAdminFirestore().collection('users').doc(uid).get()
+    ]);
+    const tData = therapistDoc.exists ? therapistDoc.data() : (userDoc.exists ? userDoc.data() : {});
+    const therapistName = tData?.name || tData?.nombre || [tData?.nombre, tData?.apellidos].filter(Boolean).join(' ') || 'Terapeuta Certificada';
+    const therapistPhoto = tData?.photo || tData?.fotografia || '';
+    const therapistPhone = tData?.phone || tData?.telefono || '';
+    const nowIso = new Date().toISOString();
+
+    const result = await getAdminFirestore().runTransaction(async (t) => {
+      const bookingRef = getAdminFirestore().collection('reservas').doc(bookingId);
+      const bookingSnap = await t.get(bookingRef);
+      if (!bookingSnap.exists) {
+        throw new Error("La reserva no existe.");
+      }
+
+      const bookingData = bookingSnap.data()!;
+      if (bookingData.state !== 'pendiente') {
+        throw new Error("Esta reserva ya fue aceptada por otra terapeuta o ya no está disponible.");
+      }
+
+      const srvId = String(bookingData.serviceId || '');
+      const srvOfficial = OFFICIAL_SERVICES_CATALOG[srvId];
+      const isDual = bookingData.requiresDualTherapist === true || srvId === 'srv-pareja' || !!srvOfficial?.requiresDualTherapist;
+
+      const existingTherapistIds: string[] = Array.isArray(bookingData.therapistIds) 
+        ? bookingData.therapistIds 
+        : (bookingData.therapistId ? [bookingData.therapistId] : []);
+      
+      const assignedCount = typeof bookingData.assignedTherapistsCount === 'number' 
+        ? bookingData.assignedTherapistsCount 
+        : existingTherapistIds.length;
+
+      let updatePayload: Record<string, any> = {};
+
+      if (!isDual) {
+        // Normal single-therapist booking
+        updatePayload = {
+          state: 'aceptada',
+          therapistId: uid,
+          therapistName,
+          therapistPhoto,
+          therapistPhone,
+          therapistIds: [uid],
+          assignedTherapistsCount: 1,
+          acceptedAt: nowIso,
+          updatedAt: nowIso
+        };
+      } else {
+        // Dual therapist booking
+        if (assignedCount >= 2 || existingTherapistIds.length >= 2) {
+          throw new Error("Esta reserva de masaje en pareja ya tiene sus dos terapeutas asignadas.");
+        }
+
+        if (existingTherapistIds.includes(uid) || bookingData.therapistId === uid) {
+          throw new Error("Ya has aceptado un cupo en esta reserva de masaje en pareja. No puedes ocupar ambos cupos.");
+        }
+
+        if (assignedCount === 0 || existingTherapistIds.length === 0) {
+          // Slot 1: assign slot 1, keep state = 'pendiente'
+          updatePayload = {
+            therapistId: uid,
+            therapistName,
+            therapistPhoto,
+            therapistPhone,
+            therapistIds: [uid],
+            assignedTherapistsCount: 1,
+            requiresDualTherapist: true,
+            acceptedAt: nowIso,
+            updatedAt: nowIso
+          };
+        } else {
+          // Slot 2: assign slot 2, complete the dual service and mark 'aceptada'
+          const newIds = [...existingTherapistIds, uid];
+          updatePayload = {
+            therapistId2: uid,
+            therapistName2: therapistName,
+            therapistPhoto2: therapistPhoto,
+            therapistPhone2: therapistPhone,
+            therapistIds: newIds,
+            assignedTherapistsCount: 2,
+            requiresDualTherapist: true,
+            state: 'aceptada',
+            acceptedAt: nowIso,
+            updatedAt: nowIso
+          };
+        }
+      }
+
+      t.update(bookingRef, updatePayload);
+      return {
+        bookingId,
+        isDual,
+        assignedCount: (updatePayload.assignedTherapistsCount as number),
+        state: updatePayload.state || bookingData.state,
+        therapistIds: updatePayload.therapistIds
+      };
+    });
+
+    res.json({ success: true, message: "Aceptación registrada con éxito.", slotAssigned: result.assignedCount, ...result });
+  } catch (err: any) {
+    console.error("Error al aceptar reserva:", err);
+    const isConflict = err.message && (
+      err.message.includes("ya fue aceptada") ||
+      err.message.includes("ya no está disponible") ||
+      err.message.includes("ya tiene sus dos") ||
+      err.message.includes("ambos cupos")
+    );
+    res.status(isConflict ? 409 : 400).json({ success: false, error: err.message || "Error al procesar aceptación." });
   }
 });
 
