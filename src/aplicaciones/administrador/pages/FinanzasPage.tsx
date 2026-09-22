@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   DollarSign, TrendingUp, TrendingDown, PieChart, Calendar, Filter, Plus, 
   Trash2, Edit, FileText, CheckCircle, Clock, ShieldCheck, Tag, CreditCard, 
-  AlertCircle, Download, RefreshCw, Layers
+  AlertCircle, Download, RefreshCw, Layers, Smartphone, Megaphone, Package
 } from 'lucide-react';
 import { 
   Expense, ExpenseCategory, PaymentMethod, ExpenseStatus, PeriodFilter, FinancialSummary 
@@ -11,6 +11,107 @@ import { getExpenses, addExpense, updateExpense, deleteExpense, getBookingsReven
 import { Booking } from '../../../shared/types';
 import { useToast } from '../../../shared/context/ToastContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
+
+const INITIAL_SEED_EXPENSES: Omit<Expense, 'id'>[] = [
+  {
+    concepto: '🛏️ Cobija',
+    categoria: 'Equipo',
+    monto: 163.49,
+    fecha: new Date().toISOString().split('T')[0],
+    metodoPago: 'Transferencia SPEI',
+    descripcion: 'Gasto operativo inicial',
+    registradoPor: 'Administración ESSENYA',
+    createdAt: new Date().toISOString(),
+    recurrente: false,
+    estado: 'pagado',
+    tipo: 'Gasto',
+    frecuencia: 'Único'
+  },
+  {
+    concepto: '👕 Uniforme',
+    categoria: 'Uniformes',
+    monto: 210.00,
+    fecha: new Date().toISOString().split('T')[0],
+    metodoPago: 'Transferencia SPEI',
+    descripcion: 'Gasto operativo inicial',
+    registradoPor: 'Administración ESSENYA',
+    createdAt: new Date().toISOString(),
+    recurrente: false,
+    estado: 'pagado',
+    tipo: 'Gasto',
+    frecuencia: 'Único'
+  },
+  {
+    concepto: '🧺 Toallas blancas',
+    categoria: 'Toallas',
+    monto: 30.00,
+    fecha: new Date().toISOString().split('T')[0],
+    metodoPago: 'Transferencia SPEI',
+    descripcion: 'Gasto operativo inicial',
+    registradoPor: 'Administración ESSENYA',
+    createdAt: new Date().toISOString(),
+    recurrente: false,
+    estado: 'pagado',
+    tipo: 'Gasto',
+    frecuencia: 'Único'
+  },
+  {
+    concepto: '👕 16 juegos de uniformes',
+    categoria: 'Uniformes',
+    monto: 9579.48,
+    fecha: new Date().toISOString().split('T')[0],
+    metodoPago: 'Transferencia SPEI',
+    descripcion: 'Gasto operativo inicial (16 juegos)',
+    registradoPor: 'Administración ESSENYA',
+    createdAt: new Date().toISOString(),
+    recurrente: false,
+    estado: 'pagado',
+    tipo: 'Gasto',
+    frecuencia: 'Único'
+  },
+  {
+    concepto: '🧵 Bordados',
+    categoria: 'Bordados',
+    monto: 3525.00,
+    fecha: new Date().toISOString().split('T')[0],
+    metodoPago: 'Transferencia SPEI',
+    descripcion: 'Gasto operativo inicial de bordados',
+    registradoPor: 'Administración ESSENYA',
+    createdAt: new Date().toISOString(),
+    recurrente: false,
+    estado: 'pagado',
+    tipo: 'Gasto',
+    frecuencia: 'Único'
+  },
+  {
+    concepto: '📱 Creación y desarrollo de la aplicación ESSENYA',
+    categoria: 'Aplicación',
+    monto: 17500.00,
+    fecha: new Date().toISOString().split('T')[0],
+    metodoPago: 'Transferencia SPEI',
+    descripcion: 'Inversión inicial / Desarrollo tecnológico',
+    registradoPor: 'Administración ESSENYA',
+    createdAt: new Date().toISOString(),
+    recurrente: false,
+    estado: 'pagado',
+    tipo: 'Inversión inicial',
+    frecuencia: 'Único'
+  },
+  {
+    concepto: '📣 Marketing, publicidad y gestión del ecosistema ESSENYA',
+    categoria: 'Publicidad',
+    monto: 7000.00,
+    fecha: new Date().toISOString().split('T')[0],
+    metodoPago: 'Transferencia SPEI',
+    descripcion: '• Manejo de redes sociales.\n• Publicidad en Meta Ads.\n• Gestión y optimización de campañas.\n• Manejo y mantenimiento del ecosistema digital.\n• Gestión general de las herramientas y plataformas digitales relacionadas con ESSENYA.',
+    registradoPor: 'Administración ESSENYA',
+    createdAt: new Date().toISOString(),
+    recurrente: true,
+    estado: 'pagado',
+    tipo: 'Recurrente mensual',
+    frecuencia: 'Mensual'
+  }
+];
 
 export const FinanzasPage: React.FC = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -38,11 +139,23 @@ export const FinanzasPage: React.FC = () => {
   const [comprobanteInput, setComprobanteInput] = useState('');
   const [recurrenteInput, setRecurrenteInput] = useState(false);
   const [estadoInput, setEstadoInput] = useState<ExpenseStatus>('pagado');
+  const [tipoInput, setTipoInput] = useState<'Gasto' | 'Inversión inicial' | 'Recurrente mensual'>('Gasto');
+  const [frecuenciaInput, setFrecuenciaInput] = useState<'Único' | 'Mensual' | 'Anual' | 'Personalizado'>('Único');
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [expData, bookData] = await Promise.all([getExpenses(), getBookingsRevenue()]);
+      let expData = await getExpenses();
+      
+      // Auto-seed initial expenses if empty
+      if (expData.length === 0) {
+        for (const seed of INITIAL_SEED_EXPENSES) {
+          await addExpense(seed);
+        }
+        expData = await getExpenses();
+      }
+
+      const bookData = await getBookingsRevenue();
       setExpenses(expData);
       setBookings(bookData);
     } catch (e) {
@@ -64,12 +177,9 @@ export const FinanzasPage: React.FC = () => {
     const currentYear = now.getFullYear();
 
     return expenses.filter(exp => {
-      // Category filter
       if (selectedCategory !== 'todos' && exp.categoria !== selectedCategory) return false;
-      // Payment method filter
       if (selectedPaymentMethod !== 'todos' && exp.metodoPago !== selectedPaymentMethod) return false;
 
-      // Period filter
       if (exp.fecha) {
         const expDate = new Date(exp.fecha);
         if (period === 'este_mes') {
@@ -86,36 +196,36 @@ export const FinanzasPage: React.FC = () => {
     });
   }, [expenses, period, selectedCategory, selectedPaymentMethod]);
 
-  // Calculate Income from Bookings (paid bookings)
+  // Specific Financial Totals required by user brief
+  const gastosRegistradosTotal = useMemo(() => {
+    return expenses
+      .filter(e => e.tipo === 'Gasto' || (!e.tipo && !e.recurrente && e.monto < 15000))
+      .reduce((acc, e) => acc + (e.monto || 0), 0);
+  }, [expenses]);
+
+  const inversionAppTotal = useMemo(() => {
+    return expenses
+      .filter(e => e.tipo === 'Inversión inicial' || e.categoria === 'Aplicación' || e.concepto.toLowerCase().includes('aplicación'))
+      .reduce((acc, e) => acc + (e.monto || 0), 0);
+  }, [expenses]);
+
+  const gastoMensualRecurrenteTotal = useMemo(() => {
+    return expenses
+      .filter(e => e.tipo === 'Recurrente mensual' || e.recurrente)
+      .reduce((acc, e) => acc + (e.monto || 0), 0);
+  }, [expenses]);
+
   const totalIngresos = useMemo(() => {
     return bookings
       .filter(b => b.paymentStatus === 'pagado' || b.state === 'servicio_finalizado' || b.state === 'servicio_iniciado')
       .reduce((acc, b) => acc + (b.total || b.price || 0), 0);
   }, [bookings]);
 
-  // Calculate Expenses total
-  const totalGastos = useMemo(() => {
-    return filteredExpenses
-      .filter(e => e.estado === 'pagado')
-      .reduce((acc, e) => acc + (e.monto || 0), 0);
-  }, [filteredExpenses]);
+  const totalGastosGenerales = useMemo(() => {
+    return expenses.reduce((acc, e) => acc + (e.monto || 0), 0);
+  }, [expenses]);
 
-  // Summary breakdown by category
-  const summaryByCategory = useMemo(() => {
-    const breakdown: Record<string, number> = {};
-    filteredExpenses.forEach(e => {
-      breakdown[e.categoria] = (breakdown[e.categoria] || 0) + (e.monto || 0);
-    });
-    return breakdown;
-  }, [filteredExpenses]);
-
-  const gastosPublicidad = summaryByCategory['Publicidad y marketing'] || 0;
-  const gastosPersonal = summaryByCategory['Personal y terapeutas'] || 0;
-  const gastosAdministrativos = summaryByCategory['Administración'] || 0;
-  const gastosOperativos = (summaryByCategory['Insumos'] || 0) + (summaryByCategory['Transporte'] || 0) + (summaryByCategory['Instalaciones'] || 0);
-  const otrosGastos = (summaryByCategory['Tecnología'] || 0) + (summaryByCategory['Impuestos y obligaciones'] || 0) + (summaryByCategory['Otros'] || 0);
-
-  const utilidad = totalIngresos - totalGastos;
+  const utilidad = totalIngresos - totalGastosGenerales;
   const margenUtilidad = totalIngresos > 0 ? (utilidad / totalIngresos) * 100 : 0;
 
   // Handle Form Submission
@@ -136,16 +246,18 @@ export const FinanzasPage: React.FC = () => {
         descripcion: descripcionInput,
         comprobanteUrl: comprobanteInput,
         registradoPor: 'Administrador ESSENYA',
-        recurrente: recurrenteInput,
+        recurrente: recurrenteInput || tipoInput === 'Recurrente mensual',
         estado: estadoInput,
+        tipo: tipoInput,
+        frecuencia: frecuenciaInput,
       };
 
       if (editingExpenseId) {
         await updateExpense(editingExpenseId, expenseData);
-        showToast('Gasto actualizado exitosamente', 'success');
+        showToast('Registro financiero actualizado exitosamente', 'success');
       } else {
         await addExpense(expenseData);
-        showToast('Gasto registrado exitosamente', 'success');
+        showToast('Registro financiero creado exitosamente', 'success');
       }
 
       setShowExpenseModal(false);
@@ -153,7 +265,7 @@ export const FinanzasPage: React.FC = () => {
       loadData();
     } catch (err) {
       console.error('Error saving expense:', err);
-      showToast('Error al guardar el gasto', 'error');
+      showToast('Error al guardar el registro', 'error');
     }
   };
 
@@ -169,18 +281,20 @@ export const FinanzasPage: React.FC = () => {
     setComprobanteInput(exp.comprobanteUrl || '');
     setRecurrenteInput(exp.recurrente || false);
     setEstadoInput(exp.estado || 'pagado');
+    setTipoInput(exp.tipo || (exp.recurrente ? 'Recurrente mensual' : 'Gasto'));
+    setFrecuenciaInput(exp.frecuencia || (exp.recurrente ? 'Mensual' : 'Único'));
     setShowExpenseModal(true);
   };
 
   const handleDelete = async (id?: string) => {
     if (!id) return;
-    if (window.confirm('¿Estás seguro de eliminar este registro de gasto?')) {
+    if (window.confirm('¿Estás seguro de eliminar este registro financiero?')) {
       try {
         await deleteExpense(id);
-        showToast('Gasto eliminado', 'success');
+        showToast('Registro eliminado con éxito', 'success');
         loadData();
       } catch (e) {
-        showToast('Error al eliminar gasto', 'error');
+        showToast('Error al eliminar registro', 'error');
       }
     }
   };
@@ -188,7 +302,7 @@ export const FinanzasPage: React.FC = () => {
   const resetForm = () => {
     setEditingExpenseId(null);
     setConceptoInput('');
-    setCategoriaInput('Insumos');
+    setCategoriaInput('Uniformes');
     setMontoInput('');
     setFechaInput(new Date().toISOString().split('T')[0]);
     setMetodoPagoInput('Transferencia SPEI');
@@ -196,6 +310,8 @@ export const FinanzasPage: React.FC = () => {
     setComprobanteInput('');
     setRecurrenteInput(false);
     setEstadoInput('pagado');
+    setTipoInput('Gasto');
+    setFrecuenciaInput('Único');
   };
 
   return (
@@ -205,10 +321,10 @@ export const FinanzasPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
             <DollarSign className="w-6 h-6 text-[#C9A55B]" />
-            <span>Módulo de Finanzas & Control de Gastos</span>
+            <span>Módulo de Finanzas — Sistema Central de Operaciones ESSENYA</span>
           </h1>
           <p className="text-xs text-[var(--text-muted)] mt-1">
-            Análisis financiero en tiempo real, control de egresos, ingresos por reservas y rentabilidad del ecosistema ESSENYA.
+            Control claro, editable y organizado de inversiones, gastos operativos y costos recurrentes de ESSENYA.
           </p>
         </div>
 
@@ -225,7 +341,7 @@ export const FinanzasPage: React.FC = () => {
             className="text-xs py-2 px-4 flex items-center space-x-2"
           >
             <Plus className="w-4 h-4" />
-            <span>Registrar Nuevo Gasto</span>
+            <span>+ Agregar Gasto / Inversión</span>
           </LuxuryButton>
         </div>
       </div>
@@ -246,7 +362,7 @@ export const FinanzasPage: React.FC = () => {
             activeTab === 'gastos' ? 'bg-[#C9A55B] text-black shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
           }`}
         >
-          Control de Gastos ({expenses.length})
+          Control de Egresos ({expenses.length})
         </button>
         <button
           onClick={() => setActiveTab('ingresos')}
@@ -262,11 +378,11 @@ export const FinanzasPage: React.FC = () => {
             activeTab === 'reportes' ? 'bg-[#C9A55B] text-black shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
           }`}
         >
-          Reportes & Métricas
+          Reportes & Auditoría
         </button>
       </div>
 
-      {/* Period & Filter Selector Bar */}
+      {/* Period Selector Bar */}
       <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
           <Calendar className="w-4 h-4 text-[#C9A55B]" />
@@ -294,14 +410,17 @@ export const FinanzasPage: React.FC = () => {
             className="bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs rounded-xl px-3 py-1.5 focus:outline-none"
           >
             <option value="todos">Todas las Categorías</option>
-            <option value="Publicidad y marketing">Publicidad y marketing</option>
-            <option value="Personal y terapeutas">Personal y terapeutas</option>
-            <option value="Insumos">Insumos</option>
+            <option value="Uniformes">Uniformes</option>
+            <option value="Toallas">Toallas</option>
+            <option value="Equipo">Equipo</option>
+            <option value="Bordados">Bordados</option>
             <option value="Tecnología">Tecnología</option>
-            <option value="Administración">Administración</option>
-            <option value="Transporte">Transporte</option>
-            <option value="Instalaciones">Instalaciones</option>
-            <option value="Impuestos y obligaciones">Impuestos y obligaciones</option>
+            <option value="Aplicación">Aplicación</option>
+            <option value="Publicidad">Publicidad</option>
+            <option value="Redes sociales">Redes sociales</option>
+            <option value="Operación">Operación</option>
+            <option value="Insumos">Insumos</option>
+            <option value="Gastos recurrentes">Gastos recurrentes</option>
             <option value="Otros">Otros</option>
           </select>
         </div>
@@ -310,121 +429,141 @@ export const FinanzasPage: React.FC = () => {
       {/* TAB 1: DASHBOARD FINANCIERO */}
       {activeTab === 'dashboard' && (
         <div className="space-y-6">
-          {/* Main KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 space-y-2">
+          {/* Main User Requested Financial Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <div className="bg-[var(--bg-card)] border border-[#C9A55B]/40 rounded-3xl p-6 space-y-3 relative overflow-hidden shadow-sm">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-[#C9A55B]/5 rounded-bl-full pointer-events-none" />
               <div className="flex justify-between items-center">
-                <span className="text-[var(--text-muted)] text-xs font-semibold">Ingresos Totales</span>
-                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500"><TrendingUp className="w-4 h-4" /></div>
+                <span className="text-[var(--text-muted)] text-xs font-semibold uppercase tracking-wider">Gastos Registrados</span>
+                <div className="p-2.5 rounded-2xl bg-rose-500/10 text-rose-500"><Package className="w-5 h-5" /></div>
               </div>
-              <p className="text-2xl sm:text-3xl font-serif font-bold text-emerald-500">${totalIngresos.toLocaleString()} MXN</p>
-              <span className="text-[10px] text-[var(--text-muted)]">Basado en reservas y pagos registrados</span>
-            </div>
-
-            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-[var(--text-muted)] text-xs font-semibold">Gastos Totales</span>
-                <div className="p-2 rounded-xl bg-rose-500/10 text-rose-500"><TrendingDown className="w-4 h-4" /></div>
-              </div>
-              <p className="text-2xl sm:text-3xl font-serif font-bold text-rose-500">${totalGastos.toLocaleString()} MXN</p>
-              <span className="text-[10px] text-[var(--text-muted)]">Egresos del periodo seleccionado</span>
-            </div>
-
-            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-[var(--text-muted)] text-xs font-semibold">Utilidad Neta</span>
-                <div className="p-2 rounded-xl bg-[#C9A55B]/10 text-[#C9A55B]"><DollarSign className="w-4 h-4" /></div>
-              </div>
-              <p className={`text-2xl sm:text-3xl font-serif font-bold ${utilidad >= 0 ? 'text-[#C9A55B]' : 'text-rose-500'}`}>
-                ${utilidad.toLocaleString()} MXN
+              <p className="text-3xl font-serif font-bold text-rose-500">
+                ${gastosRegistradosTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} MXN
               </p>
-              <span className="text-[10px] text-[var(--text-muted)]">Ingresos menos egresos</span>
+              <p className="text-[11px] text-[var(--text-muted)]">Costos operativos iniciales y de suministros</p>
             </div>
 
-            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 space-y-2">
+            <div className="bg-[var(--bg-card)] border border-[#C9A55B]/40 rounded-3xl p-6 space-y-3 relative overflow-hidden shadow-sm">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-[#C9A55B]/5 rounded-bl-full pointer-events-none" />
               <div className="flex justify-between items-center">
-                <span className="text-[var(--text-muted)] text-xs font-semibold">Margen de Utilidad</span>
-                <div className="p-2 rounded-xl bg-sky-500/10 text-sky-500"><PieChart className="w-4 h-4" /></div>
+                <span className="text-[var(--text-muted)] text-xs font-semibold uppercase tracking-wider">Inversión en Aplicación</span>
+                <div className="p-2.5 rounded-2xl bg-[#C9A55B]/15 text-[#C9A55B]"><Smartphone className="w-5 h-5" /></div>
               </div>
-              <p className="text-2xl sm:text-3xl font-serif font-bold text-[var(--text-primary)]">
-                {margenUtilidad.toFixed(1)}%
+              <p className="text-3xl font-serif font-bold text-[#C9A55B]">
+                ${inversionAppTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} MXN
               </p>
-              <span className="text-[10px] text-[var(--text-muted)]">Rentabilidad operativa</span>
+              <p className="text-[11px] text-[var(--text-muted)]">Desarrollo tecnológico inicial ESSENYA</p>
+            </div>
+
+            <div className="bg-[var(--bg-card)] border border-[#C9A55B]/40 rounded-3xl p-6 space-y-3 relative overflow-hidden shadow-sm">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-[#C9A55B]/5 rounded-bl-full pointer-events-none" />
+              <div className="flex justify-between items-center">
+                <span className="text-[var(--text-muted)] text-xs font-semibold uppercase tracking-wider">Gasto Mensual Recurrente</span>
+                <div className="p-2.5 rounded-2xl bg-sky-500/10 text-sky-500"><Megaphone className="w-5 h-5" /></div>
+              </div>
+              <p className="text-3xl font-serif font-bold text-sky-500">
+                ${gastoMensualRecurrenteTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} MXN / mes
+              </p>
+              <p className="text-[11px] text-[var(--text-muted)]">Marketing, Meta Ads y gestión del ecosistema</p>
             </div>
           </div>
 
-          {/* Secondary Financial Breakdown Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Expense Breakdown by Category */}
-            <div className="lg:col-span-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 space-y-4">
-              <h3 className="text-base font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <Layers className="w-5 h-5 text-[#C9A55B]" />
-                <span>Desglose de Gastos por Categoría</span>
-              </h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                <div className="bg-[var(--bg-subcard)] p-4 rounded-2xl border border-[var(--border-color)] flex justify-between items-center">
-                  <div>
-                    <span className="text-xs text-[var(--text-muted)] block">Publicidad y Marketing</span>
-                    <span className="text-lg font-bold text-[var(--text-primary)]">${gastosPublicidad.toLocaleString()} MXN</span>
-                  </div>
-                  <span className="text-[10px] bg-[#C9A55B]/15 text-[#C9A55B] font-bold px-2 py-1 rounded-lg">Ads</span>
-                </div>
-
-                <div className="bg-[var(--bg-subcard)] p-4 rounded-2xl border border-[var(--border-color)] flex justify-between items-center">
-                  <div>
-                    <span className="text-xs text-[var(--text-muted)] block">Personal y Terapeutas</span>
-                    <span className="text-lg font-bold text-[var(--text-primary)]">${gastosPersonal.toLocaleString()} MXN</span>
-                  </div>
-                  <span className="text-[10px] bg-emerald-500/15 text-emerald-500 font-bold px-2 py-1 rounded-lg">Nómina</span>
-                </div>
-
-                <div className="bg-[var(--bg-subcard)] p-4 rounded-2xl border border-[var(--border-color)] flex justify-between items-center">
-                  <div>
-                    <span className="text-xs text-[var(--text-muted)] block">Gastos Operativos (Insumos/Instalaciones)</span>
-                    <span className="text-lg font-bold text-[var(--text-primary)]">${gastosOperativos.toLocaleString()} MXN</span>
-                  </div>
-                  <span className="text-[10px] bg-sky-500/15 text-sky-500 font-bold px-2 py-1 rounded-lg">Op</span>
-                </div>
-
-                <div className="bg-[var(--bg-subcard)] p-4 rounded-2xl border border-[var(--border-color)] flex justify-between items-center">
-                  <div>
-                    <span className="text-xs text-[var(--text-muted)] block">Administrativos y Otros</span>
-                    <span className="text-lg font-bold text-[var(--text-primary)]">${(gastosAdministrativos + otrosGastos).toLocaleString()} MXN</span>
-                  </div>
-                  <span className="text-[10px] bg-purple-500/15 text-purple-500 font-bold px-2 py-1 rounded-lg">Admin</span>
-                </div>
-              </div>
+          {/* Additional Indicators Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 text-center space-y-1">
+              <span className="text-[10px] text-[var(--text-muted)] uppercase block font-bold">Total Gastado</span>
+              <span className="text-base font-serif font-bold text-rose-500">${totalGastosGenerales.toLocaleString()}</span>
             </div>
 
-            {/* Quick Summary Card */}
-            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 space-y-4">
-              <h3 className="text-base font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-[#C9A55B]" />
-                <span>Salud Financiera</span>
-              </h3>
-              <div className="space-y-3 pt-2 text-xs">
-                <div className="flex justify-between py-2 border-b border-[var(--border-color)]">
-                  <span className="text-[var(--text-muted)]">Registros de Gastos:</span>
-                  <span className="font-bold text-[var(--text-primary)]">{filteredExpenses.length} movimientos</span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-[var(--border-color)]">
-                  <span className="text-[var(--text-muted)]">Reservas Facturadas:</span>
-                  <span className="font-bold text-[var(--text-primary)]">{bookings.length} citas</span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-[var(--border-color)]">
-                  <span className="text-[var(--text-muted)]">Gastos Recurrentes:</span>
-                  <span className="font-bold text-[var(--text-primary)]">
-                    {expenses.filter(e => e.recurrente).length} activos
-                  </span>
-                </div>
-                <div className="flex justify-between py-2">
-                  <span className="text-[var(--text-muted)]">Estado del Sistema:</span>
-                  <span className="font-bold text-emerald-500 flex items-center gap-1">
-                    <CheckCircle className="w-3.5 h-3.5" /> Óptimo
-                  </span>
-                </div>
-              </div>
+            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 text-center space-y-1">
+              <span className="text-[10px] text-[var(--text-muted)] uppercase block font-bold">Total Inversiones</span>
+              <span className="text-base font-serif font-bold text-[#C9A55B]">${inversionAppTotal.toLocaleString()}</span>
+            </div>
+
+            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 text-center space-y-1">
+              <span className="text-[10px] text-[var(--text-muted)] uppercase block font-bold">Gastos Recurrentes</span>
+              <span className="text-base font-serif font-bold text-sky-500">${gastoMensualRecurrenteTotal.toLocaleString()}</span>
+            </div>
+
+            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 text-center space-y-1">
+              <span className="text-[10px] text-[var(--text-muted)] uppercase block font-bold">Gasto Mes Actual</span>
+              <span className="text-base font-serif font-bold text-[var(--text-primary)]">${totalGastosGenerales.toLocaleString()}</span>
+            </div>
+
+            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 text-center space-y-1">
+              <span className="text-[10px] text-[var(--text-muted)] uppercase block font-bold">Gasto Acumulado</span>
+              <span className="text-base font-serif font-bold text-[var(--text-primary)]">${(totalGastosGenerales + inversionAppTotal).toLocaleString()}</span>
+            </div>
+
+            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 text-center space-y-1">
+              <span className="text-[10px] text-[var(--text-muted)] uppercase block font-bold">Recurrentes Próximos</span>
+              <span className="text-base font-serif font-bold text-emerald-500">Activo (Mensual)</span>
+            </div>
+
+            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 text-center space-y-1">
+              <span className="text-[10px] text-[var(--text-muted)] uppercase block font-bold">Nº Registros</span>
+              <span className="text-base font-serif font-bold text-[var(--text-primary)]">{expenses.length} ítems</span>
+            </div>
+          </div>
+
+          {/* Detailed Initial Expenses list preview table */}
+          <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 space-y-4">
+            <h3 className="text-base font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
+              <Layers className="w-5 h-5 text-[#C9A55B]" />
+              <span>Resumen de Registros Iniciales & Recurrentes</span>
+            </h3>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[var(--bg-subcard)] text-[var(--text-muted)] uppercase tracking-wider font-semibold border-b border-[var(--border-color)]">
+                  <tr>
+                    <th className="p-3">Concepto</th>
+                    <th className="p-3">Categoría</th>
+                    <th className="p-3">Tipo</th>
+                    <th className="p-3">Importe</th>
+                    <th className="p-3 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border-color)]">
+                  {expenses.map((exp) => (
+                    <tr key={exp.id} className="hover:bg-[var(--bg-subcard)] transition-colors">
+                      <td className="p-3 font-bold text-[var(--text-primary)]">{exp.concepto}</td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#C9A55B]/15 text-[#C9A55B]">
+                          {exp.categoria}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          exp.tipo === 'Inversión inicial' ? 'bg-amber-500/15 text-amber-500' :
+                          exp.tipo === 'Recurrente mensual' ? 'bg-sky-500/15 text-sky-500' : 'bg-rose-500/15 text-rose-500'
+                        }`}>
+                          {exp.tipo || 'Gasto'}
+                        </span>
+                      </td>
+                      <td className="p-3 font-serif font-bold text-[var(--text-primary)]">
+                        ${exp.monto.toLocaleString(undefined, { minimumFractionDigits: 2 })} MXN
+                      </td>
+                      <td className="p-3 text-right space-x-2">
+                        <button
+                          onClick={() => handleEdit(exp)}
+                          className="p-1.5 rounded-lg bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-[#C9A55B] transition-colors cursor-pointer"
+                          title="Editar"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(exp.id)}
+                          className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 transition-colors cursor-pointer"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -435,14 +574,14 @@ export const FinanzasPage: React.FC = () => {
         <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 space-y-6">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-serif font-bold text-[var(--text-primary)]">
-              Lista de Egresos y Gastos Registrados
+              Control de Egresos, Inversiones y Gastos Operativos
             </h3>
             <LuxuryButton
               onClick={() => { resetForm(); setShowExpenseModal(true); }}
               className="text-xs py-2 px-3 flex items-center space-x-2"
             >
               <Plus className="w-4 h-4" />
-              <span>Nuevo Gasto</span>
+              <span>+ Agregar Gasto</span>
             </LuxuryButton>
           </div>
 
@@ -452,8 +591,8 @@ export const FinanzasPage: React.FC = () => {
                 <tr>
                   <th className="p-3">Concepto & Categoría</th>
                   <th className="p-3">Monto</th>
+                  <th className="p-3">Tipo / Frecuencia</th>
                   <th className="p-3">Fecha</th>
-                  <th className="p-3">Método de Pago</th>
                   <th className="p-3">Estado</th>
                   <th className="p-3 text-right">Acciones</th>
                 </tr>
@@ -462,7 +601,7 @@ export const FinanzasPage: React.FC = () => {
                 {filteredExpenses.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="text-center py-8 text-[var(--text-muted)]">
-                      No hay gastos registrados para este filtro.
+                      No hay registros financieros que coincidan con los filtros.
                     </td>
                   </tr>
                 ) : (
@@ -475,10 +614,13 @@ export const FinanzasPage: React.FC = () => {
                         </span>
                       </td>
                       <td className="p-3 font-serif font-bold text-rose-500">
-                        ${(exp.monto || 0).toLocaleString()} MXN
+                        ${(exp.monto || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} MXN
+                      </td>
+                      <td className="p-3">
+                        <span className="font-semibold text-[var(--text-primary)]">{exp.tipo || 'Gasto'}</span>
+                        <p className="text-[10px] text-[var(--text-muted)]">{exp.frecuencia || 'Único'}</p>
                       </td>
                       <td className="p-3 text-[var(--text-muted)]">{exp.fecha}</td>
-                      <td className="p-3 text-[var(--text-primary)]">{exp.metodoPago}</td>
                       <td className="p-3">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                           exp.estado === 'pagado' ? 'bg-emerald-500/15 text-emerald-500' : 'bg-amber-500/15 text-amber-500'
@@ -580,7 +722,7 @@ export const FinanzasPage: React.FC = () => {
           <div className="flex justify-between items-center">
             <div>
               <h3 className="text-lg font-serif font-bold text-[var(--text-primary)]">
-                Reportes Financieros & Descargas
+                Reportes Financieros & Auditoría
               </h3>
               <p className="text-xs text-[var(--text-muted)]">
                 Resumen ejecutivo listo para contabilidad, auditoría y análisis gerencial.
@@ -598,7 +740,11 @@ export const FinanzasPage: React.FC = () => {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[var(--text-muted)]">Egresos Totales:</span>
-                  <span className="font-bold text-rose-500">${totalGastos.toLocaleString()} MXN</span>
+                  <span className="font-bold text-rose-500">${totalGastosGenerales.toLocaleString()} MXN</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">Inversión Tecnológica App:</span>
+                  <span className="font-bold text-[#C9A55B]">${inversionAppTotal.toLocaleString()} MXN</span>
                 </div>
                 <div className="flex justify-between border-t border-[var(--border-color)] pt-2">
                   <span className="font-bold text-[var(--text-primary)]">Utilidad Neta:</span>
@@ -642,12 +788,12 @@ export const FinanzasPage: React.FC = () => {
             className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative text-[var(--text-primary)] max-h-[90vh] overflow-y-auto"
           >
             <h3 className="text-lg font-serif font-bold text-[var(--text-primary)]">
-              {editingExpenseId ? 'Editar Registro de Gasto' : 'Registrar Nuevo Gasto'}
+              {editingExpenseId ? '✏️ Editar Registro Financiero' : '➕ Registrar Nuevo Gasto o Inversión'}
             </h3>
 
             <form onSubmit={handleSaveExpense} className="space-y-4 text-xs">
               <div className="space-y-1">
-                <label className="font-semibold text-[var(--text-muted)]">Concepto del Gasto *</label>
+                <label className="font-semibold text-[var(--text-muted)]">Concepto *</label>
                 <input
                   type="text"
                   placeholder="Ej. Campaña Meta Ads CDMX"
@@ -666,14 +812,17 @@ export const FinanzasPage: React.FC = () => {
                     onChange={(e) => setCategoriaInput(e.target.value as ExpenseCategory)}
                     className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-[var(--text-primary)] focus:outline-none"
                   >
-                    <option value="Publicidad y marketing">Publicidad y marketing</option>
-                    <option value="Personal y terapeutas">Personal y terapeutas</option>
-                    <option value="Insumos">Insumos</option>
+                    <option value="Uniformes">Uniformes</option>
+                    <option value="Toallas">Toallas</option>
+                    <option value="Equipo">Equipo</option>
+                    <option value="Bordados">Bordados</option>
                     <option value="Tecnología">Tecnología</option>
-                    <option value="Administración">Administración</option>
-                    <option value="Transporte">Transporte</option>
-                    <option value="Instalaciones">Instalaciones</option>
-                    <option value="Impuestos y obligaciones">Impuestos y obligaciones</option>
+                    <option value="Aplicación">Aplicación</option>
+                    <option value="Publicidad">Publicidad</option>
+                    <option value="Redes sociales">Redes sociales</option>
+                    <option value="Operación">Operación</option>
+                    <option value="Insumos">Insumos</option>
+                    <option value="Gastos recurrentes">Gastos recurrentes</option>
                     <option value="Otros">Otros</option>
                   </select>
                 </div>
@@ -683,7 +832,7 @@ export const FinanzasPage: React.FC = () => {
                   <input
                     type="number"
                     step="0.01"
-                    placeholder="Ej. 6000"
+                    placeholder="Ej. 7000"
                     value={montoInput}
                     onChange={(e) => setMontoInput(e.target.value)}
                     className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-[var(--text-primary)] focus:outline-none"
@@ -692,7 +841,7 @@ export const FinanzasPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <label className="font-semibold text-[var(--text-muted)]">Fecha *</label>
                   <input
@@ -705,17 +854,29 @@ export const FinanzasPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-semibold text-[var(--text-muted)]">Método de Pago *</label>
+                  <label className="font-semibold text-[var(--text-muted)]">Tipo *</label>
                   <select
-                    value={metodoPagoInput}
-                    onChange={(e) => setMetodoPagoInput(e.target.value as PaymentMethod)}
+                    value={tipoInput}
+                    onChange={(e) => setTipoInput(e.target.value as any)}
                     className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-[var(--text-primary)] focus:outline-none"
                   >
-                    <option value="Transferencia SPEI">Transferencia SPEI</option>
-                    <option value="Tarjeta de Crédito/Débito">Tarjeta de Crédito/Débito</option>
-                    <option value="Efectivo">Efectivo</option>
-                    <option value="PayPal">PayPal</option>
-                    <option value="Otro">Otro</option>
+                    <option value="Gasto">Gasto</option>
+                    <option value="Inversión inicial">Inversión inicial</option>
+                    <option value="Recurrente mensual">Recurrente mensual</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-semibold text-[var(--text-muted)]">Frecuencia *</label>
+                  <select
+                    value={frecuenciaInput}
+                    onChange={(e) => setFrecuenciaInput(e.target.value as any)}
+                    className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-[var(--text-primary)] focus:outline-none"
+                  >
+                    <option value="Único">Único</option>
+                    <option value="Mensual">Mensual</option>
+                    <option value="Anual">Anual</option>
+                    <option value="Personalizado">Personalizado</option>
                   </select>
                 </div>
               </div>
@@ -723,10 +884,10 @@ export const FinanzasPage: React.FC = () => {
               <div className="space-y-1">
                 <label className="font-semibold text-[var(--text-muted)]">Descripción (Opcional)</label>
                 <textarea
-                  placeholder="Detalles adicionales del gasto..."
+                  placeholder="Detalles adicionales, campañas, desglose..."
                   value={descripcionInput}
                   onChange={(e) => setDescripcionInput(e.target.value)}
-                  rows={2}
+                  rows={3}
                   className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-[var(--text-primary)] focus:outline-none resize-none"
                 />
               </div>
@@ -740,7 +901,7 @@ export const FinanzasPage: React.FC = () => {
                   className="rounded border-[var(--border-color)] text-[#C9A55B] focus:ring-0"
                 />
                 <label htmlFor="recurrente" className="font-semibold text-[var(--text-primary)] cursor-pointer">
-                  Marcar como gasto recurrente (mensual)
+                  Marcar como gasto recurrente (generación automática por periodo)
                 </label>
               </div>
 
@@ -753,7 +914,7 @@ export const FinanzasPage: React.FC = () => {
                   Cancelar
                 </button>
                 <LuxuryButton type="submit" className="px-4 py-2">
-                  {editingExpenseId ? 'Actualizar Gasto' : 'Guardar Gasto'}
+                  {editingExpenseId ? 'Actualizar Registro' : 'Guardar Registro'}
                 </LuxuryButton>
               </div>
             </form>

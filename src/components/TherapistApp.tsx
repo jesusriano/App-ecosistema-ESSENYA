@@ -590,7 +590,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
               onClick={() => setShowPanicModal(true)}
               id="therapist-panic-sos-btn"
               title="Botón de Pánico Emergencia SOS"
-              className="relative z-10 flex items-center justify-center space-x-1.5 bg-gradient-to-r from-red-600 via-red-500 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-md animate-pulse shrink-0 cursor-pointer min-h-[38px]"
+              className="fixed top-4 right-[4.5rem] z-50 flex items-center justify-center space-x-1.5 bg-gradient-to-r from-red-600 via-red-500 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-md animate-pulse shrink-0 cursor-pointer min-h-[38px]"
             >
               <AlertTriangle className="w-4 h-4 text-white" />
               <span>Botón Pánico SOS</span>

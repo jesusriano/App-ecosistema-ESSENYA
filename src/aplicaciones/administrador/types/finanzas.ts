@@ -1,13 +1,22 @@
 export type ExpenseCategory = 
+  | 'Uniformes'
+  | 'Toallas'
+  | 'Equipo'
+  | 'Bordados'
+  | 'Tecnología'
+  | 'Aplicación'
+  | 'Publicidad'
+  | 'Redes sociales'
+  | 'Operación'
+  | 'Insumos'
+  | 'Gastos recurrentes'
+  | 'Otros'
   | 'Publicidad y marketing'
   | 'Personal y terapeutas'
-  | 'Insumos'
-  | 'Tecnología'
   | 'Administración'
   | 'Transporte'
   | 'Instalaciones'
-  | 'Impuestos y obligaciones'
-  | 'Otros';
+  | 'Impuestos y obligaciones';
 
 export type PaymentMethod = 
   | 'Transferencia SPEI'
@@ -31,6 +40,8 @@ export interface Expense {
   createdAt: string; // ISO string
   recurrente: boolean;
   estado: ExpenseStatus;
+  tipo?: 'Gasto' | 'Inversión inicial' | 'Recurrente mensual';
+  frecuencia?: 'Único' | 'Mensual' | 'Anual' | 'Personalizado';
 }
 
 export type PeriodFilter = 'este_mes' | 'mes_anterior' | 'anio_actual' | 'personalizado';
