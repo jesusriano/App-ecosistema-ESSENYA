@@ -1,4 +1,5 @@
 import express from "express";
+import http from "http";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import apiApp from "./api/index.js";
@@ -8,6 +9,8 @@ async function startLocalServer() {
   
   // Use the API app for routes
   const app = express();
+  const server = http.createServer(app);
+
   app.use(apiApp);
 
   // Catch unhandled /api routes and return JSON 404 (preventing Vite SPA HTML fallback)
@@ -18,7 +21,12 @@ async function startLocalServer() {
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: {
+          server,
+        },
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
@@ -30,7 +38,7 @@ async function startLocalServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`ESSENYA Ecosystem server running on http://0.0.0.0:${PORT}`);
   });
 }
