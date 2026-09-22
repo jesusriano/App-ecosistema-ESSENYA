@@ -335,58 +335,87 @@ async function requireAuth(req: Request, res: Response, next: NextFunction): Pro
   }
 }
 
+/**
+ * Verificación administrativa centralizada compartida entre middlewares y endpoints.
+ * Aplica las reglas estrictas de ESSENYA:
+ * 1. Cuentas maestras explícitas (essenya222@gmail.com, graphixglow.2024@gmail.com)
+ * 2. Dominio corporativo obligatorio (@essenya.mx o @essenya.com)
+ * 3. Documento existente y con estado === 'activo' en 'administradores/{uid}' (o fallback histórico 'admins/{uid}')
+ */
+async function verifyAdminStatus(uid: string, email: string): Promise<{ isAdmin: boolean; isMaster?: boolean; errorReason?: string; adminData?: any }> {
+  const normalizedEmail = (email || "").toLowerCase().trim();
+
+  // 1. Cuentas maestras autorizadas explícitamente en el proyecto
+  const isMaster = normalizedEmail === "essenya222@gmail.com" || normalizedEmail === "graphixglow.2024@gmail.com";
+  if (isMaster) {
+    return { isAdmin: true, isMaster: true };
+  }
+
+  // Soporte para pruebas automatizadas locales con mock tokens
+  if (process.env.NODE_ENV === 'test' && uid && uid.includes('admin')) {
+    return { isAdmin: true };
+  }
+
+  // 2. Requisito de dominio corporativo obligatorio para administradores normales
+  const hasCorporateDomain = normalizedEmail.endsWith("@essenya.mx") || normalizedEmail.endsWith("@essenya.com");
+  if (!hasCorporateDomain) {
+    return { 
+      isAdmin: false, 
+      errorReason: "No autorizado. Se requiere correo corporativo (@essenya.mx o @essenya.com) y registro activo de administrador." 
+    };
+  }
+
+  // 3. Verificación de existencia y estado activo en Firestore
+  try {
+    const db = getAdminFirestore();
+
+    // Consultar documento en 'administradores/{uid}'
+    const adminDoc = await db.collection("administradores").doc(uid).get();
+    if (adminDoc.exists) {
+      const adminData = adminDoc.data();
+      const status = (adminData?.estado || "activo").toLowerCase();
+      if (status === "activo") {
+        return { isAdmin: true, adminData };
+      } else {
+        return { isAdmin: false, errorReason: "Cuenta de administrador inactiva o suspendida." };
+      }
+    }
+
+    // Fallback para colección histórica 'admins/{uid}'
+    const adminsDoc = await db.collection("admins").doc(uid).get();
+    if (adminsDoc.exists) {
+      const adminsData = adminsDoc.data();
+      const status = (adminsData?.estado || "activo").toLowerCase();
+      if (status === "activo") {
+        return { isAdmin: true, adminData: adminsData };
+      } else {
+        return { isAdmin: false, errorReason: "Cuenta de administrador inactiva o suspendida." };
+      }
+    }
+  } catch (e) {
+    console.warn("Error al verificar rol de administrador en Firestore:", e);
+  }
+
+  return { isAdmin: false, errorReason: "No autorizado. Usuario no registrado como administrador en el sistema." };
+}
+
 async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void | any> {
   await requireAuth(req, res, async () => {
     const uid = (req as any).user?.uid;
-    const email = ((req as any).user?.email || "").toLowerCase().trim();
-    
-    // 1. Master admins override
-    const isMasterEmail = 
-      email === "essenya222@gmail.com" || 
-      email === "graphixglow.2024@gmail.com" || 
-      email.endsWith("@essenya.mx") || 
-      email.endsWith("@essenya.com");
-      
-    if (isMasterEmail) {
-      (req as any).user.role = "administrador";
-      (req as any).user.isMasterAdmin = true;
-      return next();
+    const email = (req as any).user?.email || "";
+
+    const check = await verifyAdminStatus(uid, email);
+    if (!check.isAdmin) {
+      return res.status(403).json({ 
+        success: false, 
+        error: check.errorReason || "No autorizado. Usuario no registrado como administrador en el sistema." 
+      });
     }
 
-    // 2. Custom claims
-    if ((req as any).user?.role === "administrador" || (req as any).user?.admin === true) {
-      return next();
-    }
-    
-    try {
-      const db = getAdminFirestore();
-      const adminDoc = await db.collection("administradores").doc(uid).get();
-      if (adminDoc.exists) {
-        (req as any).user.role = "administrador";
-        return next();
-      }
-      const adminsDoc = await db.collection("admins").doc(uid).get();
-      if (adminsDoc.exists) {
-        (req as any).user.role = "administrador";
-        return next();
-      }
-      const userDoc = await db.collection("users").doc(uid).get();
-      if (userDoc.exists && (userDoc.data()?.rol === "administrador" || userDoc.data()?.role === "administrador")) {
-        (req as any).user.role = "administrador";
-        return next();
-      }
-      if (email) {
-        const adminEmailSnap = await db.collection("administradores").where("correo", "==", email).limit(1).get();
-        if (!adminEmailSnap.empty) {
-          (req as any).user.role = "administrador";
-          return next();
-        }
-      }
-    } catch (e) {
-      console.warn("Error fetching user role", e);
-    }
-    
-    return res.status(403).json({ success: false, error: "No autorizado. Se requiere rol administrador." });
+    (req as any).user.role = "administrador";
+    if (check.isMaster) (req as any).user.isMasterAdmin = true;
+    if (check.adminData) (req as any).user.adminData = check.adminData;
+    return next();
   });
 }
 
@@ -395,28 +424,36 @@ async function requireSuperAdmin(req: Request, res: Response, next: NextFunction
     const uid = (req as any).user?.uid;
     const email = ((req as any).user?.email || "").toLowerCase().trim();
 
-    const isMasterEmail = 
-      email === "essenya222@gmail.com" || 
-      email === "graphixglow.2024@gmail.com" || 
-      email.endsWith("@essenya.mx") || 
-      email.endsWith("@essenya.com");
-
-    if (isMasterEmail) {
+    // 1. Cuentas maestras autorizadas explícitamente en el proyecto
+    const isMaster = email === "essenya222@gmail.com" || email === "graphixglow.2024@gmail.com";
+    if (isMaster) {
       (req as any).user.role = "superadmin";
+      (req as any).user.isMasterAdmin = true;
       return next();
+    }
+
+    // 2. Requiere dominio corporativo + registro en administradores con nivelAcceso superadmin y estado activo
+    const hasCorporateDomain = email.endsWith("@essenya.mx") || email.endsWith("@essenya.com");
+    if (!hasCorporateDomain) {
+      return res.status(403).json({ success: false, error: "No autorizado. Se requiere cuenta autorizada de superadministrador." });
     }
 
     try {
       const db = getAdminFirestore();
       const adminDoc = await db.collection("administradores").doc(uid).get();
-      if (adminDoc.exists && (adminDoc.data()?.role === "superadmin" || adminDoc.data()?.nivelAcceso === "superadmin")) {
-        (req as any).user.role = "superadmin";
-        return next();
+      if (adminDoc.exists) {
+        const data = adminDoc.data();
+        const status = (data?.estado || "activo").toLowerCase();
+        const isSuper = data?.nivelAcceso === "superadmin" || data?.role === "superadmin" || data?.rol === "superadmin";
+        if (status === "activo" && isSuper) {
+          (req as any).user.role = "superadmin";
+          return next();
+        }
       }
     } catch (e) {
-      console.warn("Error checking superadmin", e);
+      console.warn("Error comprobando superadmin en Firestore:", e);
     }
-    return res.status(403).json({ success: false, error: "No autorizado. Se requiere superadministrador." });
+    return res.status(403).json({ success: false, error: "No autorizado. Se requiere superadministrador activo." });
   });
 }
 
@@ -441,11 +478,36 @@ app.post("/api/auth/sync-claims", requireAuth, async (req: Request, res: Respons
     let permissions: string[] = ["client:access", "client:bookings"];
     let isAdmin = false;
 
-    // Check if user is Admin in Firestore or master list
-    const adminDoc = await db.collection("administradores").doc(uid).get();
+    // 1. Evaluar si es Administrador (Cuenta Maestra o Dominio Corporativo + Registro Activo en administradores)
     const isMasterAdmin = email === "essenya222@gmail.com" || email === "graphixglow.2024@gmail.com";
+    const hasCorporateDomain = email.endsWith("@essenya.mx") || email.endsWith("@essenya.com");
 
-    if (adminDoc.exists || isMasterAdmin) {
+    let isAuthorizedAdmin = false;
+
+    if (isMasterAdmin) {
+      isAuthorizedAdmin = true;
+    } else if (hasCorporateDomain) {
+      const adminDoc = await db.collection("administradores").doc(uid).get();
+      if (adminDoc.exists) {
+        const adminData = adminDoc.data();
+        const status = (adminData?.estado || "activo").toLowerCase();
+        if (status === "activo") {
+          isAuthorizedAdmin = true;
+        }
+      } else {
+        // Fallback colección admins
+        const adminsDoc = await db.collection("admins").doc(uid).get();
+        if (adminsDoc.exists) {
+          const adminsData = adminsDoc.data();
+          const status = (adminsData?.estado || "activo").toLowerCase();
+          if (status === "activo") {
+            isAuthorizedAdmin = true;
+          }
+        }
+      }
+    }
+
+    if (isAuthorizedAdmin) {
       detectedRole = "administrador";
       isAdmin = true;
       permissions = ["admin:all", "admin:access", "therapist:access", "client:access"];
@@ -1698,25 +1760,9 @@ app.post("/api/wallet/purchase", requireAuth, async (req, res) => {
 });
 
 // Admin activation for Gift Cards upon payment verification (SPEI / Confirmation)
-app.post("/api/admin/gift-cards/activate", requireAuth, async (req, res) => {
+app.post("/api/admin/gift-cards/activate", requireAdmin, async (req, res) => {
   try {
-    const user = (req as any).user;
-    const uid = user?.uid;
-    const email = user?.email || '';
-
-    // Verify admin
-    let isAdmin = email === 'essenya222@gmail.com' || (process.env.NODE_ENV === 'test' && uid.includes('admin'));
-    if (!isAdmin) {
-      try {
-        const userDoc = await getAdminFirestore().collection('users').doc(uid).get();
-        if (userDoc.exists && userDoc.data()?.role === 'admin') isAdmin = true;
-      } catch {}
-    }
-
-    if (!isAdmin) {
-      return res.status(403).json({ success: false, error: "Permisos de administrador requeridos para activar tarjetas." });
-    }
-
+    const uid = (req as any).user?.uid;
     const { code, cardId, paymentReference } = req.body;
     if (!code && !cardId) {
       return res.status(400).json({ success: false, error: "Se requiere código o ID de la tarjeta." });
@@ -2197,14 +2243,9 @@ app.post("/api/bookings/cancel", requireAuth, async (req, res) => {
     if (!uid) return res.status(401).json({ error: "No autorizado" });
     if (!bookingId) return res.status(400).json({ error: "bookingId es obligatorio" });
 
-    // Verify admin
-    let isAdmin = email === 'essenya222@gmail.com' || (process.env.NODE_ENV === 'test' && uid.includes('admin'));
-    if (!isAdmin) {
-      try {
-        const userDoc = await getAdminFirestore().collection('users').doc(uid).get();
-        if (userDoc.exists && userDoc.data()?.role === 'admin') isAdmin = true;
-      } catch {}
-    }
+    // Verify admin using centralized logic (master accounts, corporate domain, and active admin doc)
+    const adminCheck = await verifyAdminStatus(uid, email);
+    const isAdmin = adminCheck.isAdmin;
 
     const result = await getAdminFirestore().runTransaction(async (t) => {
       const bookingRef = getAdminFirestore().collection('reservas').doc(bookingId);

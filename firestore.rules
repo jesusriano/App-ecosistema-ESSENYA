@@ -31,16 +31,28 @@ service cloud.firestore {
     
     function isAdmin() {
       return isSignedIn() && (
-        exists(/databases/$(database)/documents/administradores/$(request.auth.uid)) ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        // 1. Cuentas maestras autorizadas explícitamente en el proyecto
         (request.auth.token.keys().hasAny(['email']) && (
           request.auth.token.email.lower() == 'essenya222@gmail.com' ||
-          request.auth.token.email.lower() == 'graphixglow.2024@gmail.com' ||
-          request.auth.token.email.lower().matches('.*@essenya\\..*')
+          request.auth.token.email.lower() == 'graphixglow.2024@gmail.com'
         )) ||
-        (request.auth.token.keys().hasAny(['admin']) && request.auth.token.admin == true) ||
-        (request.auth.token.keys().hasAny(['role']) && request.auth.token.role == 'administrador') ||
-        (request.auth.token.keys().hasAny(['rol']) && request.auth.token.rol == 'administrador')
+        // 2. Administrador normal: Requiere SIMULTÁNEAMENTE dominio corporativo + registro activo en administradores
+        (
+          request.auth.token.keys().hasAny(['email']) && (
+            request.auth.token.email.lower().matches('.*@essenya\\.mx$') ||
+            request.auth.token.email.lower().matches('.*@essenya\\.com$')
+          ) && (
+            (
+              exists(/databases/$(database)/documents/administradores/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/administradores/$(request.auth.uid)).data.estado == 'activo'
+            ) ||
+            (
+              exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+              (!get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.keys().hasAny(['estado']) || 
+               get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.estado == 'activo')
+            )
+          )
+        )
       );
     }
 
