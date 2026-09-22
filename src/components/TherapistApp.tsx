@@ -75,50 +75,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
     };
   }, []);
 
-  const defaultCompletedServices = [
-    {
-      id: 'bk-comp-1',
-      code: 'ESS-4821',
-      serviceName: 'Masaje Tejido Profundo VIP',
-      date: '2026-09-10',
-      time: '16:00',
-      clientName: 'Don Alejandro',
-      clientPhone: '55 1234 5678',
-      price: 1800,
-      tip: 300,
-      total: 2100,
-      rating: 5,
-      reviewComment: 'Excelente técnica y profesionalismo. Alivió por completo mi dolor lumbar.',
-    },
-    {
-      id: 'bk-comp-2',
-      code: 'ESS-3921',
-      serviceName: 'Ritual Holístico Essenya',
-      date: '2026-09-08',
-      time: '11:30',
-      clientName: 'Sra. Sofia Lorenz',
-      clientPhone: '55 8765 4321',
-      price: 2200,
-      tip: 400,
-      total: 2600,
-      rating: 5,
-      reviewComment: 'Una experiencia verdaderamente mística. El aceite de lavanda y la música zen crearon una atmósfera insuperable.',
-    },
-    {
-      id: 'bk-comp-3',
-      code: 'ESS-3104',
-      serviceName: 'Masaje Descontracturante VIP',
-      date: '2026-09-05',
-      time: '18:00',
-      clientName: 'Ing. Carlos Mendoza',
-      clientPhone: '55 4321 8765',
-      price: 1950,
-      tip: 200,
-      total: 2150,
-      rating: 4.8,
-      reviewComment: 'Muy recomendado. Liberó la rigidez de mis hombros y cuello después de una semana muy pesada.',
-    }
-  ];
+  const defaultCompletedServices: any[] = [];
 
   const mergedCompletedBookings = React.useMemo(() => {
     const realCompleted = bookings.filter(b => b.state === 'servicio_finalizado');
@@ -160,6 +117,39 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
     });
     return allCompleted;
   }, [bookings]);
+
+  const [historyDateFilter, setHistoryDateFilter] = useState<'all' | 'week' | 'month'>('all');
+  const [historyServiceFilter, setHistoryServiceFilter] = useState<string>('all');
+
+  const availableServiceNames = React.useMemo(() => {
+    const setNames = new Set<string>();
+    mergedCompletedBookings.forEach(b => {
+      if (b.serviceName) setNames.add(b.serviceName);
+    });
+    return Array.from(setNames);
+  }, [mergedCompletedBookings]);
+
+  const filteredCompletedBookings = React.useMemo(() => {
+    return mergedCompletedBookings.filter(bk => {
+      if (historyServiceFilter !== 'all' && bk.serviceName !== historyServiceFilter) {
+        return false;
+      }
+      if (historyDateFilter !== 'all') {
+        const bkDate = new Date(bk.date);
+        const now = new Date();
+        const diffTime = now.getTime() - bkDate.getTime();
+        const diffDays = diffTime / (1000 * 60 * 60 * 24);
+        if (historyDateFilter === 'week' && diffDays > 7) {
+          return false;
+        }
+        if (historyDateFilter === 'month' && diffDays > 30) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [mergedCompletedBookings, historyDateFilter, historyServiceFilter]);
+
   const [showPanicModal, setShowPanicModal] = useState<boolean>(false);
   const [declinedBookingIds, setDeclinedBookingIds] = useState<string[]>([]);
 
@@ -1319,18 +1309,18 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-[#141414] p-5 rounded-2xl border border-[#C9A55B]/30">
-                <span className="text-xs text-[#888888] uppercase block">Total Ganancias Semanales</span>
-                <span className="text-2xl font-bold text-gold-gradient">$18,450 MXN</span>
+                <span className="text-xs text-[#888888] uppercase block">Total Ganancias ($650/sesión)</span>
+                <span className="text-2xl font-bold text-gold-gradient">${(mergedCompletedBookings.length * 650 + mergedCompletedBookings.reduce((sum, b) => sum + (b.tip || 0), 0)).toLocaleString()} MXN</span>
               </div>
 
               <div className="bg-[#141414] p-5 rounded-2xl border border-[#C9A55B]/30">
                 <span className="text-xs text-[#888888] uppercase block">Propinas Acumuladas</span>
-                <span className="text-2xl font-bold text-emerald-400">$3,200 MXN</span>
+                <span className="text-2xl font-bold text-emerald-400">${mergedCompletedBookings.reduce((sum, b) => sum + (b.tip || 0), 0).toLocaleString()} MXN</span>
               </div>
 
               <div className="bg-[#141414] p-5 rounded-2xl border border-[#C9A55B]/30">
                 <span className="text-xs text-[#888888] uppercase block">Servicios Completados</span>
-                <span className="text-2xl font-bold text-white">12 Sesiones</span>
+                <span className="text-2xl font-bold text-white">{mergedCompletedBookings.length} Sesiones</span>
               </div>
             </div>
           </motion.div>
@@ -1354,13 +1344,80 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                 </p>
               </div>
               <span className="text-xs text-[#806020] dark:text-[#C9A55B] bg-[#C9A55B]/15 px-3.5 py-1.5 rounded-full border border-[#C9A55B]/30 font-bold shrink-0">
-                {mergedCompletedBookings.length} Servicios en Historial
+                {filteredCompletedBookings.length} de {mergedCompletedBookings.length} Servicios
               </span>
+            </div>
+
+            {/* Filter Bar */}
+            <div className="bg-white dark:bg-[#141414] p-4 rounded-2xl border border-[#E5DFD3] dark:border-[#C9A55B]/20 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
+              <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                {/* Date Filter */}
+                <div className="flex items-center space-x-1.5 bg-[#FAF8F5] dark:bg-[#1A1A1A] p-1 rounded-xl border border-[#E5DFD3] dark:border-[#333333]">
+                  <button
+                    type="button"
+                    onClick={() => setHistoryDateFilter('all')}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      historyDateFilter === 'all'
+                        ? 'bg-[#C9A55B] text-white shadow-sm'
+                        : 'text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white'
+                    }`}
+                  >
+                    Todos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryDateFilter('week')}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      historyDateFilter === 'week'
+                        ? 'bg-[#C9A55B] text-white shadow-sm'
+                        : 'text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white'
+                    }`}
+                  >
+                    Última Semana
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryDateFilter('month')}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      historyDateFilter === 'month'
+                        ? 'bg-[#C9A55B] text-white shadow-sm'
+                        : 'text-[#6B655F] dark:text-[#AAAAAA] hover:text-[#1C1917] dark:hover:text-white'
+                    }`}
+                  >
+                    Último Mes
+                  </button>
+                </div>
+
+                {/* Service Type Filter */}
+                <select
+                  value={historyServiceFilter}
+                  onChange={(e) => setHistoryServiceFilter(e.target.value)}
+                  className="bg-[#FAF8F5] dark:bg-[#1A1A1A] text-xs font-medium text-[#1C1917] dark:text-white px-3 py-2 rounded-xl border border-[#E5DFD3] dark:border-[#333333] focus:outline-none focus:border-[#C9A55B]"
+                >
+                  <option value="all">Todos los Tipos de Servicio</option>
+                  {availableServiceNames.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {(historyDateFilter !== 'all' || historyServiceFilter !== 'all') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHistoryDateFilter('all');
+                    setHistoryServiceFilter('all');
+                  }}
+                  className="text-xs font-bold text-[#806020] dark:text-[#C9A55B] hover:underline shrink-0"
+                >
+                  Limpiar filtros
+                </button>
+              )}
             </div>
 
             {/* Scrollable List Container */}
             <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 no-scrollbar">
-              {mergedCompletedBookings.map((bk) => (
+              {filteredCompletedBookings.map((bk) => (
                 <div
                   key={bk.id}
                   className="bg-white dark:bg-[#141414] p-5 rounded-2xl border border-[#E5DFD3] dark:border-[#C9A55B]/20 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-[#C9A55B]/40 dark:hover:border-[#C9A55B]/40 transition-all duration-300 shadow-md"
@@ -1425,16 +1482,16 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                       <table className="w-full text-left border-collapse">
                         <tbody className="divide-y divide-[#E5DFD3] dark:divide-[#333333]">
                           <tr>
-                            <td className="px-4 py-2 text-[10px] text-[#6B655F] dark:text-[#888888] uppercase tracking-wider font-bold">Servicio</td>
-                            <td className="px-4 py-2 text-xs font-bold text-[#1C1917] dark:text-white text-right font-mono">${bk.price.toLocaleString()}</td>
+                            <td className="px-4 py-2 text-[10px] text-[#6B655F] dark:text-[#888888] uppercase tracking-wider font-bold">Tarifa Sesión</td>
+                            <td className="px-4 py-2 text-xs font-bold text-[#1C1917] dark:text-white text-right font-mono">$650</td>
                           </tr>
                           <tr>
                             <td className="px-4 py-2 text-[10px] text-[#6B655F] dark:text-[#888888] uppercase tracking-wider font-bold">Propina</td>
                             <td className="px-4 py-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 text-right font-mono">+${(bk.tip || 0).toLocaleString()}</td>
                           </tr>
                           <tr className="bg-[#C9A55B]/10 dark:bg-[#C9A55B]/5">
-                            <td className="px-4 py-2 text-[10px] text-[#806020] dark:text-[#C9A55B] uppercase tracking-wider font-black">Total</td>
-                            <td className="px-4 py-2 text-sm font-black text-[#806020] dark:text-[#C9A55B] text-right font-mono">${bk.total.toLocaleString()}</td>
+                            <td className="px-4 py-2 text-[10px] text-[#806020] dark:text-[#C9A55B] uppercase tracking-wider font-black">Pago Total</td>
+                            <td className="px-4 py-2 text-sm font-black text-[#806020] dark:text-[#C9A55B] text-right font-mono">${(650 + (bk.tip || 0)).toLocaleString()}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -1443,10 +1500,10 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                 </div>
               ))}
 
-              {mergedCompletedBookings.length === 0 && (
+              {filteredCompletedBookings.length === 0 && (
                 <div className="bg-white dark:bg-[#141414] p-8 rounded-2xl border border-[#E5DFD3] dark:border-[#333333] text-center space-y-2 text-[#6B655F] dark:text-[#888888]">
                   <Clock className="w-8 h-8 text-[#C9A55B]/40 mx-auto animate-pulse" />
-                  <p className="text-sm font-semibold">No se encontraron servicios completados en tu historial.</p>
+                  <p className="text-sm font-semibold">No se encontraron servicios que coincidan con los filtros seleccionados.</p>
                 </div>
               )}
             </div>
