@@ -969,7 +969,7 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
 });
 
 // Endpoint para consultar terapeutas (con auto-curación de huérfanos y deduplicación)
-app.get("/api/admin/therapists", async (req: Request, res: Response) => {
+app.get("/api/admin/therapists", requireAdmin, async (req: Request, res: Response) => {
   try {
     const db = getAdminFirestore();
     const snapshot = await db.collection("terapeutas").get();

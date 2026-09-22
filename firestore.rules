@@ -257,16 +257,14 @@ service cloud.firestore {
       allow get: if isSignedIn() && isValidId(reservaId) && (
         resource.data.clientId == request.auth.uid || 
         resource.data.therapistId == request.auth.uid || 
-        resource.data.state == 'pendiente' ||
         isAdmin()
       );
       allow list: if isSignedIn() && (
         resource.data.clientId == request.auth.uid || 
         resource.data.therapistId == request.auth.uid || 
-        resource.data.state == 'pendiente' ||
         isAdmin()
       );
-      allow create: if isSignedIn();
+      allow create: if false;
       allow update: if isSignedIn() && isValidId(reservaId) && (
         isAdmin() ||
         (!isTerminalState(existing().state) && (
@@ -304,8 +302,16 @@ service cloud.firestore {
     }
     
     match /alertas_panico/{alertaId} {
-      allow get: if isValidId(alertaId);
-      allow list: if isSignedIn() || isAdmin();
+      allow get: if isSignedIn() && isValidId(alertaId) && (
+        resource.data.userId == request.auth.uid || 
+        resource.data.usuarioId == request.auth.uid || 
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        isAdmin() || 
+        resource.data.userId == request.auth.uid || 
+        resource.data.usuarioId == request.auth.uid
+      );
       allow create: if isValidId(alertaId) && isValidPanicAlert(incoming());
       allow update: if isValidId(alertaId) && (
         isAdmin() ||
