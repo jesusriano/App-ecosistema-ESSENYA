@@ -49,12 +49,7 @@ export const TherapistLayout: React.FC<TherapistLayoutProps> = ({
         userLocation={therapist?.coverageZones?.[0] || 'Polanco / Lomas CDMX'}
       />
 
-      {/* Botón Flotante de Soporte Técnico Exclusivo vía WhatsApp */}
-      <TechSupportWhatsAppButton 
-        role="terapeuta" 
-        variant="floating" 
-        className="bottom-20 right-4 sm:bottom-6 sm:right-6"
-      />
+      {/* Botón de soporte integrado en el encabezado superior */}
     </div>
   );
 };

@@ -3075,12 +3075,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
         userLocation={client?.address || 'Polanco VIP, Ciudad de México'}
       />
 
-      {/* Botón Flotante de Soporte Técnico Exclusivo vía WhatsApp */}
-      <TechSupportWhatsAppButton 
-        role="cliente" 
-        variant="floating" 
-        className="bottom-20 right-4 sm:bottom-6 sm:right-6"
-      />
+      {/* Botón de soporte integrado en el encabezado superior */}
     </div>
   );
 };
