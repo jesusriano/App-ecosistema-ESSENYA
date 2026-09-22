@@ -167,8 +167,13 @@ export const getFriendlyErrorMessage = (error: any): string => {
   if (combinedMsg.includes('auth/email-already-in-use')) {
     return 'Ya existe una cuenta registrada con este correo electrónico. Intenta iniciar sesión en su lugar.';
   }
-  if (combinedMsg.includes('auth/weak-password')) {
-    return 'La contraseña proporcionada es demasiado débil. Debe tener al menos 8 caracteres y ser difícil de adivinar.';
+  if (
+    combinedMsg.includes('auth/password-does-not-meet-requirements') ||
+    combinedMsg.includes('missing password requirements') ||
+    combinedMsg.includes('non-alphanumeric character') ||
+    combinedMsg.includes('auth/weak-password')
+  ) {
+    return 'La contraseña no cumple con los requisitos de seguridad de Firebase. Debe contener al menos 8 caracteres, incluir letras mayúsculas, minúsculas, números y al menos un carácter especial (ej. !, @, #, $, %, etc.).';
   }
   if (combinedMsg.includes('auth/too-many-requests') || combinedMsg.includes('too-many-requests')) {
     return 'Demasiados intentos fallidos. Por seguridad, el acceso ha sido bloqueado temporalmente. Inténtalo en 15 minutos.';

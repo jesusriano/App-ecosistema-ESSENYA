@@ -12,6 +12,7 @@ import { LuxuryButton } from '../ui/LuxuryButton';
 import { useTherapistContext } from '../../context/TherapistContext';
 import { useAuth } from '../../context/AuthContext';
 import { PasswordStrengthMeter } from './PasswordStrengthMeter';
+import { getFriendlyErrorMessage } from '../../utils/authValidations';
 
 interface TherapistRegistrationFormProps {
   onSuccess: () => void;
@@ -387,15 +388,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
       onSuccess();
     } catch (clientErr: any) {
       setIsSubmitting(false);
-      if (clientErr.code === 'auth/email-already-in-use') {
-        setErrorMessage('El correo electrónico ya se encuentra registrado en ESSENYA. Inicia sesión o recupera tu contraseña.');
-      } else if (clientErr.code === 'auth/weak-password') {
-        setErrorMessage('La contraseña debe contener al menos 6 caracteres.');
-      } else if (clientErr.code === 'auth/invalid-email') {
-        setErrorMessage('El formato de correo electrónico no es válido.');
-      } else {
-        setErrorMessage(clientErr.message || 'Error al procesar la postulación. Por favor intenta de nuevo.');
-      }
+      setErrorMessage(getFriendlyErrorMessage(clientErr));
     }
   };
 
