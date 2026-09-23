@@ -6,7 +6,7 @@ import { Therapist, Booking, BookingState } from '../types';
 import { 
   Calendar, Clock, MapPin, Navigation, MessageSquare, DollarSign, 
   CheckCircle2, XCircle, Play, Shield, Award, Star, Bot, Send, UserCheck, Check, CheckCheck,
-  AlertTriangle, X, Volume2, VolumeX, Vibrate, BellRing, Sparkles, Smartphone, Mic, Square
+  AlertTriangle, X, Volume2, VolumeX, Vibrate, BellRing, Sparkles, Smartphone, Mic, Square, Bell
 } from 'lucide-react';
 import { PanicModal } from './PanicModal';
 import { WhatsAppButton } from './WhatsAppButton';
@@ -15,6 +15,8 @@ import { LiveTrackingMap } from '../shared/components/LiveTrackingMap';
 import { ServiceCompletionModal } from '../aplicaciones/terapeuta/components/ServiceCompletionModal';
 import { VoiceNotificationService } from '../shared/services/VoiceNotificationService';
 import { VoiceRecorderService, ServiceRecording } from '../shared/services/VoiceRecorderService';
+import { TherapistNotificationsPanel } from '../aplicaciones/terapeuta/components/TherapistNotificationsPanel';
+import { NotificationHistoryService } from '../shared/services/NotificationHistoryService';
 import { 
   notifyTherapistNewMessage, 
   isUrgentChatMessage 
@@ -65,6 +67,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
   const [availability, setAvailability] = useState<'disponible' | 'desconectado'>('disponible');
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [completedCelebrationBooking, setCompletedCelebrationBooking] = useState<Booking | null>(null);
+  const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState<boolean>(false);
 
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
@@ -709,9 +712,24 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
               </button>
             </div>
 
-            <div className="bg-white dark:bg-[#141414] border border-[#E5DFD3] dark:border-[#C9A55B]/30 px-3.5 py-1.5 rounded-xl text-center shadow-xs shrink-0">
-              <span className="text-[10px] text-[#6B655F] dark:text-[#888888] uppercase tracking-wider block font-semibold">Ganancia Semanal</span>
-              <span className="text-sm font-bold text-[#806020] dark:text-gold-gradient">$18,450 MXN</span>
+            <div className="flex items-center space-x-2 shrink-0">
+              <button
+                onClick={() => setIsNotificationsModalOpen(true)}
+                className="relative p-2.5 bg-white dark:bg-[#141414] border border-[#E5DFD3] dark:border-[#C9A55B]/30 rounded-xl text-[#806020] dark:text-[#C9A55B] hover:bg-[#FAF8F5] dark:hover:bg-[#1E1E1E] transition-all cursor-pointer flex items-center justify-center shadow-xs"
+                title="Historial de Notificaciones"
+              >
+                <Bell className="w-4 h-4" />
+                {NotificationHistoryService.getNotifications(activeTherapist.id).filter(n => !n.read).length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white font-extrabold text-[9px] rounded-full flex items-center justify-center animate-pulse">
+                    {NotificationHistoryService.getNotifications(activeTherapist.id).filter(n => !n.read).length}
+                  </span>
+                )}
+              </button>
+
+              <div className="bg-white dark:bg-[#141414] border border-[#E5DFD3] dark:border-[#C9A55B]/30 px-3.5 py-1.5 rounded-xl text-center shadow-xs shrink-0">
+                <span className="text-[10px] text-[#6B655F] dark:text-[#888888] uppercase tracking-wider block font-semibold">Ganancia Semanal</span>
+                <span className="text-sm font-bold text-[#806020] dark:text-gold-gradient">$18,450 MXN</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1803,6 +1821,13 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
         userLocation={currentBooking?.clientAddress || activeTherapist.coverageZones?.[0] || 'Polanco VIP / Cobertura CDMX'}
         bookingCode={currentBooking?.code || 'EMERGENCY-THERAPIST'}
         fullScreenOnMobile={true}
+      />
+
+      {/* Therapist Notification History Panel (Missed Push & Alert Review) */}
+      <TherapistNotificationsPanel
+        therapistId={activeTherapist.id}
+        isOpen={isNotificationsModalOpen}
+        onClose={() => setIsNotificationsModalOpen(false)}
       />
     </div>
   );

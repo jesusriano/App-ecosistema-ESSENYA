@@ -198,3 +198,17 @@ export function notifyTherapistNewMessage(options: ChatNotificationOptions = {})
   return notifyRoleNewEvent({ role: 'therapist', ...options });
 }
 
+// Auto-unlock Web Audio API on first user interaction to bypass browser autoplay restrictions
+if (typeof window !== 'undefined') {
+  const unlockAudio = () => {
+    getAudioContext();
+    window.removeEventListener('click', unlockAudio);
+    window.removeEventListener('touchstart', unlockAudio);
+    window.removeEventListener('keydown', unlockAudio);
+  };
+  window.addEventListener('click', unlockAudio, { once: true });
+  window.addEventListener('touchstart', unlockAudio, { once: true });
+  window.addEventListener('keydown', unlockAudio, { once: true });
+}
+
+

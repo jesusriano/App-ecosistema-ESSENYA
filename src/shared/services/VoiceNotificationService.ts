@@ -49,21 +49,29 @@ export const VoiceNotificationService = {
 
   fallbackSpeech(text: string): void {
     try {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel(); // Stop any pending speech
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const speakNow = () => {
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'es-MX';
         utterance.rate = 0.95;
         utterance.pitch = 1.0;
-        
-        // Try finding a Spanish voice
         const voices = window.speechSynthesis.getVoices();
         const spanishVoice = voices.find(v => v.lang.startsWith('es'));
         if (spanishVoice) {
           utterance.voice = spanishVoice;
         }
-
         window.speechSynthesis.speak(utterance);
+      };
+
+      if (window.speechSynthesis.getVoices().length > 0) {
+        speakNow();
+      } else {
+        window.speechSynthesis.onvoiceschanged = () => {
+          speakNow();
+          window.speechSynthesis.onvoiceschanged = null;
+        };
+        setTimeout(() => speakNow(), 150);
       }
     } catch (e) {
       console.warn('SpeechSynthesis failed:', e);
