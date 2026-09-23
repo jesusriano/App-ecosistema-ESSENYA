@@ -85,6 +85,7 @@ export default defineConfig(() => {
         devOptions: {
           enabled: true,
           type: 'module',
+          resolveTempFolder: () => path.resolve(__dirname, 'node_modules/.vite-pwa'),
         },
       }),
     ],

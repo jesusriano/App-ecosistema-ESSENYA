@@ -7,6 +7,7 @@ import { useAdmin } from '../hooks/useAdmin';
 import { useToast } from '../../../shared/context/ToastContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { Booking, Therapist, BookingState } from '../../../shared/types';
+import { AdminRecordingsSection } from '../components/AdminRecordingsSection';
 
 export const sanitizeBooking = (raw: any): Booking => {
   if (!raw) {
@@ -424,49 +425,55 @@ export const ReservasPage: React.FC = () => {
 
                   {/* Expandable Details Section */}
                   {expandedBookingId === b.id && (
-                    <div className="pt-4 border-t border-[var(--border-color)] grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs text-[var(--text-muted)] animate-fadeIn">
-                      {/* Col 1: Cliente & Contacto */}
-                      <div className="space-y-1.5 bg-[var(--bg-subcard)] p-3.5 rounded-xl border border-[var(--border-color)]">
-                        <span className="text-[10px] uppercase font-bold tracking-wider text-[#C9A55B] block mb-1">Contacto del Cliente</span>
-                        <div>👤 Nombre: <strong className="text-[var(--text-primary)]">{b.clientName}</strong></div>
-                        <div>📞 Teléfono: <span className="text-[var(--text-primary)] font-mono">{b.clientPhone || 'VIP (Sin registrar)'}</span></div>
-                        <div>📍 Dirección: <span className="text-[var(--text-primary)]">{b.clientAddress} ({b.cityZone})</span></div>
-                        {b.arrivalInstructions && (
-                          <div className="mt-1 pt-1.5 border-t border-[var(--border-color)]">
-                            🔑 <strong className="text-[var(--text-primary)]">Acceso/Llegada:</strong> {b.arrivalInstructions}
-                          </div>
-                        )}
+                    <div className="pt-4 border-t border-[var(--border-color)] space-y-4 animate-fadeIn">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs text-[var(--text-muted)]">
+                        {/* Col 1: Cliente & Contacto */}
+                        <div className="space-y-1.5 bg-[var(--bg-subcard)] p-3.5 rounded-xl border border-[var(--border-color)]">
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-[#C9A55B] block mb-1">Contacto del Cliente</span>
+                          <div>👤 Nombre: <strong className="text-[var(--text-primary)]">{b.clientName}</strong></div>
+                          <div>📞 Teléfono: <span className="text-[var(--text-primary)] font-mono">{b.clientPhone || 'VIP (Sin registrar)'}</span></div>
+                          <div>📍 Dirección: <span className="text-[var(--text-primary)]">{b.clientAddress} ({b.cityZone})</span></div>
+                          {b.arrivalInstructions && (
+                            <div className="mt-1 pt-1.5 border-t border-[var(--border-color)]">
+                              🔑 <strong className="text-[var(--text-primary)]">Acceso/Llegada:</strong> {b.arrivalInstructions}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Col 2: Preferencias del Ritual */}
+                        <div className="space-y-1.5 bg-[var(--bg-subcard)] p-3.5 rounded-xl border border-[var(--border-color)]">
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-[#C9A55B] block mb-1">Preferencias del Ritual</span>
+                          <div>💪 Presión: <strong className="text-[var(--text-primary)]">{b.preferences?.pressureLevel || 'Media'}</strong></div>
+                          <div>🌿 Aromaterapia: <strong className="text-[var(--text-primary)]">{b.preferences?.essentialOil || 'Aceite de olor'}</strong></div>
+                          <div>🎵 Ambiente: <strong className="text-[var(--text-primary)]">{b.preferences?.musicStyle || 'Sonido de la naturaleza'}</strong></div>
+                          {b.painPoints && (
+                            <div className="mt-1 pt-1.5 border-t border-[var(--border-color)] text-amber-500">
+                              ⚠️ <strong className="text-amber-500 font-semibold">Puntos de Dolor:</strong> {b.painPoints}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Col 3: Transacción & Administrativo */}
+                        <div className="space-y-1.5 bg-[var(--bg-subcard)] p-3.5 rounded-xl border border-[var(--border-color)]">
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-[#C9A55B] block mb-1">Transacción & Auditoría</span>
+                          <div>💵 Precio Total: <strong className="text-[#C9A55B] font-bold">${b.total} MXN</strong></div>
+                          <div>💳 Método Pago: <span className="text-[var(--text-primary)]">{b.paymentMethod}</span></div>
+                          <div>🏷️ Estado Pago: <span className="text-[var(--text-primary)] font-semibold">{b.paymentStatus === 'pagado' ? '✅ Pagado' : '⏳ Pendiente'}</span></div>
+                          {b.motivoRechazo && (
+                            <div className="mt-1 pt-1.5 border-t border-[var(--border-color)] text-rose-500">
+                              ❌ <strong className="text-rose-500">Motivo de Rechazo:</strong> {b.motivoRechazo}
+                            </div>
+                          )}
+                          {b.cancellationReason && !b.motivoRechazo && (
+                            <div className="mt-1 pt-1.5 border-t border-[var(--border-color)] text-rose-500">
+                              ❌ <strong className="text-rose-500">Cancelación/Rechazo:</strong> {b.cancellationReason}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
-                      {/* Col 2: Preferencias del Ritual */}
-                      <div className="space-y-1.5 bg-[var(--bg-subcard)] p-3.5 rounded-xl border border-[var(--border-color)]">
-                        <span className="text-[10px] uppercase font-bold tracking-wider text-[#C9A55B] block mb-1">Preferencias del Ritual</span>
-                        <div>💪 Presión: <strong className="text-[var(--text-primary)]">{b.preferences?.pressureLevel || 'Media'}</strong></div>
-                        <div>🌿 Aromaterapia: <strong className="text-[var(--text-primary)]">{b.preferences?.essentialOil || 'Aceite de olor'}</strong></div>
-                        <div>🎵 Ambiente: <strong className="text-[var(--text-primary)]">{b.preferences?.musicStyle || 'Sonido de la naturaleza'}</strong></div>
-                        {b.painPoints && (
-                          <div className="mt-1 pt-1.5 border-t border-[var(--border-color)] text-amber-500">
-                            ⚠️ <strong className="text-amber-500 font-semibold">Puntos de Dolor:</strong> {b.painPoints}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Col 3: Transacción & Administrativo */}
-                      <div className="space-y-1.5 bg-[var(--bg-subcard)] p-3.5 rounded-xl border border-[var(--border-color)]">
-                        <span className="text-[10px] uppercase font-bold tracking-wider text-[#C9A55B] block mb-1">Transacción & Auditoría</span>
-                        <div>💵 Precio Total: <strong className="text-[#C9A55B] font-bold">${b.total} MXN</strong></div>
-                        <div>💳 Método Pago: <span className="text-[var(--text-primary)]">{b.paymentMethod}</span></div>
-                        <div>🏷️ Estado Pago: <span className="text-[var(--text-primary)] font-semibold">{b.paymentStatus === 'pagado' ? '✅ Pagado' : '⏳ Pendiente'}</span></div>
-                        {b.motivoRechazo && (
-                          <div className="mt-1 pt-1.5 border-t border-[var(--border-color)] text-rose-500">
-                            ❌ <strong className="text-rose-500">Motivo de Rechazo:</strong> {b.motivoRechazo}
-                          </div>
-                        )}
-                        {b.cancellationReason && !b.motivoRechazo && (
-                          <div className="mt-1 pt-1.5 border-t border-[var(--border-color)] text-rose-500">
-                            ❌ <strong className="text-rose-500">Cancelación/Rechazo:</strong> {b.cancellationReason}
-                          </div>
-                        )}
+                      <div className="pt-2">
+                        <AdminRecordingsSection serviceId={b.id} />
                       </div>
                     </div>
                   )}

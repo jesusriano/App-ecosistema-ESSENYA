@@ -6,13 +6,15 @@ import { Therapist, Booking, BookingState } from '../types';
 import { 
   Calendar, Clock, MapPin, Navigation, MessageSquare, DollarSign, 
   CheckCircle2, XCircle, Play, Shield, Award, Star, Bot, Send, UserCheck, Check, CheckCheck,
-  AlertTriangle, X, Volume2, VolumeX, Vibrate, BellRing, Sparkles, Smartphone
+  AlertTriangle, X, Volume2, VolumeX, Vibrate, BellRing, Sparkles, Smartphone, Mic, Square
 } from 'lucide-react';
 import { PanicModal } from './PanicModal';
 import { WhatsAppButton } from './WhatsAppButton';
 import { fetchPostCareProtocol } from '../shared/services/api';
 import { LiveTrackingMap } from '../shared/components/LiveTrackingMap';
 import { ServiceCompletionModal } from '../aplicaciones/terapeuta/components/ServiceCompletionModal';
+import { VoiceNotificationService } from '../shared/services/VoiceNotificationService';
+import { VoiceRecorderService, ServiceRecording } from '../shared/services/VoiceRecorderService';
 import { 
   notifyTherapistNewMessage, 
   isUrgentChatMessage 
@@ -64,16 +66,104 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [completedCelebrationBooking, setCompletedCelebrationBooking] = useState<Booking | null>(null);
 
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
+  const [activeMediaRecorder, setActiveMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [showFinishConfirmModal, setShowFinishConfirmModal] = useState<boolean>(false);
+
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    let interval: any = null;
+    if (isRecording) {
+      interval = setInterval(() => {
+        setRecordingSeconds(s => s + 1);
+      }, 1000);
+    } else {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [isRecording]);
+
+  useEffect(() => {
+    const handleOnlineEvent = () => {
+      setIsOnline(true);
+      VoiceRecorderService.processPendingSyncQueue();
+    };
+    const handleOfflineEvent = () => setIsOnline(false);
+    window.addEventListener('online', handleOnlineEvent);
+    window.addEventListener('offline', handleOfflineEvent);
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnlineEvent);
+      window.removeEventListener('offline', handleOfflineEvent);
     };
   }, []);
+
+  const startLiveRecording = async () => {
+    if (!currentBooking) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = VoiceRecorderService.getBestMimeType() || 'audio/webm';
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      const chunks: Blob[] = [];
+      const recId = `rec-${Date.now()}`;
+      const now = new Date();
+      const startTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: mimeType });
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64data = reader.result as string;
+          const durationSecs = recordingSeconds;
+          const newRec: ServiceRecording = {
+            id: recId,
+            serviceId: currentBooking.id,
+            therapistId: activeTherapist.id,
+            date: now.toLocaleDateString(),
+            startTime: startTimeStr,
+            endTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            durationSeconds: durationSecs,
+            durationFormatted: VoiceRecorderService.formatDuration(durationSecs),
+            mimeType: mimeType,
+            audioDataUrl: base64data,
+            syncStatus: navigator.onLine ? 'sincronizada' : 'pendiente_sincronizacion',
+            createdAt: now.toISOString()
+          };
+
+          await VoiceRecorderService.saveRecordingLocal(newRec);
+          if (navigator.onLine) {
+            await VoiceRecorderService.syncRecordingToFirestore(newRec);
+            showToast('Grabación Guardada', 'Audio grabado y sincronizado correctamente.', 'success');
+          } else {
+            showToast('Sin Conexión', 'Grabación guardada localmente. Se sincronizará cuando vuelva la conexión.', 'warning');
+          }
+        };
+        reader.readAsDataURL(blob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start(1000);
+      setActiveMediaRecorder(recorder);
+      setIsRecording(true);
+      setRecordingSeconds(0);
+      showToast('Grabación Iniciada', '🎙️ El micrófono se encuentra activo.', 'success');
+    } catch (err: any) {
+      showToast('Error de Micrófono', err?.message || 'No fue posible acceder al micrófono.', 'error');
+    }
+  };
+
+  const stopLiveRecording = () => {
+    if (activeMediaRecorder && activeMediaRecorder.state !== 'inactive') {
+      activeMediaRecorder.stop();
+    }
+    setIsRecording(false);
+    setActiveMediaRecorder(null);
+  };
 
   const defaultCompletedServices: any[] = [];
 
@@ -922,6 +1012,52 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                 />
               </div>
 
+              {/* Live Voice Recorder Widget (Active only when servicio_iniciado) */}
+              {currentBooking?.state === 'servicio_iniciado' && (
+                <div className="bg-[#1C160C] dark:bg-[#1C1813] border-2 border-[#C9A55B] rounded-2xl p-4 sm:p-5 space-y-3 shadow-xl">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="flex items-center space-x-2.5">
+                      <div className={`w-3.5 h-3.5 rounded-full ${isRecording ? 'bg-red-500 animate-ping' : 'bg-emerald-400 animate-pulse'}`} />
+                      <div>
+                        <span className="text-xs uppercase text-[#C9A55B] tracking-wider font-extrabold block">
+                          {isRecording ? `🔴 GRABANDO ${VoiceRecorderService.formatDuration(recordingSeconds)}` : '🔊 Servicio en Curso — Sistema de Voz Activo'}
+                        </span>
+                        <span className="text-[11px] text-[#AAAAAA]">
+                          {isRecording ? 'Micrófono activo y grabando audio en vivo' : 'Listo para iniciar grabaciones de voz en vivo'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      {!isRecording ? (
+                        <button
+                          onClick={startLiveRecording}
+                          className="px-4 py-2.5 bg-gradient-to-r from-red-600 to-red-700 text-white font-bold text-xs rounded-xl shadow-md hover:opacity-95 transition-all flex items-center gap-2 cursor-pointer"
+                        >
+                          <Mic className="w-4 h-4 animate-bounce" />
+                          <span>🎙️ INICIAR GRABACIÓN</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={stopLiveRecording}
+                          className="px-4 py-2.5 bg-white text-black font-extrabold text-xs rounded-xl shadow-lg hover:bg-zinc-200 transition-all flex items-center gap-2 cursor-pointer"
+                        >
+                          <Square className="w-4 h-4 fill-black" />
+                          <span>DETENER GRABACIÓN</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {!isOnline && (
+                    <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-[11px] text-amber-400 flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>Sin conexión. La grabación se sincronizará cuando vuelva la conexión. (Pendiente de sincronización)</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Service State Controller Buttons */}
               <div className="space-y-3 pt-2">
                 <span className="text-xs uppercase text-[#AAAAAA] tracking-wider font-semibold block">
@@ -959,10 +1095,21 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                           whileTap={{ scale: 0.96 }}
                           whileHover={{ scale: isNext ? 1.04 : 1.01 }}
                           onClick={() => {
-                            onUpdateBookingState(currentBooking.id, st.key as any);
-                            if (st.key === 'servicio_finalizado') {
-                              setCompletedCelebrationBooking(currentBooking);
-                              showToast('¡Servicio Finalizado!', 'Has completado la sesión con éxito. Ganancia registrada en tu balance.', 'success');
+                            if (st.key === 'servicio_iniciado') {
+                              onUpdateBookingState(currentBooking.id, 'servicio_iniciado');
+                              VoiceNotificationService.playServiceStarted(currentBooking.id, currentBooking.clientName);
+                              showToast('Servicio Iniciado', 'Voz del sistema reproducida y notificación enviada al cliente.', 'success');
+                            } else if (st.key === 'servicio_finalizado') {
+                              if (isRecording) {
+                                setShowFinishConfirmModal(true);
+                              } else {
+                                onUpdateBookingState(currentBooking.id, 'servicio_finalizado');
+                                VoiceNotificationService.playServiceFinished(currentBooking.id);
+                                setCompletedCelebrationBooking(currentBooking);
+                                showToast('¡Servicio Finalizado!', 'Has completado la sesión con éxito. Ganancia registrada en tu balance.', 'success');
+                              }
+                            } else {
+                              onUpdateBookingState(currentBooking.id, st.key as any);
                             }
                           }}
                           className={`p-3 rounded-xl text-[11px] lg:text-xs font-bold transition-all duration-300 flex items-center justify-center space-x-1.5 sm:space-x-2 cursor-pointer ${btnClasses}`}
@@ -976,6 +1123,45 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* Finish Service Confirmation Modal if Active Recording */}
+            {showFinishConfirmModal && (
+              <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                <div className="bg-[#1A1A1A] border border-amber-500/50 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+                  <h3 className="font-serif font-bold text-base text-white flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-amber-400" />
+                    <span>Grabación Activa en Curso</span>
+                  </h3>
+                  <p className="text-xs text-[#CCCCCC]">
+                    Tienes una grabación activa. ¿Quieres detenerla y finalizar el servicio?
+                  </p>
+
+                  <div className="flex justify-end space-x-3 pt-2">
+                    <button
+                      onClick={() => setShowFinishConfirmModal(false)}
+                      className="px-4 py-2 bg-[#2A2A2A] hover:bg-[#333333] text-[#CCCCCC] text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                    >
+                      CANCELAR
+                    </button>
+                    <button
+                      onClick={() => {
+                        stopLiveRecording();
+                        setShowFinishConfirmModal(false);
+                        if (currentBooking) {
+                          onUpdateBookingState(currentBooking.id, 'servicio_finalizado');
+                          VoiceNotificationService.playServiceFinished(currentBooking.id);
+                          setCompletedCelebrationBooking(currentBooking);
+                          showToast('¡Servicio Finalizado!', 'Has completado la sesión con éxito.', 'success');
+                        }
+                      }}
+                      className="px-4 py-2 bg-[#C9A55B] hover:opacity-95 text-black font-extrabold text-xs rounded-xl transition-all cursor-pointer shadow"
+                    >
+                      DETENER Y FINALIZAR
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Chat with Client with Subtle Audio & Tactile Vibration Controls */}
             <div className={`bg-[#141414] p-5 sm:p-6 rounded-2xl border transition-all duration-500 space-y-4 shadow-xl ${
