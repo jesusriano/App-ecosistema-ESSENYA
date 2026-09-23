@@ -88,6 +88,33 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
     administrador: '/admin'
   };
 
+  // Active session in another role check
+  const activeSessionRole: UserRole | null = sessions.administrador 
+    ? 'administrador' 
+    : sessions.terapeuta 
+      ? 'terapeuta' 
+      : sessions.cliente 
+        ? 'cliente' 
+        : null;
+
+  const shouldRedirectActiveSession = Boolean(
+    isAuthReady &&
+    !currentUser &&
+    activeSessionRole &&
+    activeSessionRole !== role &&
+    !forceShowLogin
+  );
+
+  // Cross-portal session auto-redirection effect (Top level hook)
+  useEffect(() => {
+    if (shouldRedirectActiveSession && activeSessionRole) {
+      const targetPath = rolePaths[activeSessionRole];
+      if (targetPath && location.pathname !== targetPath) {
+        navigate(targetPath, { replace: true });
+      }
+    }
+  }, [shouldRedirectActiveSession, activeSessionRole, location.pathname, navigate]);
+
   // Strict role redirection effect: ensure automatic redirection (Admin -> /admin, Terapeutas -> /terapeuta, Clientes -> /cliente) occurs before any restricted screen render
   useEffect(() => {
     if (!isAuthReady) return;
@@ -611,21 +638,7 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
   }
 
   // 2. Middleware Check: Automatic redirection if session active in another role
-  const activeSessionRole: UserRole | null = sessions.administrador 
-    ? 'administrador' 
-    : sessions.terapeuta 
-      ? 'terapeuta' 
-      : sessions.cliente 
-        ? 'cliente' 
-        : null;
-
-  if (activeSessionRole && activeSessionRole !== role && !forceShowLogin) {
-    const correctPath = rolePaths[activeSessionRole];
-    
-    useEffect(() => {
-      navigate(correctPath, { replace: true });
-    }, [correctPath, navigate]);
-
+  if (shouldRedirectActiveSession && activeSessionRole) {
     return (
       <div className="min-h-[85vh] flex items-center justify-center p-4 bg-[#FAF8F5] dark:bg-[#0D0D0D]">
         <div className="w-full max-w-md bg-white dark:bg-[#141414] border border-[#C9A55B]/40 rounded-3xl p-8 shadow-2xl text-center space-y-4">

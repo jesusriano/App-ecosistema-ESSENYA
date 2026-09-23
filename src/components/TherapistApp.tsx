@@ -143,7 +143,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
             await VoiceRecorderService.syncRecordingToFirestore(newRec);
             showToast('Grabación Guardada', 'Audio grabado y sincronizado correctamente.', 'success');
           } else {
-            showToast('Sin Conexión', 'Grabación guardada localmente. Se sincronizará cuando vuelva la conexión.', 'warning');
+            showToast('Sin Conexión', 'Grabación guardada localmente. Se sincronizará cuando vuelva la conexión.', 'info');
           }
         };
         reader.readAsDataURL(blob);
