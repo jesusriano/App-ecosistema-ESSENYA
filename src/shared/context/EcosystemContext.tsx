@@ -336,8 +336,17 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Primitive flags for listener stability (prevents frequent tear-down on unrelated session ref changes)
   const currentUserId = firebaseUser?.uid;
-  const isUserAdmin = Boolean(sessions?.administrador || currentPortal === 'admin');
-  const isUserTherapist = Boolean(sessions?.terapeuta || currentPortal === 'therapist');
+  const isActualAdmin = Boolean(
+    firebaseUser && (
+      sessions?.administrador ||
+      firebaseUser.email === 'essenya222@gmail.com' ||
+      firebaseUser.email === 'graphixglow.2024@gmail.com' ||
+      firebaseUser.email?.toLowerCase().endsWith('@essenya.mx') ||
+      firebaseUser.email?.toLowerCase().endsWith('@essenya.com')
+    )
+  );
+  const isUserAdmin = Boolean(isActualAdmin && (sessions?.administrador || currentPortal === 'admin'));
+  const isUserTherapist = Boolean(firebaseUser && (sessions?.terapeuta || currentPortal === 'therapist' || authTherapist));
 
   // Firestore Realtime Subscriptions (Catalogs always public; user data queried by role / UID)
   useEffect(() => {
@@ -425,10 +434,10 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
     }, err => handleFirestoreError(err, OperationType.GET, 'configuraciones/global'));
 
-    const uid = firebaseUser?.uid || authTherapist?.id || sessions?.terapeuta?.id || sessions?.administrador?.id || 'demo-user-id';
-
-    // 2. Private Subscriptions (Require active authenticated Firebase User or active portal role)
-    if (!firebaseUser && !isUserAdmin && !isUserTherapist) {
+    // 2. Private Subscriptions (STRICT REQUIREMENT: Must have an active authenticated Firebase user)
+    // Firestore security rules enforce isSignedIn() for private collections (reservas, alertas_panico, clientes, etc.).
+    // Querying without firebaseUser will be blocked as unauthenticated / anonymous.
+    if (!firebaseUser) {
       return () => {
         unsubServicios();
         unsubTerapeuta();
@@ -436,6 +445,8 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         unsubConfig();
       };
     }
+
+    const uid = firebaseUser.uid;
 
     let unsubReservas = () => {};
     let unsubReservas2 = () => {};
