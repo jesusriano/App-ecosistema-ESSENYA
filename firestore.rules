@@ -187,14 +187,22 @@ service cloud.firestore {
     }
     
     match /clientes/{clienteId} {
-      allow read, write: if true;
+      allow get: if (isOwner(clienteId) || isAdmin()) && isValidId(clienteId);
+      allow list: if isAdmin();
+      allow create: if isOwner(clienteId) && isValidId(clienteId);
+      allow update: if (isOwner(clienteId) || isAdmin()) && isValidId(clienteId);
+      allow delete: if isAdmin();
 
       match /billetera/{cardId} {
-        allow read, write: if true;
+        allow get: if (isOwner(clienteId) || isAdmin()) && isValidId(cardId);
+        allow list: if isOwner(clienteId) || isAdmin();
+        allow write: if isOwner(clienteId) || isAdmin();
       }
 
       match /wallet_ledger/{ledgerId} {
-        allow read, write: if true;
+        allow get: if (isOwner(clienteId) || isAdmin()) && isValidId(ledgerId);
+        allow list: if isOwner(clienteId) || isAdmin();
+        allow write: if isOwner(clienteId) || isAdmin();
       }
     }
     
@@ -256,8 +264,15 @@ service cloud.firestore {
     match /reservas/{reservaId} {
       allow get, list: if isSignedIn();
       allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow update: if isSignedIn() && (
+        resource.data.clientId == request.auth.uid || 
+        resource.data.therapistId == request.auth.uid || 
+        (resource.data.keys().hasAny(['therapistId2']) && resource.data.therapistId2 == request.auth.uid) ||
+        (resource.data.keys().hasAny(['therapistIds']) && request.auth.uid in resource.data.therapistIds) ||
+        resource.data.state == 'pendiente' ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
     }
     
     match /invoices/{invoiceId} {

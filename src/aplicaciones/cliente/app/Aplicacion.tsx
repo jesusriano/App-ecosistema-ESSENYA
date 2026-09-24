@@ -100,6 +100,28 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   const { showToast } = useToast();
   const prevPaymentStatusRef = useRef<Record<string, string>>({});
 
+  // Handle Stripe Checkout return success / cancellation
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get('payment');
+    const bookingId = params.get('bookingId');
+
+    if (paymentStatus === 'success' && bookingId) {
+      showToast('¡Pago Exitoso con Stripe!', 'Tu pago ha sido procesado de manera segura. Tu reserva ha sido confirmada y asignada a una terapeuta.', 'success');
+      // Confirm payment & update state to accepted/paid
+      ecosystem.handleConfirmPayment(bookingId);
+      ecosystem.handleUpdateBookingState(bookingId, 'aceptada');
+      
+      // Clean URL params
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+    } else if (paymentStatus === 'cancelled') {
+      showToast('Pago Cancelado', 'El proceso de pago con Stripe fue cancelado. Puedes reintentarlo cuando gustes.', 'info');
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+    }
+  }, [ecosystem, showToast]);
+
   useEffect(() => {
     bookings.forEach(b => {
       const prevStatus = prevPaymentStatusRef.current[b.id];
@@ -242,8 +264,8 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     reader.readAsDataURL(file);
   };
 
-  // Payment Method Selection State (Apple Pay completely removed)
-  const [paymentMethodType, setPaymentMethodType] = useState<'transferencia' | 'efectivo'>('transferencia');
+  // Payment Method Selection State
+  const [paymentMethodType, setPaymentMethodType] = useState<'transferencia' | 'efectivo' | 'stripe'>('stripe');
   const [clabeCopied, setClabeCopied] = useState<boolean>(false);
 
   // Safety & Emergency Panic Modal State
@@ -513,6 +535,8 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       etaMinutes: 20,
       paymentMethod: totalPrice === 0 && giftCardDeduction > 0
         ? 'Tarjeta de Regalo (Saldo Billetera)'
+        : paymentMethodType === 'stripe'
+        ? 'Tarjeta de Crédito / Débito (Stripe Checkout)'
         : paymentMethodType === 'efectivo'
         ? 'Efectivo (Pago al Recibir)'
         : paymentMethodType === 'transferencia'
@@ -533,6 +557,30 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     try {
       const finalized = await onNewBooking(newBk);
       const finalizedBooking = finalized as Booking | undefined;
+
+      if (paymentMethodType === 'stripe' && totalPrice > 0) {
+        try {
+          const res = await fetch('/api/create-stripe-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId: newBk.id,
+              serviceName: newBk.serviceName,
+              total: totalPrice,
+              customerEmail: client?.email || '',
+              successUrl: `${window.location.origin}/cliente?payment=success&bookingId=${newBk.id}`,
+              cancelUrl: `${window.location.origin}/cliente?payment=cancelled&bookingId=${newBk.id}`
+            })
+          });
+          const data = await res.json();
+          if (data.success && data.url) {
+            window.location.href = data.url;
+            return;
+          }
+        } catch (stripeErr) {
+          console.error("Stripe Checkout redirect error:", stripeErr);
+        }
+      }
 
       if (finalizedBooking && typeof finalizedBooking.total === 'number' && finalizedBooking.total !== newBk.total) {
         showToast(
@@ -1962,7 +2010,21 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                     <label className="text-xs text-[#6B655F] dark:text-[#AAAAAA] uppercase font-semibold block">
                       Selecciona tu Método de Pago
                     </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {/* Option 1: Tarjeta con Stripe */}
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethodType('stripe')}
+                        className={`p-3.5 rounded-xl border flex flex-col items-center justify-center space-y-1.5 transition-all text-xs font-bold ${
+                          paymentMethodType === 'stripe'
+                            ? 'bg-[#C9A55B]/15 border-[#C9A55B] text-[#806020] dark:text-[#C9A55B] ring-1 ring-[#C9A55B]'
+                            : 'bg-[#F5F1EA] dark:bg-[#1A1A1A] border-[#E5DFD3] dark:border-[#333333] text-[#6B655F] dark:text-[#AAAAAA]'
+                        }`}
+                      >
+                        <CreditCard className="w-5 h-5 text-[#C9A55B]" />
+                        <span>Tarjeta (Stripe)</span>
+                      </button>
+
                       {/* Option 2: Transferencia Bancaria SPEI */}
                       <button
                         type="button"
@@ -1988,9 +2050,21 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                         }`}
                       >
                         <Banknote className="w-5 h-5 text-[#C9A55B]" />
-                        <span>Efectivo (Pago al Recibir)</span>
+                        <span>Efectivo</span>
                       </button>
                     </div>
+
+                    {paymentMethodType === 'stripe' && (
+                      <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 rounded-xl border border-[#C9A55B]/50 space-y-2">
+                        <div className="flex items-center space-x-2 text-xs font-bold text-[#806020] dark:text-[#C9A55B]">
+                          <CreditCard className="w-4 h-4 text-[#C9A55B]" />
+                          <span>Pago Seguro con Stripe Checkout</span>
+                        </div>
+                        <p className="text-xs text-[#1C1917] dark:text-white font-medium">
+                          Al hacer clic en "Confirmar y Pagar", serás redirigido a la pasarela cifrada de Stripe para procesar tu tarjeta con total seguridad.
+                        </p>
+                      </div>
+                    )}
 
 
                     {paymentMethodType === 'transferencia' && (

@@ -2,10 +2,13 @@ import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import fs from "fs";
 import webPush from "web-push";
+import Stripe from "stripe";
 import { sendPushNotificationToUser } from "./pushNotificationService.js";
 import * as adminApp from "firebase-admin/app";
 import * as adminAuth from "firebase-admin/auth";
 import * as adminFirestore from "firebase-admin/firestore";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder_key');
 
 // Initialize VAPID Keys for Web Push with persistent file storage
 let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY;
@@ -2940,6 +2943,45 @@ app.post("/api/push/send", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("Error en /api/push/send:", err);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Stripe Checkout Integration Endpoint
+app.post("/api/create-stripe-checkout", async (req: Request, res: Response) => {
+  try {
+    const { bookingId, serviceName, total, customerEmail, successUrl, cancelUrl } = req.body;
+    if (!total || !serviceName) {
+      return res.status(400).json({ success: false, error: "Faltan datos de la reserva o monto." });
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'mxn',
+            product_data: {
+              name: `ESSENYA — ${serviceName}`,
+              description: `Reserva y Servicio de Masaje a Domicilio (${bookingId || 'VIP'})`
+            },
+            unit_amount: Math.round(Number(total) * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: successUrl || `${req.protocol}://${req.get('host')}/cliente?payment=success&bookingId=${bookingId || ''}`,
+      cancel_url: cancelUrl || `${req.protocol}://${req.get('host')}/cliente?payment=cancelled`,
+      customer_email: customerEmail || undefined,
+      metadata: {
+        bookingId: bookingId || ''
+      }
+    });
+
+    res.json({ success: true, url: session.url, sessionId: session.id });
+  } catch (err: any) {
+    console.error("Error creating Stripe Checkout session:", err);
+    res.status(500).json({ success: false, error: err.message || "Error al crear la sesión de pago con Stripe." });
   }
 });
 

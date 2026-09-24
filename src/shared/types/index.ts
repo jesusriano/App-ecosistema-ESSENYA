@@ -176,7 +176,7 @@ export interface Booking {
   activeOfferTherapistIds?: string[];
   activeOffers?: DispatchOffer[];
   dispatchHistory?: DispatchHistoryItem[];
-  paymentMethod: 'Tarjeta de Crédito / Débito' | 'Tarjeta Crédito VIP' | 'Transferencia Interbancaria (SPEI)' | 'Transferencia Bank VIP' | 'Efectivo (Pago al Recibir)' | 'Tarjeta de Regalo (Saldo Billetera)';
+  paymentMethod: 'Tarjeta de Crédito / Débito' | 'Tarjeta Crédito VIP' | 'Transferencia Interbancaria (SPEI)' | 'Transferencia Bank VIP' | 'Efectivo (Pago al Recibir)' | 'Tarjeta de Regalo (Saldo Billetera)' | 'Tarjeta de Crédito / Débito (Stripe Checkout)';
   paymentStatus: 'pagado' | 'pendiente' | 'reembolsado' | 'rechazado';
   paid?: boolean;
   updatedAt?: string;
