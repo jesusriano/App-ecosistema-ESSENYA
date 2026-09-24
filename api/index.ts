@@ -84,7 +84,14 @@ async function getGeminiClient() {
 }
 
 
-app.use(express.json({ limit: "2mb" })); // Prevent large payloads (like base64) directly in JSON
+app.use(express.json({
+  limit: "2mb",
+  verify: (req: any, res, buf) => {
+    if (req.originalUrl && req.originalUrl.includes('/api/stripe')) {
+      req.rawBody = buf;
+    }
+  }
+}));
 
 // Initialize Firebase Admin globally
 const configPath = path.join(process.cwd(), "firebase-applet-config.json");
@@ -3019,10 +3026,11 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
 
   let event: Stripe.Event;
   try {
+    const rawBody = (req as any).rawBody || req.body;
     if (webhookSecret && sig) {
-      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
     } else {
-      event = JSON.parse(req.body.toString());
+      event = typeof rawBody === 'string' ? JSON.parse(rawBody) : rawBody;
     }
   } catch (err: any) {
     console.error(`[Stripe Webhook] Signature verification failed:`, err.message);
