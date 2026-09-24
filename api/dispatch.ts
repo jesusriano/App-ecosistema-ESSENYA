@@ -230,19 +230,39 @@ export async function getEligibleTherapistCandidates(
   // Fallback coordinates by CDMX cityZone if clientLat is not set
   if (clientLat === null || clientLng === null) {
     const zoneCoords: Record<string, [number, number]> = {
-      'Polanco': [19.4338, -99.1912],
-      'Polanco VIP': [19.4338, -99.1912],
-      'Lomas de Chapultepec': [19.4184, -99.2155],
-      'Condesa': [19.4116, -99.1714],
-      'Roma Norte': [19.4195, -99.1620],
-      'Santa Fe': [19.3601, -99.2600],
-      'Del Valle': [19.3820, -99.1670],
-      'Pedregal': [19.3140, -99.2070],
-      'Interlomas': [19.3990, -99.2810],
-      'Coyoacán': [19.3500, -99.1620]
+      'polanco': [19.4338, -99.1912],
+      'polanco vip': [19.4338, -99.1912],
+      'lomas de chapultepec': [19.4184, -99.2155],
+      'bosques de las lomas': [19.3950, -99.2450],
+      'santa fe': [19.3601, -99.2600],
+      'interlomas': [19.3990, -99.2810],
+      'atizapán de zaragoza': [19.5630, -99.2450],
+      'atizapan de zaragoza': [19.5630, -99.2450],
+      'naucalpan': [19.4770, -99.2380],
+      'huixquilucan': [19.3640, -99.3520],
+      'satélite': [19.5100, -99.2350],
+      'satelite': [19.5100, -99.2350],
+      'lomas verdes': [19.5050, -99.2550],
+      'tecamachalco': [19.4280, -99.2420],
+      'la herradura': [19.4180, -99.2650],
+      'bosque real': [19.3850, -99.3100],
+      'jesús del monte': [19.3750, -99.2850],
+      'condesa': [19.4116, -99.1714],
+      'roma norte': [19.4195, -99.1620],
+      'del valle': [19.3820, -99.1670],
+      'narvarte': [19.3920, -99.1550],
+      'pedregal': [19.3140, -99.2070],
+      'san ángel': [19.3450, -99.1900],
+      'san angel': [19.3450, -99.1900],
+      'coyoacán': [19.3500, -99.1620],
+      'coyoacan': [19.3500, -99.1620],
+      'nápoles': [19.3920, -99.1750],
+      'napoles': [19.3920, -99.1750],
+      'tlalpan': [19.2980, -99.1680],
+      'san jerónimo': [19.3240, -99.2300]
     };
-    const zoneKey = booking.cityZone || 'Polanco';
-    const match = zoneCoords[zoneKey] || [19.4326, -99.1332];
+    const rawZone = (booking.cityZone || 'Polanco').toLowerCase().trim();
+    const match = zoneCoords[rawZone] || Object.entries(zoneCoords).find(([k]) => rawZone.includes(k))?.[1] || [19.4326, -99.1332];
     clientLat = match[0];
     clientLng = match[1];
   }

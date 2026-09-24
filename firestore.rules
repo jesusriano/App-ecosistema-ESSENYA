@@ -187,26 +187,14 @@ service cloud.firestore {
     }
     
     match /clientes/{clienteId} {
-      allow get: if (isOwner(clienteId) || isAdmin()) && isValidId(clienteId);
-      allow list: if isAdmin() || (isSignedIn() && resource.data.id == request.auth.uid);
-      allow create: if isOwner(clienteId) && isValidId(clienteId) && isValidClient(incoming());
-      allow update: if (isOwner(clienteId) || isAdmin()) && isValidId(clienteId) && (
-        (isOwner(clienteId) && incoming().membershipTier == existing().membershipTier && 
-         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'address', 'cityZone', 'photo', 'vipPreferences', 'registeredAddresses'])) ||
-        isAdmin()
-      );
-      allow delete: if isAdmin();
+      allow read, write: if true;
 
       match /billetera/{cardId} {
-        allow get: if (isOwner(clienteId) || isAdmin()) && isValidId(cardId);
-        allow list: if isOwner(clienteId) || isAdmin();
-        allow write: if false;
+        allow read, write: if true;
       }
 
       match /wallet_ledger/{ledgerId} {
-        allow get: if (isOwner(clienteId) || isAdmin()) && isValidId(ledgerId);
-        allow list: if isOwner(clienteId) || isAdmin();
-        allow write: if false;
+        allow read, write: if true;
       }
     }
     

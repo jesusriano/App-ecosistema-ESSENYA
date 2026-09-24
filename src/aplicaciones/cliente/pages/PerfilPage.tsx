@@ -8,10 +8,11 @@ import { useAuth } from '../../../shared/context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 import { calculateMembershipTier, getCompletedAndPaidBookings } from '../services/membershipService';
 import { NotificationSoundSettings } from '../../../shared/components/NotificationSoundSettings';
+import { COMPREHENSIVE_ZONES } from '../../../shared/constants/zones';
 
 export const PerfilPage: React.FC = () => {
   const { client, bookings } = useCliente();
-  const { getUser } = useAuth();
+  const { getUser, firebaseUser } = useAuth();
   const authUser = getUser('cliente');
   const { showToast } = useToast();
 
@@ -36,6 +37,47 @@ export const PerfilPage: React.FC = () => {
     return client?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
   });
 
+  const [addressInput, setAddressInput] = useState<string>(client?.address || 'Av. Paseo de las Palmas 735, Polanco');
+  const [cityZoneInput, setCityZoneInput] = useState<string>(client?.cityZone || 'Polanco / Lomas CDMX');
+  const [isEditingAddress, setIsEditingAddress] = useState<boolean>(false);
+  const [savingAddress, setSavingAddress] = useState<boolean>(false);
+
+  const handleSaveAddress = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetId = firebaseUser?.uid || authUser?.uid || client?.id;
+    if (!targetId) {
+      showToast('Sesión no encontrada', 'Por favor inicia sesión de nuevo para guardar tu dirección.', 'error');
+      return;
+    }
+    if (!addressInput.trim() || !cityZoneInput.trim()) {
+      showToast('Campos requeridos', 'La dirección y la zona son obligatorias.', 'error');
+      return;
+    }
+
+    setSavingAddress(true);
+    try {
+      const { doc, setDoc } = await import('firebase/firestore');
+      const { db } = await import('../../../lib/firebase');
+      const clientRef = doc(db, 'clientes', targetId);
+      await setDoc(clientRef, {
+        id: targetId,
+        name: client?.name || authUser?.nombre || 'Socio VIP',
+        email: client?.email || authUser?.correo || '',
+        membershipTier: client?.membershipTier || 'Platino',
+        address: addressInput.trim(),
+        cityZone: cityZoneInput.trim(),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      setIsEditingAddress(false);
+      showToast('Dirección Actualizada', 'Tu dirección principal de cobertura se ha guardado exitosamente.', 'success');
+    } catch (err: any) {
+      console.error('Error saving client address:', err);
+      showToast('Error al guardar', err?.message || 'No se pudo actualizar la dirección.', 'error');
+    } finally {
+      setSavingAddress(false);
+    }
+  };
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -57,10 +99,17 @@ export const PerfilPage: React.FC = () => {
         try {
           setClientPhoto(dataUrl);
           // Persist to Firestore directly (100% Secure)
-          const { doc, updateDoc } = await import('firebase/firestore');
+          const { doc, setDoc } = await import('firebase/firestore');
           const { db } = await import('../../../lib/firebase');
           const clientRef = doc(db, 'clientes', client.id);
-          await updateDoc(clientRef, { photo: dataUrl });
+          await setDoc(clientRef, {
+            id: client.id,
+            name: client.name || 'Socio VIP',
+            email: client.email || authUser?.correo || '',
+            membershipTier: client.membershipTier || 'Platino',
+            photo: dataUrl,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
           
           showToast('Foto de Perfil Actualizada', 'Tu fotografía de socio VIP se ha guardado exitosamente en el servidor.', 'success');
         } catch (error) {
@@ -360,14 +409,80 @@ export const PerfilPage: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
           <div className="space-y-3">
-            <h3 className="font-bold text-[#1C1917] dark:text-white flex items-center gap-1.5">
-              <MapPin className="w-4 h-4 text-[#C9A55B]" />
-              <span>Dirección Principal de Cobertura</span>
-            </h3>
-            <div className="p-3 bg-[#FAF8F5] dark:bg-[#1A1A1A] rounded-xl border border-[#E5DFD3] dark:border-[#262626]">
-              <p className="font-semibold text-[#1C1917] dark:text-white">{client?.address || 'Av. Paseo de las Palmas 735, Polanco'}</p>
-              <p className="text-[#6B655F] dark:text-[#888888] mt-0.5">Zona: {client?.cityZone || 'Polanco / Lomas CDMX'}</p>
+            <div className="flex justify-between items-center">
+              <h3 className="font-bold text-[#1C1917] dark:text-white flex items-center gap-1.5">
+                <MapPin className="w-4 h-4 text-[#C9A55B]" />
+                <span>Dirección Principal de Cobertura</span>
+              </h3>
+              {!isEditingAddress ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddressInput(client?.address || 'Av. Paseo de las Palmas 735, Polanco');
+                    setCityZoneInput(client?.cityZone || 'Polanco / Lomas CDMX');
+                    setIsEditingAddress(true);
+                  }}
+                  className="text-xs font-bold text-[#806020] dark:text-[#C9A55B] hover:underline cursor-pointer"
+                >
+                  Editar Dirección
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingAddress(false)}
+                  className="text-xs text-[#6B655F] dark:text-[#AAAAAA] hover:underline cursor-pointer"
+                >
+                  Cancelar
+                </button>
+              )}
             </div>
+
+            {!isEditingAddress ? (
+              <div className="p-3 bg-[#FAF8F5] dark:bg-[#1A1A1A] rounded-xl border border-[#E5DFD3] dark:border-[#262626]">
+                <p className="font-semibold text-[#1C1917] dark:text-white">{client?.address || 'Av. Paseo de las Palmas 735, Polanco'}</p>
+                <p className="text-[#6B655F] dark:text-[#888888] mt-0.5">Zona: {client?.cityZone || 'Polanco / Lomas CDMX'}</p>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveAddress} className="p-3 bg-[#FAF8F5] dark:bg-[#1A1A1A] rounded-xl border border-[#C9A55B]/40 space-y-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-[#6B655F] dark:text-[#AAAAAA] mb-1">
+                    Dirección (Calle, Número, Int, Colonia)
+                  </label>
+                  <input
+                    type="text"
+                    value={addressInput}
+                    onChange={(e) => setAddressInput(e.target.value)}
+                    placeholder="Ej. Av. Campos Elíseos 204, Polanco"
+                    className="w-full bg-white dark:bg-[#202020] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-[#6B655F] dark:text-[#AAAAAA] mb-1">
+                    Zona o Colonia CDMX / Zona Metropolitana
+                  </label>
+                  <select
+                    value={cityZoneInput}
+                    onChange={(e) => setCityZoneInput(e.target.value)}
+                    className="w-full bg-white dark:bg-[#202020] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                  >
+                    {COMPREHENSIVE_ZONES.map(z => (
+                      <option key={z} value={z}>{z}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="submit"
+                    disabled={savingAddress}
+                    className="px-4 py-1.5 bg-[#C9A55B] hover:bg-[#E6CA65] text-black font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {savingAddress ? 'Guardando...' : 'Guardar Dirección'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
 
           <div className="space-y-3">
