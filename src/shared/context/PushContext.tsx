@@ -1,0 +1,206 @@
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import {
+  isPushSupported,
+  getNotificationPermission,
+  requestNotificationPermission,
+  subscribeToPushNotifications,
+  unsubscribeFromPushNotifications,
+  sendTestPushNotification,
+  playNotificationSound,
+  registerServiceWorker,
+  SoundPreset
+} from '../services/pushService';
+import { InAppNotificationItem, NotificationEventType } from '../types/notifications';
+
+interface PushContextType {
+  supported: boolean;
+  permission: NotificationPermission;
+  subscribed: boolean;
+  soundEnabled: boolean;
+  soundPreset: SoundPreset;
+  volume: number;
+  setSoundEnabled: (enabled: boolean) => void;
+  setSoundPreset: (preset: SoundPreset) => void;
+  setVolume: (vol: number) => void;
+  enablePush: (userId?: string) => Promise<{ success: boolean; error?: string }>;
+  disablePush: () => Promise<{ success: boolean; error?: string }>;
+  testPush: (userId?: string, title?: string, body?: string, preset?: SoundPreset) => Promise<{ success: boolean; error?: string }>;
+  previewSound: (preset?: SoundPreset) => void;
+  inAppNotifications: InAppNotificationItem[];
+  unreadCount: number;
+  markAsRead: (id: string) => void;
+  markAllAsRead: () => void;
+  clearNotification: (id: string) => void;
+  addInAppNotification: (item: Omit<InAppNotificationItem, 'id' | 'timestamp' | 'read'>) => void;
+}
+
+const PushContext = createContext<PushContextType | undefined>(undefined);
+
+export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string }> = ({ children, userId }) => {
+  const [supported, setSupported] = useState<boolean>(false);
+  const [permission, setPermission] = useState<NotificationPermission>('default');
+  const [subscribed, setSubscribed] = useState<boolean>(false);
+  
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    return localStorage.getItem('essenya_push_sound') !== 'false';
+  });
+  const [soundPreset, setSoundPresetState] = useState<SoundPreset>(() => {
+    return (localStorage.getItem('essenya_sound_preset') as SoundPreset) || 'classic';
+  });
+  const [volume, setVolumeState] = useState<number>(() => {
+    const saved = localStorage.getItem('essenya_sound_volume');
+    return saved !== null ? parseFloat(saved) : 0.8;
+  });
+
+  const [inAppNotifications, setInAppNotifications] = useState<InAppNotificationItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('essenya_in_app_notifications');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('essenya_push_sound', String(soundEnabled));
+  }, [soundEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('essenya_sound_preset', soundPreset);
+  }, [soundPreset]);
+
+  useEffect(() => {
+    localStorage.setItem('essenya_sound_volume', String(volume));
+  }, [volume]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('essenya_in_app_notifications', JSON.stringify(inAppNotifications));
+    } catch {}
+  }, [inAppNotifications]);
+
+  useEffect(() => {
+    const isSupp = isPushSupported();
+    setSupported(isSupp);
+    if (isSupp) {
+      setPermission(getNotificationPermission());
+      registerServiceWorker().then(async (reg) => {
+        if (reg) {
+          const sub = await reg.pushManager.getSubscription();
+          setSubscribed(!!sub);
+        }
+      });
+    }
+  }, []);
+
+  const setSoundPreset = useCallback((preset: SoundPreset) => {
+    setSoundPresetState(preset);
+    if (soundEnabled) {
+      playNotificationSound(preset, volume);
+    }
+  }, [soundEnabled, volume]);
+
+  const setVolume = useCallback((vol: number) => {
+    setVolumeState(vol);
+  }, []);
+
+  const previewSound = useCallback((preset?: SoundPreset) => {
+    playNotificationSound(preset || soundPreset, volume);
+  }, [soundPreset, volume]);
+
+  const enablePush = useCallback(async (targetUserId?: string) => {
+    const res = await subscribeToPushNotifications(targetUserId || userId || 'anonymous');
+    setPermission(getNotificationPermission());
+    if (res.success) {
+      setSubscribed(true);
+      if (soundEnabled) playNotificationSound(soundPreset, volume);
+    }
+    return res;
+  }, [userId, soundEnabled, soundPreset, volume]);
+
+  const disablePush = useCallback(async () => {
+    const res = await unsubscribeFromPushNotifications();
+    if (res.success) {
+      setSubscribed(false);
+      setPermission(getNotificationPermission());
+    }
+    return res;
+  }, []);
+
+  const testPush = useCallback(async (targetUserId?: string, title?: string, body?: string, preset?: SoundPreset) => {
+    const presetToUse = preset || soundPreset;
+    if (soundEnabled) playNotificationSound(presetToUse, volume);
+    
+    // Also add to in-app notification center for complete sync test
+    addInAppNotification({
+      userId: targetUserId || userId || 'anonymous',
+      title: title || 'Prueba de Notificación ESSENYA',
+      description: body || 'Notificación push nativa con sonido operativo en tiempo real.',
+      eventType: 'reservation.created',
+      category: 'reservas',
+      url: '/'
+    });
+
+    return await sendTestPushNotification(targetUserId || userId, title, body, presetToUse);
+  }, [userId, soundEnabled, soundPreset, volume]);
+
+  const addInAppNotification = useCallback((item: Omit<InAppNotificationItem, 'id' | 'timestamp' | 'read'>) => {
+    const newItem: InAppNotificationItem = {
+      ...item,
+      id: 'notif_' + Math.random().toString(36).substring(2, 9),
+      timestamp: new Date().toISOString(),
+      read: false
+    };
+    setInAppNotifications(prev => [newItem, ...prev].slice(0, 100)); // keep last 100
+  }, []);
+
+  const markAsRead = useCallback((id: string) => {
+    setInAppNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  }, []);
+
+  const markAllAsRead = useCallback(() => {
+    setInAppNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  }, []);
+
+  const clearNotification = useCallback((id: string) => {
+    setInAppNotifications(prev => prev.filter(n => n.id !== id));
+  }, []);
+
+  const unreadCount = inAppNotifications.filter(n => !n.read).length;
+
+  return (
+    <PushContext.Provider
+      value={{
+        supported,
+        permission,
+        subscribed,
+        soundEnabled,
+        soundPreset,
+        volume,
+        setSoundEnabled,
+        setSoundPreset,
+        setVolume,
+        enablePush,
+        disablePush,
+        testPush,
+        previewSound,
+        inAppNotifications,
+        unreadCount,
+        markAsRead,
+        markAllAsRead,
+        clearNotification,
+        addInAppNotification
+      }}
+    >
+      {children}
+    </PushContext.Provider>
+  );
+};
+
+export const usePush = () => {
+  const context = useContext(PushContext);
+  if (!context) {
+    throw new Error('usePush must be used within a PushProvider');
+  }
+  return context;
+};

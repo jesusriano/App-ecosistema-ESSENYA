@@ -6,6 +6,8 @@ import { ToastProvider } from './context/ToastContext';
 import { EcosystemProvider, useEcosystem } from './shared/context/EcosystemContext';
 import { AuthProvider, useAuth } from './shared/context/AuthContext';
 import { TherapistProvider } from './shared/context/TherapistContext';
+import { PushProvider, usePush } from './shared/context/PushContext';
+import { NotificationCenterModal } from './shared/components/NotificationCenterModal';
 import { PortalAuthGuard } from './shared/components/auth/PortalAuthGuard';
 import { ThemeToggle } from './shared/components/ThemeToggle';
 import { Header } from './shared/components/Header';
@@ -131,6 +133,8 @@ function MainAppContent() {
   };
 
   const activeBookingCount = bookings.filter(b => b.state === 'pendiente' || b.state === 'aceptada' || b.state === 'en_camino' || b.state === 'llegue' || b.state === 'servicio_iniciado').length;
+  const { unreadCount } = usePush();
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = React.useState(false);
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#0D0D0D] text-[#1C1917] dark:text-white flex flex-col font-sans transition-colors duration-300 selection:bg-[#C9A55B] selection:text-black">
@@ -139,6 +143,14 @@ function MainAppContent() {
         currentPortal={currentPortal}
         onSelectPortal={handleSelectPortal}
         activeBookingCount={activeBookingCount}
+        onOpenNotificationCenter={() => setIsNotificationCenterOpen(true)}
+        unreadNotificationCount={unreadCount}
+      />
+
+      {/* Notification Center Modal */}
+      <NotificationCenterModal
+        isOpen={isNotificationCenterOpen}
+        onClose={() => setIsNotificationCenterOpen(false)}
       />
 
       {/* Independent Application Modules on dedicated URLs */}
@@ -209,6 +221,15 @@ function MainAppContent() {
   );
 }
 
+function AuthenticatedPushWrapper({ children }: { children: React.ReactNode }) {
+  const { firebaseUser } = useAuth() || {};
+  return (
+    <PushProvider userId={firebaseUser?.uid}>
+      {children}
+    </PushProvider>
+  );
+}
+
 export default function App() {
   return (
     <ErrorBoundary fallbackTitle="Error al inicializar la plataforma ESSENYA">
@@ -218,9 +239,11 @@ export default function App() {
             <AuthProvider>
               <TherapistProvider>
                 <EcosystemProvider>
-                  <BrowserRouter>
-                    <MainAppContent />
-                  </BrowserRouter>
+                  <AuthenticatedPushWrapper>
+                    <BrowserRouter>
+                      <MainAppContent />
+                    </BrowserRouter>
+                  </AuthenticatedPushWrapper>
                 </EcosystemProvider>
               </TherapistProvider>
             </AuthProvider>

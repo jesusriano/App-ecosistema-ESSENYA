@@ -11,6 +11,7 @@ import { TherapistDocument, TherapistFullProfile } from '../../../shared/types/a
 import { DocumentVerificationSection } from '../components/DocumentVerificationSection';
 import { TechSupportWhatsAppButton } from '../../../shared/components/TechSupportWhatsAppButton';
 import { NotificationSoundSettings } from '../../../shared/components/NotificationSoundSettings';
+import { PushSettingsCard } from '../../../shared/components/PushSettingsCard';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../../lib/firebase';
 
@@ -656,8 +657,9 @@ export const PerfilPage: React.FC = () => {
                 </LuxuryButton>
               </div>
             )}
-            <div className="pt-4">
+            <div className="pt-4 space-y-4">
               <NotificationSoundSettings role="therapist" />
+              <PushSettingsCard userId={activeTherapist.id} />
             </div>
           </form>
         )}

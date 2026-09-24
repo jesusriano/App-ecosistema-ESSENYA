@@ -1,9 +1,36 @@
 import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import fs from "fs";
+import webPush from "web-push";
 import * as adminApp from "firebase-admin/app";
 import * as adminAuth from "firebase-admin/auth";
 import * as adminFirestore from "firebase-admin/firestore";
+
+// Initialize VAPID Keys for Web Push
+let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY;
+let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+
+if (!vapidPublicKey || !vapidPrivateKey) {
+  try {
+    const vapidKeys = webPush.generateVAPIDKeys();
+    vapidPublicKey = vapidKeys.publicKey;
+    vapidPrivateKey = vapidKeys.privateKey;
+    console.log('[WebPush] Auto-generated VAPID keys for backend.');
+  } catch (err) {
+    vapidPublicKey = vapidPublicKey || 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nwh8W4';
+    vapidPrivateKey = vapidPrivateKey || 'v8_private_key_placeholder';
+  }
+}
+
+try {
+  webPush.setVapidDetails(
+    process.env.VAPID_EMAIL || 'mailto:soporte@essenya.mx',
+    vapidPublicKey,
+    vapidPrivateKey
+  );
+} catch (e) {
+  console.warn('[WebPush] Failed to set vapid details:', e);
+}
 import { getServiceById } from "./services/service-catalog.js";
 import {
   stepDispatchEngine,
@@ -2719,6 +2746,117 @@ function initDispatchTicker() {
     }
   }, 5000);
 }
+
+// ========================================================
+// Web Push Notifications Endpoints
+// ========================================================
+
+app.get("/api/push/vapid-public-key", (req: Request, res: Response) => {
+  res.json({ success: true, publicKey: vapidPublicKey });
+});
+
+app.post("/api/push/subscribe", async (req: Request, res: Response) => {
+  try {
+    const { userId, subscription } = req.body || {};
+    if (!subscription || !subscription.endpoint) {
+      return res.status(400).json({ success: false, error: "Suscripción push inválida." });
+    }
+
+    const db = getAdminFirestore();
+    const subId = Buffer.from(subscription.endpoint).toString('base64').slice(0, 64);
+    
+    await db.collection("push_subscriptions").doc(subId).set({
+      userId: userId || 'anonymous',
+      endpoint: subscription.endpoint,
+      p256dh: subscription.keys?.p256dh || '',
+      auth: subscription.keys?.auth || '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+
+    res.json({ success: true, message: "Suscripción push guardada correctamente." });
+  } catch (err: any) {
+    console.error("Error en /api/push/subscribe:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/push/unsubscribe", async (req: Request, res: Response) => {
+  try {
+    const { endpoint } = req.body || {};
+    if (!endpoint) {
+      return res.status(400).json({ success: false, error: "Falta el endpoint." });
+    }
+
+    const db = getAdminFirestore();
+    const subId = Buffer.from(endpoint).toString('base64').slice(0, 64);
+    await db.collection("push_subscriptions").doc(subId).delete();
+
+    res.json({ success: true, message: "Suscripción eliminada correctamente." });
+  } catch (err: any) {
+    console.error("Error en /api/push/unsubscribe:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/push/send", async (req: Request, res: Response) => {
+  try {
+    const { userId, title, body, url, tag, soundPreset, data } = req.body || {};
+    const db = getAdminFirestore();
+
+    let query: any = db.collection("push_subscriptions");
+    if (userId) {
+      query = query.where("userId", "==", userId);
+    }
+
+    const snapshot = await query.get();
+    if (snapshot.empty) {
+      return res.json({ success: true, sentCount: 0, message: "No se encontraron suscripciones push activas." });
+    }
+
+    const payload = JSON.stringify({
+      title: title || "ESSENYA — Notificación",
+      body: body || "Tienes una nueva actualización en tu ecosistema.",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/badge-72.png",
+      url: url || "/",
+      tag: tag || "essenya-notification",
+      soundPreset: soundPreset || "classic",
+      data: data || { type: "general" }
+    });
+
+    let sentCount = 0;
+    const errors: any[] = [];
+
+    for (const doc of snapshot.docs) {
+      const subData = doc.data();
+      const pushSubscription = {
+        endpoint: subData.endpoint,
+        keys: {
+          p256dh: subData.p256dh,
+          auth: subData.auth
+        }
+      };
+
+      try {
+        await webPush.sendNotification(pushSubscription, payload);
+        sentCount++;
+      } catch (err: any) {
+        console.warn(`[WebPush] Error sending to subscription ${doc.id}:`, err?.statusCode, err?.message);
+        if (err?.statusCode === 410 || err?.statusCode === 404) {
+          await doc.ref.delete().catch(() => {});
+        } else {
+          errors.push({ endpoint: subData.endpoint, error: err?.message });
+        }
+      }
+    }
+
+    res.json({ success: true, sentCount, errors: errors.length > 0 ? errors : undefined });
+  } catch (err: any) {
+    console.error("Error en /api/push/send:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // Start ticker
 initDispatchTicker();

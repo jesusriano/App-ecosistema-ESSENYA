@@ -282,7 +282,7 @@ export async function getEligibleTherapistCandidates(
     // Exclude if already contacted or rejected
     if (alreadyContactedIds.has(tId)) continue;
     // Exclude if busy in another booking
-    if (busyTherapistsIds.has(tId)) continue;
+    if (busyTherapistIds.has(tId)) continue;
 
     // Check location coordinates
     const lat = typeof tData.lat === 'number' ? tData.lat : null;
