@@ -3012,8 +3012,8 @@ app.post("/api/create-stripe-checkout", async (req: Request, res: Response) => {
   }
 });
 
-// Stripe Webhook Endpoint (Secure & Idempotent)
-app.post("/api/stripe/webhook", express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
+// Stripe Webhook Handler Logic
+const handleStripeWebhook = async (req: Request, res: Response) => {
   const sig = req.headers['stripe-signature'];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
 
@@ -3079,7 +3079,11 @@ app.post("/api/stripe/webhook", express.raw({ type: 'application/json' }), async
   }
 
   res.json({ received: true });
-});
+};
+
+// Stripe Webhook Endpoints (/api/stripe/webhook & /api/stripe-webhook)
+app.post("/api/stripe/webhook", express.raw({ type: 'application/json' }), handleStripeWebhook);
+app.post("/api/stripe-webhook", express.raw({ type: 'application/json' }), handleStripeWebhook);
 
 // Start ticker
 initDispatchTicker();
