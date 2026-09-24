@@ -137,19 +137,19 @@ export const MUSIC_OPTIONS = [
   { id: 'Otra música', label: 'Otra música', description: 'Ambiente musical relajante contemporáneo o sin música' }
 ] as const;
 
-// Official Payment Methods (Only bank transfer and cash allowed)
+// Official Payment Methods (Transferencia SPEI and Tarjeta Stripe)
 export const PAYMENT_METHODS = [
+  {
+    id: 'tarjeta',
+    label: 'Tarjeta de Crédito / Débito',
+    badge: 'Stripe Seguro',
+    description: 'Pago cifrado y seguro con tarjeta de crédito o débito.'
+  },
   {
     id: 'transferencia',
     label: 'Transferencia Interbancaria (SPEI)',
     badge: 'BBVA México',
-    description: 'Transferencia directa a cuenta CLABE con confirmación instantánea.'
-  },
-  {
-    id: 'efectivo',
-    label: 'Efectivo (Pago al Recibir)',
-    badge: 'Al Momento de la Cita',
-    description: 'Pago en efectivo directo a la masajista antes de iniciar el masaje.'
+    description: 'Transferencia directa a cuenta CLABE con validación central.'
   }
 ] as const;
 

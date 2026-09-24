@@ -107,10 +107,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     const bookingId = params.get('bookingId');
 
     if (paymentStatus === 'success' && bookingId) {
-      showToast('¡Pago Exitoso con Stripe!', 'Tu pago ha sido procesado de manera segura. Tu reserva ha sido confirmada y asignada a una terapeuta.', 'success');
-      // Confirm payment & update state to accepted/paid
-      ecosystem.handleConfirmPayment(bookingId);
-      ecosystem.handleUpdateBookingState(bookingId, 'aceptada');
+      showToast('¡Pago Recibido por Stripe!', 'Tu pago está siendo verificado por el servidor. En unos segundos tu reserva será confirmada y enviada a despacho.', 'success');
       
       // Clean URL params
       const newUrl = window.location.pathname;

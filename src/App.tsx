@@ -1,8 +1,8 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { InvoiceModal } from './shared/components/InvoiceModal';
-import { ThemeProvider } from './context/ThemeContext';
-import { ToastProvider } from './context/ToastContext';
+import { ThemeProvider } from './shared/context/ThemeContext';
+import { ToastProvider } from './shared/context/ToastContext';
 import { EcosystemProvider, useEcosystem } from './shared/context/EcosystemContext';
 import { AuthProvider, useAuth } from './shared/context/AuthContext';
 import { TherapistProvider } from './shared/context/TherapistContext';

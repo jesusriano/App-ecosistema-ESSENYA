@@ -2465,9 +2465,9 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
         assignedTherapistsCount: 0,
         clientLat: typeof req.body.clientLat === 'number' ? req.body.clientLat : null,
         clientLng: typeof req.body.clientLng === 'number' ? req.body.clientLng : null,
-        dispatchState: "buscando",
+        dispatchState: calculatedFinalTotal === 0 ? "buscando" : "en_espera_pago",
         currentDispatchLevel: 10,
-        dispatchStartedAt: new Date().toISOString(),
+        dispatchStartedAt: calculatedFinalTotal === 0 ? new Date().toISOString() : '',
         activeOfferTherapistIds: [],
         activeOffers: [],
         dispatchHistory: [],
@@ -2494,15 +2494,17 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
         });
       }
 
-      return { bookingId, booking: newBooking };
+      return { bookingId, booking: newBooking, calculatedFinalTotal };
     });
 
-    // Trigger dispatch engine step immediately for Level 1 (<= 10 min)
-    stepDispatchEngine(getAdminFirestore(), result.bookingId, process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY).catch(e => {
-      console.warn("[Dispatch] Initial step async error from atomic booking:", e);
-    });
+    // Trigger dispatch engine step immediately only if fully paid (e.g. 0 total via gift card)
+    if (result.calculatedFinalTotal === 0) {
+      stepDispatchEngine(getAdminFirestore(), result.bookingId, process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY).catch(e => {
+        console.warn("[Dispatch] Initial step async error from atomic booking:", e);
+      });
+    }
 
-    res.json({ success: true, ...result });
+    res.json({ success: true, bookingId: result.bookingId, booking: result.booking });
 
   } catch (err: any) {
     console.error("Error en reserva atómica:", err);
@@ -2983,6 +2985,75 @@ app.post("/api/create-stripe-checkout", async (req: Request, res: Response) => {
     console.error("Error creating Stripe Checkout session:", err);
     res.status(500).json({ success: false, error: err.message || "Error al crear la sesión de pago con Stripe." });
   }
+});
+
+// Stripe Webhook Endpoint (Secure & Idempotent)
+app.post("/api/stripe/webhook", express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
+  const sig = req.headers['stripe-signature'];
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+
+  let event: Stripe.Event;
+  try {
+    if (webhookSecret && sig) {
+      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    } else {
+      event = JSON.parse(req.body.toString());
+    }
+  } catch (err: any) {
+    console.error(`[Stripe Webhook] Signature verification failed:`, err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  const db = getAdminFirestore();
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const bookingId = session.metadata?.bookingId;
+
+    if (bookingId) {
+      try {
+        const bookingRef = db.collection('reservas').doc(bookingId);
+        const bookingSnap = await bookingRef.get();
+
+        if (bookingSnap.exists) {
+          const bData = bookingSnap.data()!;
+          if (bData.paymentStatus !== 'pagado') {
+            const nowIso = new Date().toISOString();
+            await bookingRef.update({
+              paymentStatus: 'pagado',
+              paid: true,
+              dispatchState: 'buscando',
+              dispatchStartedAt: nowIso,
+              updatedAt: nowIso
+            });
+
+            console.log(`[Stripe Webhook] Booking ${bookingId} successfully paid and moved to dispatch 'buscando'.`);
+
+            // Trigger dispatch engine step immediately
+            const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
+            await stepDispatchEngine(db, bookingId, apiKey);
+
+            // Sync related invoice
+            if (bData.invoiceId) {
+              const invRef = db.collection('invoices').doc(bData.invoiceId);
+              await invRef.set({
+                paymentStatus: 'pagado',
+                status: 'pagada',
+                paidAt: nowIso,
+                updatedAt: nowIso
+              }, { merge: true });
+            }
+          } else {
+            console.log(`[Stripe Webhook] Booking ${bookingId} was already marked as paid (Idempotent).`);
+          }
+        }
+      } catch (webhookErr) {
+        console.error(`[Stripe Webhook] Error processing booking ${bookingId}:`, webhookErr);
+      }
+    }
+  }
+
+  res.json({ received: true });
 });
 
 // Start ticker

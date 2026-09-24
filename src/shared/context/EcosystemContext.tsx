@@ -1871,6 +1871,8 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     const updatePayload: any = {
       paymentStatus: 'pagado',
       paid: true,
+      dispatchState: 'buscando',
+      dispatchStartedAt: nowIso,
       updatedAt: nowIso
     };
 
