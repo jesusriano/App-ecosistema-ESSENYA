@@ -32,6 +32,42 @@ interface TherapistAppProps {
   onUpdateLiveLocation?: (bookingId: string, lat: number, lng: number) => Promise<void>;
 }
 
+function DispatchCountdownTimer({ expiresAt, onExpire }: { expiresAt: string; onExpire?: () => void }) {
+  const [timeLeftSec, setTimeLeftSec] = useState<number>(() => {
+    const diff = Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);
+    return Math.max(0, diff);
+  });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const diff = Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);
+      if (diff <= 0) {
+        setTimeLeftSec(0);
+        clearInterval(timer);
+        if (onExpire) onExpire();
+      } else {
+        setTimeLeftSec(diff);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [expiresAt, onExpire]);
+
+  const mins = Math.floor(timeLeftSec / 60);
+  const secs = timeLeftSec % 60;
+  const isUrgent = timeLeftSec <= 30;
+
+  return (
+    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg border font-mono font-bold text-xs ${
+      isUrgent
+        ? 'bg-red-500/20 text-red-400 border-red-500/40 animate-pulse'
+        : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+    }`}>
+      <Clock className="w-3.5 h-3.5" />
+      <span>Ventana para aceptar: {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}</span>
+    </div>
+  );
+}
+
 export const TherapistApp: React.FC<TherapistAppProps> = ({
   therapist,
   bookings,
@@ -246,9 +282,43 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
   const [showPanicModal, setShowPanicModal] = useState<boolean>(false);
   const [declinedBookingIds, setDeclinedBookingIds] = useState<string[]>([]);
 
-  // Pending bookings that need therapist acceptance
-  const pendingBookings = bookings.filter(b => b.state === 'pendiente' && !declinedBookingIds.includes(b.id));
+  // Pending bookings that need therapist acceptance according to dispatch levels
+  const pendingBookings = bookings.filter(b => {
+    if (b.state !== 'pendiente') return false;
+    if (declinedBookingIds.includes(b.id)) return false;
+    if (Array.isArray(b.rejectedBy) && b.rejectedBy.includes(activeTherapist.id)) return false;
+    // If progressive dispatch engine is targeting this booking, only show if this therapist is in activeOfferTherapistIds
+    if (Array.isArray(b.activeOfferTherapistIds) && b.activeOfferTherapistIds.length > 0) {
+      return b.activeOfferTherapistIds.includes(activeTherapist.id);
+    }
+    return true;
+  });
   const activePending = pendingBookings[0] || null;
+
+  // Periodically report live GPS to server so dispatch engine recognizes location as fresh
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const reportLocation = () => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          fetch('/api/therapist/location', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              status: activeTherapist.status || 'disponible'
+            })
+          }).catch(() => {});
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+      );
+    };
+    reportLocation();
+    const interval = setInterval(reportLocation, 60000);
+    return () => clearInterval(interval);
+  }, [activeTherapist.id, activeTherapist.status]);
 
   // Find active booking assigned to therapist
   const currentBooking = bookings.find(b => b.state !== 'servicio_finalizado' && b.state !== 'cancelado' && b.state !== 'pendiente') || bookings.find(b => b.state !== 'servicio_finalizado' && b.state !== 'cancelado') || bookings[0];
@@ -860,7 +930,12 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         
         {/* INCOMING BOOKING ALERT MODAL / BANNER (FOR PENDING BOOKINGS) */}
-        {activePending && (
+        {activePending && (() => {
+          const activeOffer = activePending.activeOffers?.find(o => o.therapistId === activeTherapist.id);
+          const displayedEta = activeOffer?.etaMinutes ?? activePending.etaMinutes ?? 15;
+          const currentLevel = activePending.currentDispatchLevel ?? 10;
+
+          return (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -868,7 +943,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
           >
             <div className="absolute top-0 right-0 bg-[#C9A55B] text-black font-extrabold text-[11px] px-4 py-1 rounded-bl-2xl uppercase tracking-widest flex items-center gap-1.5 shadow-md">
               <span className="w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
-              <span>¡Nueva Solicitud Entrante!</span>
+              <span>🔔 Nueva Solicitud • Nivel ETA {currentLevel} min</span>
             </div>
 
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-[#C9A55B]/30 pb-4">
@@ -881,7 +956,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                 </div>
                 <h3 className="text-2xl font-serif font-bold text-white">{activePending.serviceName}</h3>
                 <p className="text-xs text-[#AAAAAA]">
-                  Cliente VIP: <strong className="text-white font-semibold">{activePending.clientName}</strong> • {activePending.clientPhone}
+                  Cliente: <strong className="text-white font-semibold">{activePending.clientName}</strong> • {activePending.clientPhone}
                 </p>
               </div>
 
@@ -891,12 +966,36 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
               </div>
             </div>
 
+            {/* Real-time Route ETA & Response Window Banner */}
+            <div className="bg-gradient-to-r from-amber-500/20 via-amber-600/15 to-black/40 p-3.5 rounded-xl border border-amber-500/30 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-[#C9A55B]/20 border border-[#C9A55B]/40 flex items-center justify-center text-amber-300">
+                  <Navigation className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-[#AAAAAA] font-bold">Tiempo Estimado de Llegada (ETA por Ruta)</div>
+                  <div className="text-xl font-bold text-white flex items-center gap-2">
+                    <span>⏱️ {displayedEta} minutos</span>
+                    <span className="text-[11px] font-normal text-amber-300/80 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">
+                      Ruta calculada a tu ubicación
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {activePending.dispatchExpiresAt && (
+                <DispatchCountdownTimer
+                  expiresAt={activePending.dispatchExpiresAt}
+                />
+              )}
+            </div>
+
             {/* Service & Location Specs */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-black/40 p-4 rounded-xl border border-[#C9A55B]/20 text-xs">
               <div className="space-y-1">
                 <span className="text-[#888888] flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5 text-[#C9A55B]" />
-                  <span>Fecha & Horario</span>
+                  <span>📅 Fecha & Horario</span>
                 </span>
                 <p className="font-bold text-white">{activePending.date} a las {activePending.time}</p>
                 <p className="text-[11px] text-[#AAAAAA]">{activePending.durationMinutes} min de sesión</p>
@@ -905,7 +1004,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
               <div className="space-y-1">
                 <span className="text-[#888888] flex items-center gap-1">
                   <MapPin className="w-3.5 h-3.5 text-[#C9A55B]" />
-                  <span>Dirección del Cliente</span>
+                  <span>📍 Dirección del Cliente</span>
                 </span>
                 <p className="font-bold text-white">{activePending.clientAddress}</p>
                 <p className="text-[11px] text-[#AAAAAA]">Zona: {activePending.cityZone}</p>
@@ -914,7 +1013,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
               <div className="space-y-1">
                 <span className="text-[#888888] flex items-center gap-1">
                   <Star className="w-3.5 h-3.5 text-[#C9A55B]" />
-                  <span>Preferencias & Molestias</span>
+                  <span>💆 Preferencias & Molestias</span>
                 </span>
                 <p className="text-[#C9A55B] font-semibold">Presión: {activePending.preferences?.pressureLevel ?? 'Media'} • {activePending.preferences?.essentialOil ?? 'Lavanda Francesa'}</p>
                 {activePending.painPoints && (
@@ -948,7 +1047,8 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
               </div>
             </div>
           </motion.div>
-        )}
+          );
+        })()}
 
         {/* TAB CONTENTS WITH SMOOTH ANIMATIONS */}
         <AnimatePresence mode="wait">

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   Calendar, Search, Filter, RefreshCw, UserCheck, Clock, MapPin, 
-  Sparkles, CheckCircle2, AlertTriangle, X, ShieldAlert, FileText, Check, ChevronRight, ChevronDown, Banknote
+  Sparkles, CheckCircle2, AlertTriangle, X, ShieldAlert, FileText, Check, ChevronRight, ChevronDown, Banknote,
+  Radio, Navigation, Zap
 } from 'lucide-react';
 import { useAdmin } from '../hooks/useAdmin';
 import { useToast } from '../../../shared/context/ToastContext';
@@ -333,6 +334,90 @@ export const ReservasPage: React.FC = () => {
                           )}
                         </button>
                       </div>
+
+                      {/* Dispatch Telemetry Widget */}
+                      {(b.state === 'pendiente' || b.dispatchState) && (
+                        <div className="w-full bg-[var(--bg-subcard)] border border-[#C9A55B]/30 rounded-xl p-3 text-xs space-y-2 mt-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              {b.dispatchState === 'buscando' ? (
+                                <>
+                                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+                                  <strong className="text-emerald-400 font-mono flex items-center gap-1.5">
+                                    <Radio className="w-3.5 h-3.5" />
+                                    🟢 DESPACHANDO - NIVEL {b.currentDispatchLevel || 10} (ETA &le; {b.currentDispatchLevel || 10} min)
+                                  </strong>
+                                </>
+                              ) : b.dispatchState === 'asignada' ? (
+                                <strong className="text-emerald-400 flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  Asignada por Despacho ETA
+                                </strong>
+                              ) : b.dispatchState === 'sin_disponibilidad' ? (
+                                <strong className="text-rose-400 flex items-center gap-1">
+                                  <AlertTriangle className="w-3.5 h-3.5" />
+                                  Sin Disponibilidad tras agotar 60 min
+                                </strong>
+                              ) : (
+                                <span className="text-[var(--text-muted)]">Despacho: {b.dispatchState || 'Iniciando'}</span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+                              {b.dispatchStartedAt && (
+                                <span>Iniciado: {new Date(b.dispatchStartedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              )}
+                              {b.state === 'pendiente' && (
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const res = await fetch('/api/dispatch/step', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ bookingId: b.id })
+                                      });
+                                      const data = await res.json();
+                                      showToast(data.message || 'Despacho actualizado');
+                                    } catch (e: any) {
+                                      showToast('Error al avanzar despacho: ' + e.message, 'error');
+                                    }
+                                  }}
+                                  className="px-2 py-1 bg-[#C9A55B]/20 hover:bg-[#C9A55B]/30 border border-[#C9A55B]/40 text-[#C9A55B] text-[10px] font-bold rounded cursor-pointer flex items-center gap-1"
+                                >
+                                  <Zap className="w-3 h-3" />
+                                  <span>Avanzar Nivel</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Metric Chips */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
+                            <div className="bg-[var(--bg-card)] p-2 rounded-lg border border-[var(--border-color)]">
+                              <span className="text-[10px] text-[var(--text-muted)] block">Terapeutas contactados</span>
+                              <strong className="text-[var(--text-primary)] text-xs">{b.dispatchHistory?.length || 0}</strong>
+                            </div>
+                            <div className="bg-[var(--bg-card)] p-2 rounded-lg border border-[var(--border-color)]">
+                              <span className="text-[10px] text-[var(--text-muted)] block">Rechazaron</span>
+                              <strong className="text-rose-400 text-xs">
+                                {b.dispatchHistory?.filter(h => h.action === 'rejected').length || b.rejectedBy?.length || 0}
+                              </strong>
+                            </div>
+                            <div className="bg-[var(--bg-card)] p-2 rounded-lg border border-[var(--border-color)]">
+                              <span className="text-[10px] text-[var(--text-muted)] block">Sin respuesta</span>
+                              <strong className="text-amber-400 text-xs">
+                                {b.dispatchHistory?.filter(h => h.action === 'timeout').length || 0}
+                              </strong>
+                            </div>
+                            <div className="bg-[var(--bg-card)] p-2 rounded-lg border border-[var(--border-color)]">
+                              <span className="text-[10px] text-[var(--text-muted)] block">Ofertas activas</span>
+                              <strong className="text-blue-400 text-xs">
+                                {b.activeOfferTherapistIds?.length || 0}
+                              </strong>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions Column */}
@@ -471,6 +556,47 @@ export const ReservasPage: React.FC = () => {
                           )}
                         </div>
                       </div>
+
+                      {/* Dispatch History Audit Trail */}
+                      {Array.isArray(b.dispatchHistory) && b.dispatchHistory.length > 0 && (
+                        <div className="bg-[var(--bg-subcard)] p-3.5 rounded-xl border border-[var(--border-color)] space-y-2">
+                          <div className="text-[10px] uppercase font-bold tracking-wider text-[#C9A55B] flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <Radio className="w-3.5 h-3.5" />
+                              Historial de Despacho por Nivel ETA
+                            </span>
+                            <span className="font-mono">{b.dispatchHistory.length} eventos registrados</span>
+                          </div>
+                          <div className="divide-y divide-[var(--border-color)] max-h-48 overflow-y-auto pr-1">
+                            {b.dispatchHistory.map((item, hIdx) => (
+                              <div key={hIdx} className="py-1.5 flex flex-wrap items-center justify-between text-[11px] gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-[10px] text-[#C9A55B] bg-[#C9A55B]/10 px-1.5 py-0.5 rounded border border-[#C9A55B]/20">
+                                    Nivel {item.level} min
+                                  </span>
+                                  <span className="font-semibold text-[var(--text-primary)]">{item.therapistName || item.therapistId}</span>
+                                  <span className="text-[var(--text-muted)] text-[10px]">ETA: ~{item.etaMinutes} min</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    item.action === 'accepted' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                                    item.action === 'rejected' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                                    item.action === 'timeout' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                                    'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                  }`}>
+                                    {item.action === 'accepted' ? '✓ Aceptó' :
+                                     item.action === 'rejected' ? '✕ Rechazó' :
+                                     item.action === 'timeout' ? '⏱ Expiró ventana' : '🔔 Contactada'}
+                                  </span>
+                                  <span className="text-[10px] text-[var(--text-muted)] font-mono">
+                                    {item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       <div className="pt-2">
                         <AdminRecordingsSection serviceId={b.id} />

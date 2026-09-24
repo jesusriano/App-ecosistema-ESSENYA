@@ -5,6 +5,13 @@ import * as adminApp from "firebase-admin/app";
 import * as adminAuth from "firebase-admin/auth";
 import * as adminFirestore from "firebase-admin/firestore";
 import { getServiceById } from "./services/service-catalog.js";
+import {
+  stepDispatchEngine,
+  rejectDispatchOffer,
+  acceptDispatchOfferAtomic,
+  getDispatchSettings,
+  DEFAULT_DISPATCH_LEVELS
+} from "./dispatch.js";
 
 
 function sanitizePromptInput(input: any, maxLength: number = 500): string {
@@ -766,12 +773,15 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
     const extrasDurationMinutes = validatedExtras.reduce((acc, e) => acc + (Number(e.durationMinutes) || 0), 0);
 
     const newBooking = {
+      id: '', // Will be assigned doc.id
       code,
       clientId: uid,
       clientName: finalClientName,
       clientPhone: finalClientPhone,
       clientAddress,
       cityZone,
+      clientLat: typeof req.body.clientLat === 'number' ? req.body.clientLat : null,
+      clientLng: typeof req.body.clientLng === 'number' ? req.body.clientLng : null,
       serviceId,
       serviceName,
       durationMinutes,
@@ -786,13 +796,25 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
       preferences: preferences || {},
       state: "pendiente",
       paymentStatus: "pendiente", // ALWAYS pendiente on creation
+      dispatchState: "buscando",
+      currentDispatchLevel: 10,
+      dispatchStartedAt: new Date().toISOString(),
+      activeOfferTherapistIds: [],
+      activeOffers: [],
+      dispatchHistory: [],
       createdAt: new Date().toISOString()
     };
 
     const newDocRef = getAdminFirestore().collection("reservas").doc();
+    newBooking.id = newDocRef.id;
     await newDocRef.set(newBooking);
     
-    const successRes = { success: true, bookingId: newDocRef.id, booking: { id: newDocRef.id, ...newBooking } };
+    // Trigger dispatch engine step immediately for Level 1 (<= 10 min)
+    stepDispatchEngine(getAdminFirestore(), newDocRef.id, process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY).catch(e => {
+      console.warn("[Dispatch] Initial step async error:", e);
+    });
+
+    const successRes = { success: true, bookingId: newDocRef.id, booking: newBooking };
     console.log("=== API BOOKING OUTGOING SUCCESS RESPONSE ===");
     console.log(JSON.stringify(successRes, null, 2));
     res.json(successRes);
@@ -1806,6 +1828,68 @@ app.post("/api/admin/gift-cards/activate", requireAdmin, async (req, res) => {
   }
 });
 
+// Admin list all gift cards
+app.get("/api/admin/gift-cards", requireAdmin, async (req, res) => {
+  try {
+    const snap = await getAdminFirestore().collection('gift_cards').get();
+    const cards = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Sort in memory by createdAt descending
+    cards.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    res.json({ success: true, cards });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || "Error al listar tarjetas." });
+  }
+});
+
+// Admin generate gift card directly with immediate active status
+app.post("/api/admin/gift-cards/generate", requireAdmin, async (req, res) => {
+  try {
+    const uid = (req as any).user?.uid;
+    const { customCode, recipientName, amount, senderName, customMessage } = req.body;
+    
+    const code = (customCode || `REGALO-ESS-${Math.floor(1000 + Math.random() * 9000)}`).trim().toUpperCase();
+    const balance = typeof amount === 'number' && amount > 0 ? amount : 1400;
+
+    // Check if code already exists
+    const existing = await getAdminFirestore().collection('gift_cards').where('code', '==', code).limit(1).get();
+    if (!existing.empty) {
+      return res.status(400).json({ success: false, error: `El código ${code} ya existe. Elige otro código o genera uno automático.` });
+    }
+
+    const newCard = {
+      code,
+      title: `Tarjeta de Regalo ESSENYA $${balance.toLocaleString()} MXN para ${recipientName || 'Cliente Especial'}`,
+      initialAmount: balance,
+      purchasePrice: balance,
+      currentBalance: balance,
+      status: 'activa',
+      active: true,
+      expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      createdAt: new Date().toISOString(),
+      recipientName: (recipientName || '').trim() || 'Cliente VIP',
+      senderName: (senderName || '').trim() || 'Administración ESSENYA',
+      customMessage: (customMessage || '').trim() || '¡Disfruta de tu experiencia de bienestar en ESSENYA!',
+      paymentMethod: 'administracion',
+      paymentStatus: 'pagado',
+      purchaserId: uid,
+      isGiftForSomeoneElse: true,
+      redeemed: false,
+      history: []
+    };
+
+    const docRef = getAdminFirestore().collection('gift_cards').doc();
+    await docRef.set(newCard);
+
+    res.json({
+      success: true,
+      message: `Tarjeta de regalo ${code} generada exitosamente con saldo de $${balance.toLocaleString()} MXN.`,
+      card: { id: docRef.id, ...newCard }
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || "Error al generar tarjeta." });
+  }
+});
+
 // Validate gift card code endpoint (returns card details if valid and active)
 app.post("/api/wallet/validate-code", requireAuth, async (req, res) => {
   try {
@@ -1840,6 +1924,35 @@ app.post("/api/wallet/validate-code", requireAuth, async (req, res) => {
       .get();
 
     if (globalCards.empty) {
+      if (cleanCode === 'REGALO-ESS-1400') {
+        const demoCard = {
+          code: 'REGALO-ESS-1400',
+          title: 'Tarjeta de Regalo ESSENYA Oficial ($1,400 MXN)',
+          initialAmount: 1400,
+          purchasePrice: 1400,
+          currentBalance: 1400,
+          status: 'activa',
+          active: true,
+          expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          createdAt: new Date().toISOString(),
+          recipientName: 'Cliente Distinguido',
+          senderName: 'ESSENYA Wellness',
+          customMessage: 'Disfruta de una experiencia exclusiva de masajes a domicilio.',
+          paymentMethod: 'cortesia',
+          paymentStatus: 'pagado',
+          purchaserId: 'system',
+          isGiftForSomeoneElse: true,
+          redeemed: false,
+          history: []
+        };
+        const ref = getAdminFirestore().collection('gift_cards').doc('gift-card-demo-1400');
+        await ref.set(demoCard);
+        return res.json({
+          valid: true,
+          message: `Tarjeta de regalo válida con saldo de $1,400 MXN.`,
+          card: { id: ref.id, ...demoCard }
+        });
+      }
       return res.status(404).json({ valid: false, message: "El código no existe o no es válido." });
     }
 
@@ -1873,11 +1986,38 @@ app.post("/api/wallet/redeem", requireAuth, async (req, res) => {
     // Transactional redeem
     const result = await getAdminFirestore().runTransaction(async (t) => {
       const cardsQuery = await t.get(getAdminFirestore().collection('gift_cards').where('code', '==', cleanCode).limit(1));
-      if (cardsQuery.empty) {
+      let cardDoc: any = !cardsQuery.empty ? cardsQuery.docs[0] : null;
+
+      if (!cardDoc && cleanCode === 'REGALO-ESS-1400') {
+        const demoRef = getAdminFirestore().collection('gift_cards').doc('gift-card-demo-1400');
+        const demoCard = {
+          code: 'REGALO-ESS-1400',
+          title: 'Tarjeta de Regalo ESSENYA Oficial ($1,400 MXN)',
+          initialAmount: 1400,
+          purchasePrice: 1400,
+          currentBalance: 1400,
+          status: 'activa',
+          active: true,
+          expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          createdAt: new Date().toISOString(),
+          recipientName: 'Cliente Distinguido',
+          senderName: 'ESSENYA Wellness',
+          customMessage: 'Disfruta de una experiencia exclusiva de masajes a domicilio.',
+          paymentMethod: 'cortesia',
+          paymentStatus: 'pagado',
+          purchaserId: 'system',
+          isGiftForSomeoneElse: true,
+          redeemed: false,
+          history: []
+        };
+        t.set(demoRef, demoCard);
+        cardDoc = { ref: demoRef, data: () => demoCard };
+      }
+
+      if (!cardDoc) {
         throw new Error("El código ingresado no existe o no es válido.");
       }
       
-      const cardDoc = cardsQuery.docs[0];
       const cardData = cardDoc.data();
 
       if (cardData.redeemed === true || cardData.status === 'canjeada') {
@@ -1955,7 +2095,8 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
       applyGiftCard, 
       expectedWalletDeduction, 
       expectedFinalTotal, 
-      applyCourtesy 
+      applyCourtesy,
+      giftCardCode 
     } = req.body;
 
     const uid = (req as any).user?.uid;
@@ -2119,44 +2260,113 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
       const subtotal = officialDurationPrice + extrasTotal;
       const totalBeforeWallet = Math.max(0, subtotal - courtesyDiscount + tip);
 
-      // 4. Strict Option B Wallet Logic
+      // 4. Strict Option B Wallet Logic & Direct Gift Card Single-Use Deduction
       let amountDeductedFromWallet = 0;
       const walletUpdates = [];
-      const isWalletRequested = applyGiftCard === true || (typeof expectedWalletDeduction === 'number' && expectedWalletDeduction > 0);
+      const isWalletRequested = applyGiftCard === true || (typeof expectedWalletDeduction === 'number' && expectedWalletDeduction > 0) || !!giftCardCode;
 
       if (isWalletRequested) {
-        const walletQuery = await t.get(
-          getAdminFirestore().collection('clientes').doc(uid).collection('billetera')
-            .where('status', '==', 'activa')
-        );
+        if (giftCardCode && typeof giftCardCode === 'string') {
+          // Direct centralized Gift Card redemption (Single-Use Enforced)
+          const cleanCode = giftCardCode.trim().toUpperCase();
+          const gcQuery = await t.get(getAdminFirestore().collection('gift_cards').where('code', '==', cleanCode).limit(1));
+          
+          let gcDoc = !gcQuery.empty ? gcQuery.docs[0] : null;
 
-        const availableBalance = walletQuery.docs.reduce((sum, d) => sum + (d.data().currentBalance || 0), 0);
+          // Support system demo card if not present yet
+          if (!gcDoc && cleanCode === 'REGALO-ESS-1400') {
+            const demoRef = getAdminFirestore().collection('gift_cards').doc('gift-card-demo-1400');
+            const demoCard = {
+              code: 'REGALO-ESS-1400',
+              title: 'Tarjeta de Regalo ESSENYA Oficial ($1,400 MXN)',
+              initialAmount: 1400,
+              purchasePrice: 1400,
+              currentBalance: 1400,
+              status: 'activa',
+              active: true,
+              expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+              createdAt: new Date().toISOString(),
+              recipientName: 'Cliente Distinguido',
+              senderName: 'ESSENYA Wellness',
+              customMessage: 'Disfruta de una experiencia exclusiva de masajes a domicilio.',
+              paymentMethod: 'cortesia',
+              paymentStatus: 'pagado',
+              purchaserId: 'system',
+              isGiftForSomeoneElse: true,
+              redeemed: false,
+              history: []
+            };
+            t.set(demoRef, demoCard);
+            gcDoc = { ref: demoRef, data: () => demoCard } as any;
+          }
 
-        const reqDeduction = typeof expectedWalletDeduction === 'number'
-          ? expectedWalletDeduction
-          : Math.min(availableBalance, totalBeforeWallet);
+          if (!gcDoc) {
+            throw new Error(`La tarjeta de regalo con código "${cleanCode}" no existe.`);
+          }
 
-        // STRICT OPTION B ABORT CHECK:
-        if (reqDeduction > 0 && availableBalance < reqDeduction) {
-          throw new Error(`Saldo insuficiente en billetera. Saldo esperado a descontar: $${reqDeduction}, Saldo disponible actual: $${availableBalance}. La transacción fue abortada para proteger sus fondos.`);
-        }
+          const gcData = gcDoc.data();
+          if (gcData.redeemed === true || gcData.status === 'canjeada' || (gcData.currentBalance || 0) <= 0) {
+            throw new Error(`Esta tarjeta de regalo (${cleanCode}) ya ha sido utilizada previamente. Las tarjetas son de uso único.`);
+          }
 
-        let remainingToDeduct = reqDeduction;
-        for (const cardDoc of walletQuery.docs) {
-          if (remainingToDeduct <= 0) break;
-          const cardData = cardDoc.data();
-          if (cardData.currentBalance > 0) {
-            const deduction = Math.min(cardData.currentBalance, remainingToDeduct);
-            remainingToDeduct -= deduction;
-            amountDeductedFromWallet += deduction;
+          const isCardActive = (gcData.status === 'activa' || gcData.active === true) && gcData.status !== 'pendiente_pago' && gcData.active !== false;
+          if (!isCardActive) {
+            throw new Error(`La tarjeta de regalo (${cleanCode}) no está activa o se encuentra pendiente de pago.`);
+          }
 
-            const newBalance = cardData.currentBalance - deduction;
-            walletUpdates.push({
-              ref: cardDoc.ref,
-              newBalance,
-              deduction,
-              cardCode: cardData.code
-            });
+          if (gcData.expirationDate && gcData.expirationDate < new Date().toISOString().split('T')[0]) {
+            throw new Error(`La tarjeta de regalo (${cleanCode}) ha vencido.`);
+          }
+
+          const deduction = Math.min(gcData.currentBalance, totalBeforeWallet);
+          amountDeductedFromWallet = deduction;
+          const newBalance = Math.max(0, gcData.currentBalance - deduction);
+
+          // Atomic consumption: mark as redeemed/canjeada if fully used or single-use
+          t.update(gcDoc.ref, {
+            currentBalance: newBalance,
+            status: 'canjeada', // Strict single-use voucher policy
+            redeemed: true,
+            usedByClientId: uid,
+            usedAt: new Date().toISOString(),
+            usedForBookingTotal: totalBeforeWallet,
+            deductionApplied: deduction
+          });
+        } else {
+          // Normal personal wallet deduction
+          const walletQuery = await t.get(
+            getAdminFirestore().collection('clientes').doc(uid).collection('billetera')
+              .where('status', '==', 'activa')
+          );
+
+          const availableBalance = walletQuery.docs.reduce((sum, d) => sum + (d.data().currentBalance || 0), 0);
+
+          const reqDeduction = typeof expectedWalletDeduction === 'number'
+            ? expectedWalletDeduction
+            : Math.min(availableBalance, totalBeforeWallet);
+
+          // STRICT OPTION B ABORT CHECK:
+          if (reqDeduction > 0 && availableBalance < reqDeduction) {
+            throw new Error(`Saldo insuficiente en billetera. Saldo esperado a descontar: $${reqDeduction}, Saldo disponible actual: $${availableBalance}. La transacción fue abortada para proteger sus fondos.`);
+          }
+
+          let remainingToDeduct = reqDeduction;
+          for (const cardDoc of walletQuery.docs) {
+            if (remainingToDeduct <= 0) break;
+            const cardData = cardDoc.data();
+            if (cardData.currentBalance > 0) {
+              const deduction = Math.min(cardData.currentBalance, remainingToDeduct);
+              remainingToDeduct -= deduction;
+              amountDeductedFromWallet += deduction;
+
+              const newBalance = cardData.currentBalance - deduction;
+              walletUpdates.push({
+                ref: cardDoc.ref,
+                newBalance,
+                deduction,
+                cardCode: cardData.code
+              });
+            }
           }
         }
       }
@@ -2204,6 +2414,14 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
         requiresDualTherapist: isDualTherapist,
         therapistIds: [],
         assignedTherapistsCount: 0,
+        clientLat: typeof req.body.clientLat === 'number' ? req.body.clientLat : null,
+        clientLng: typeof req.body.clientLng === 'number' ? req.body.clientLng : null,
+        dispatchState: "buscando",
+        currentDispatchLevel: 10,
+        dispatchStartedAt: new Date().toISOString(),
+        activeOfferTherapistIds: [],
+        activeOffers: [],
+        dispatchHistory: [],
         createdAt: new Date().toISOString()
       };
 
@@ -2228,6 +2446,11 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
       }
 
       return { bookingId, booking: newBooking };
+    });
+
+    // Trigger dispatch engine step immediately for Level 1 (<= 10 min)
+    stepDispatchEngine(getAdminFirestore(), result.bookingId, process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY).catch(e => {
+      console.warn("[Dispatch] Initial step async error from atomic booking:", e);
     });
 
     res.json({ success: true, ...result });
@@ -2345,96 +2568,11 @@ app.post("/api/bookings/accept", requireAuth, async (req, res) => {
     const therapistName = tData?.name || tData?.nombre || [tData?.nombre, tData?.apellidos].filter(Boolean).join(' ') || 'Terapeuta Certificada';
     const therapistPhoto = tData?.photo || tData?.fotografia || '';
     const therapistPhone = tData?.phone || tData?.telefono || '';
-    const nowIso = new Date().toISOString();
 
-    const result = await getAdminFirestore().runTransaction(async (t) => {
-      const bookingRef = getAdminFirestore().collection('reservas').doc(bookingId);
-      const bookingSnap = await t.get(bookingRef);
-      if (!bookingSnap.exists) {
-        throw new Error("La reserva no existe.");
-      }
-
-      const bookingData = bookingSnap.data()!;
-      if (bookingData.state !== 'pendiente') {
-        throw new Error("Esta reserva ya fue aceptada por otra terapeuta o ya no está disponible.");
-      }
-
-      const srvId = String(bookingData.serviceId || '');
-      const srvOfficial = OFFICIAL_SERVICES_CATALOG[srvId];
-      const isDual = bookingData.requiresDualTherapist === true || srvId === 'srv-pareja' || !!srvOfficial?.requiresDualTherapist;
-
-      const existingTherapistIds: string[] = Array.isArray(bookingData.therapistIds) 
-        ? bookingData.therapistIds 
-        : (bookingData.therapistId ? [bookingData.therapistId] : []);
-      
-      const assignedCount = typeof bookingData.assignedTherapistsCount === 'number' 
-        ? bookingData.assignedTherapistsCount 
-        : existingTherapistIds.length;
-
-      let updatePayload: Record<string, any> = {};
-
-      if (!isDual) {
-        // Normal single-therapist booking
-        updatePayload = {
-          state: 'aceptada',
-          therapistId: uid,
-          therapistName,
-          therapistPhoto,
-          therapistPhone,
-          therapistIds: [uid],
-          assignedTherapistsCount: 1,
-          acceptedAt: nowIso,
-          updatedAt: nowIso
-        };
-      } else {
-        // Dual therapist booking
-        if (assignedCount >= 2 || existingTherapistIds.length >= 2) {
-          throw new Error("Esta reserva de masaje en pareja ya tiene sus dos terapeutas asignadas.");
-        }
-
-        if (existingTherapistIds.includes(uid) || bookingData.therapistId === uid) {
-          throw new Error("Ya has aceptado un cupo en esta reserva de masaje en pareja. No puedes ocupar ambos cupos.");
-        }
-
-        if (assignedCount === 0 || existingTherapistIds.length === 0) {
-          // Slot 1: assign slot 1, keep state = 'pendiente'
-          updatePayload = {
-            therapistId: uid,
-            therapistName,
-            therapistPhoto,
-            therapistPhone,
-            therapistIds: [uid],
-            assignedTherapistsCount: 1,
-            requiresDualTherapist: true,
-            acceptedAt: nowIso,
-            updatedAt: nowIso
-          };
-        } else {
-          // Slot 2: assign slot 2, complete the dual service and mark 'aceptada'
-          const newIds = [...existingTherapistIds, uid];
-          updatePayload = {
-            therapistId2: uid,
-            therapistName2: therapistName,
-            therapistPhoto2: therapistPhoto,
-            therapistPhone2: therapistPhone,
-            therapistIds: newIds,
-            assignedTherapistsCount: 2,
-            requiresDualTherapist: true,
-            state: 'aceptada',
-            acceptedAt: nowIso,
-            updatedAt: nowIso
-          };
-        }
-      }
-
-      t.update(bookingRef, updatePayload);
-      return {
-        bookingId,
-        isDual,
-        assignedCount: (updatePayload.assignedTherapistsCount as number),
-        state: updatePayload.state || bookingData.state,
-        therapistIds: updatePayload.therapistIds
-      };
+    const result = await acceptDispatchOfferAtomic(getAdminFirestore(), bookingId, uid, {
+      name: therapistName,
+      photo: therapistPhoto,
+      phone: therapistPhone
     });
 
     res.json({ success: true, message: "Aceptación registrada con éxito.", slotAssigned: result.assignedCount, ...result });
@@ -2449,5 +2587,140 @@ app.post("/api/bookings/accept", requireAuth, async (req, res) => {
     res.status(isConflict ? 409 : 400).json({ success: false, error: err.message || "Error al procesar aceptación." });
   }
 });
+
+// ========================================================
+// POST /api/dispatch/step - Manually or event-triggered step
+// ========================================================
+app.post("/api/dispatch/step", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { bookingId } = req.body;
+    if (!bookingId) return res.status(400).json({ success: false, error: "bookingId es requerido" });
+    const result = await stepDispatchEngine(
+      getAdminFirestore(),
+      bookingId,
+      process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY
+    );
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ========================================================
+// POST /api/dispatch/reject - Therapist declines dispatch offer
+// ========================================================
+app.post("/api/dispatch/reject", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { bookingId, reason } = req.body;
+    const uid = (req as any).user?.uid;
+    if (!uid) return res.status(401).json({ success: false, error: "No autorizado" });
+    if (!bookingId) return res.status(400).json({ success: false, error: "bookingId es requerido" });
+
+    const result = await rejectDispatchOffer(getAdminFirestore(), bookingId, uid, reason);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ========================================================
+// GET /api/dispatch/config - Read dispatch levels & settings
+// ========================================================
+app.get("/api/dispatch/config", async (req: Request, res: Response) => {
+  try {
+    const settings = await getDispatchSettings(getAdminFirestore());
+    res.json({ success: true, settings });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ========================================================
+// PUT /api/dispatch/config - Update dispatch settings (Admin)
+// ========================================================
+app.put("/api/dispatch/config", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { levels, maxLocationAgeMinutes, urbanSpeedKmh, routeTortuosityFactor, enableGoogleRoutes } = req.body;
+    const payload: Record<string, any> = { updatedAt: new Date().toISOString() };
+    if (Array.isArray(levels)) payload.levels = levels;
+    if (typeof maxLocationAgeMinutes === 'number') payload.maxLocationAgeMinutes = maxLocationAgeMinutes;
+    if (typeof urbanSpeedKmh === 'number') payload.urbanSpeedKmh = urbanSpeedKmh;
+    if (typeof routeTortuosityFactor === 'number') payload.routeTortuosityFactor = routeTortuosityFactor;
+    if (typeof enableGoogleRoutes === 'boolean') payload.enableGoogleRoutes = enableGoogleRoutes;
+
+    await getAdminFirestore().collection('configuraciones').doc('dispatch').set(payload, { merge: true });
+    res.json({ success: true, message: "Configuración de despacho actualizada" });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ========================================================
+// POST /api/therapist/location - Update therapist live GPS
+// ========================================================
+app.post("/api/therapist/location", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const uid = (req as any).user?.uid;
+    const { lat, lng, status } = req.body;
+    if (!uid) return res.status(401).json({ success: false, error: "No autorizado" });
+    if (typeof lat !== 'number' || typeof lng !== 'number') {
+      return res.status(400).json({ success: false, error: "Coordenadas lat/lng requeridas" });
+    }
+    const nowIso = new Date().toISOString();
+    const updateData: Record<string, any> = {
+      lat,
+      lng,
+      lastLocationUpdate: nowIso,
+      updatedAt: nowIso
+    };
+    if (status) updateData.status = status;
+
+    await getAdminFirestore().collection('terapeutas').doc(uid).set(updateData, { merge: true });
+    res.json({ success: true, timestamp: nowIso });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ========================================================
+// Background Dispatch Engine Ticker (Runs every 5 seconds)
+// ========================================================
+let dispatchTickerStarted = false;
+function initDispatchTicker() {
+  if (dispatchTickerStarted) return;
+  dispatchTickerStarted = true;
+  setInterval(async () => {
+    try {
+      const db = getAdminFirestore();
+      const activeSearchingSnap = await db.collection('reservas')
+        .where('state', '==', 'pendiente')
+        .where('dispatchState', '==', 'buscando')
+        .limit(10)
+        .get();
+
+      if (activeSearchingSnap.empty) return;
+
+      const now = Date.now();
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
+
+      for (const doc of activeSearchingSnap.docs) {
+        const data = doc.data();
+        const expiresAtMs = data.dispatchExpiresAt ? new Date(data.dispatchExpiresAt).getTime() : 0;
+        const allOffersRejected = Array.isArray(data.activeOfferTherapistIds) && data.activeOfferTherapistIds.length === 0 && Array.isArray(data.activeOffers) && data.activeOffers.length > 0;
+        
+        // If window expired or all offered therapists rejected, step to next level
+        if ((expiresAtMs > 0 && now >= expiresAtMs) || allOffersRejected) {
+          await stepDispatchEngine(db, doc.id, apiKey);
+        }
+      }
+    } catch (err) {
+      // Quiet background log
+      console.warn("[Dispatch Ticker] Check interval error:", err);
+    }
+  }, 5000);
+}
+
+// Start ticker
+initDispatchTicker();
 
 export default app;

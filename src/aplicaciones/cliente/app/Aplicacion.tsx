@@ -526,6 +526,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       createdAt: new Date().toISOString(),
       invoiceId: `inv-${Math.floor(1000 + Math.random() * 9000)}`,
       applyGiftCard: !!appliedGiftCard,
+      giftCardCode: appliedGiftCard ? appliedGiftCard.code : undefined,
       expectedWalletDeduction: appliedGiftCard ? giftCardDeduction : 0,
       expectedFinalTotal: totalPrice,
       applyCourtesy: appliedPromo?.type === 'VIP15'
@@ -1898,11 +1899,16 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                           <Gift className="w-4 h-4" />
                         </div>
                         <div>
-                          <span className="text-xs font-bold text-[#1C1917] dark:text-white block">
-                            ¿Te obsequiaron una Tarjeta de Regalo ESSENYA? ($1,400 MXN)
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-[#1C1917] dark:text-white block">
+                              ¿Tienes una Tarjeta de Regalo ESSENYA?
+                            </span>
+                            <span className="text-[9px] font-semibold bg-[#C9A55B]/15 text-[#806020] dark:text-[#E6CA65] border border-[#C9A55B]/30 px-1.5 py-0.2 rounded">
+                              Opcional
+                            </span>
+                          </div>
                           <span className="text-[10px] text-[#6B655F] dark:text-[#AAAAAA]">
-                            Ingresa el código que te regalaron para aplicar su saldo monetario a esta reserva.
+                            Si te regalaron un código de cortesía, ingrésalo aquí para cubrir el valor de tu cita ($1,400 MXN).
                           </span>
                         </div>
                       </div>
@@ -1943,21 +1949,26 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                         </div>
                       </div>
                     ) : (
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <input
-                          type="text"
-                          value={giftCardCodeInput}
-                          onChange={(e) => setGiftCardCodeInput(e.target.value)}
-                          placeholder="Ingresa código recibido (ej. REGALO-ESS-1400)"
-                          className="flex-1 bg-white dark:bg-[#202020] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-3 py-2 text-xs text-[#1C1917] dark:text-white uppercase focus:outline-none focus:border-[#C9A55B]"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleApplyGiftCard()}
-                          className="px-4 py-2 bg-[#C9A55B] hover:bg-[#E6CA65] text-black font-bold text-xs rounded-xl transition-all shadow-xs"
-                        >
-                          Aplicar Saldo
-                        </button>
+                      <div className="space-y-1.5">
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="text"
+                            value={giftCardCodeInput}
+                            onChange={(e) => setGiftCardCodeInput(e.target.value)}
+                            placeholder="Código de regalo (ej. REGALO-ESS-1400) — Dejar vacío si no tienes"
+                            className="flex-1 bg-white dark:bg-[#202020] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-3 py-2 text-xs text-[#1C1917] dark:text-white uppercase focus:outline-none focus:border-[#C9A55B]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleApplyGiftCard()}
+                            className="px-4 py-2 bg-[#C9A55B] hover:bg-[#E6CA65] text-black font-bold text-xs rounded-xl transition-all shadow-xs"
+                          >
+                            Aplicar Saldo
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-[#888888] dark:text-[#999999] italic">
+                          💡 Si no cuentas con una tarjeta de regalo, omite este campo y elige tu método de pago preferido abajo (Tarjeta, Transferencia SPEI o Efectivo).
+                        </p>
                       </div>
                     )}
                   </div>

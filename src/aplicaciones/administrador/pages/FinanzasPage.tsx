@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   DollarSign, TrendingUp, TrendingDown, PieChart, Calendar, Filter, Plus, 
   Trash2, Edit, FileText, CheckCircle, Clock, ShieldCheck, Tag, CreditCard, 
-  AlertCircle, Download, RefreshCw, Layers, Smartphone, Megaphone, Package
+  AlertCircle, Download, RefreshCw, Layers, Smartphone, Megaphone, Package,
+  Gift, Copy, Share2, Lock
 } from 'lucide-react';
 import { 
   Expense, ExpenseCategory, PaymentMethod, ExpenseStatus, PeriodFilter, FinancialSummary 
@@ -11,6 +12,7 @@ import { getExpenses, addExpense, updateExpense, deleteExpense, getBookingsReven
 import { Booking } from '../../../shared/types';
 import { useToast } from '../../../shared/context/ToastContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
+import { auth } from '../../../lib/firebase';
 
 const INITIAL_SEED_EXPENSES: Omit<Expense, 'id'>[] = [
   {
@@ -123,7 +125,95 @@ export const FinanzasPage: React.FC = () => {
   const [period, setPeriod] = useState<PeriodFilter>('este_mes');
   const [selectedCategory, setSelectedCategory] = useState<string>('todos');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('todos');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'gastos' | 'ingresos' | 'reportes'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'gastos' | 'ingresos' | 'reportes' | 'giftcards'>('dashboard');
+
+  // Gift Cards Management State
+  const [giftCards, setGiftCards] = useState<any[]>([]);
+  const [loadingGiftCards, setLoadingGiftCards] = useState(false);
+  const [showGiftCardModal, setShowGiftCardModal] = useState(false);
+  const [gcCodeInput, setGcCodeInput] = useState('');
+  const [gcRecipientInput, setGcRecipientInput] = useState('');
+  const [gcAmountInput, setGcAmountInput] = useState('1400');
+  const [gcSenderInput, setGcSenderInput] = useState('Administración ESSENYA');
+  const [gcMessageInput, setGcMessageInput] = useState('¡Disfruta de tu sesión de masaje relajante!');
+  const [generatingGc, setGeneratingGc] = useState(false);
+
+  const loadAdminGiftCards = async () => {
+    setLoadingGiftCards(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/admin/gift-cards', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setGiftCards(data.cards || []);
+      }
+    } catch (e) {
+      console.error('Error cargando gift cards:', e);
+    } finally {
+      setLoadingGiftCards(false);
+    }
+  };
+
+  const handleGenerateGiftCard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGeneratingGc(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/admin/gift-cards/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          customCode: gcCodeInput || undefined,
+          recipientName: gcRecipientInput,
+          amount: parseFloat(gcAmountInput) || 1400,
+          senderName: gcSenderInput,
+          customMessage: gcMessageInput
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Tarjeta Generada', `Código: ${data.card.code} con saldo de $${data.card.currentBalance} MXN`, 'success');
+        setShowGiftCardModal(false);
+        setGcCodeInput('');
+        setGcRecipientInput('');
+        loadAdminGiftCards();
+      } else {
+        showToast('Error', data.error || 'No se pudo generar la tarjeta', 'error');
+      }
+    } catch (err: any) {
+      showToast('Error', err.message || 'Error de red', 'error');
+    } finally {
+      setGeneratingGc(false);
+    }
+  };
+
+  const handleActivateGiftCard = async (code: string) => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/admin/gift-cards/activate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ code })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Tarjeta Activada', `La tarjeta ${code} ha sido activada con saldo completo.`, 'success');
+        loadAdminGiftCards();
+      } else {
+        showToast('Error', data.error, 'error');
+      }
+    } catch (err: any) {
+      showToast('Error', err.message, 'error');
+    }
+  };
 
   // Modal State for New/Edit Expense
   const [showExpenseModal, setShowExpenseModal] = useState<boolean>(false);
@@ -379,6 +469,15 @@ export const FinanzasPage: React.FC = () => {
           }`}
         >
           Reportes & Auditoría
+        </button>
+        <button
+          onClick={() => { setActiveTab('giftcards'); loadAdminGiftCards(); }}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'giftcards' ? 'bg-[#C9A55B] text-black shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+          }`}
+        >
+          <Gift className="w-3.5 h-3.5" />
+          Tarjetas de Regalo ({giftCards.length})
         </button>
       </div>
 
@@ -773,6 +872,287 @@ export const FinanzasPage: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* SECCIÓN DE TARJETAS DE REGALO */}
+      {activeTab === 'giftcards' && (
+        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[var(--border-color)] pb-5">
+            <div>
+              <div className="inline-flex items-center space-x-2 bg-[#C9A55B]/15 border border-[#C9A55B]/30 px-3 py-1 rounded-full text-xs font-semibold text-[#806020] dark:text-[#C9A55B] mb-2">
+                <Gift className="w-3.5 h-3.5" />
+                <span>Gestión de Tarjetas de Regalo</span>
+              </div>
+              <h3 className="text-xl font-serif font-bold text-[var(--text-primary)]">
+                Emisión & Control de Tarjetas de Regalo
+              </h3>
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Genera códigos de cortesía prepagados ($1,400 MXN o personalizado), consulta tarjetas activas y valida pagos pendientes.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <LuxuryButton 
+                variant="outline" 
+                size="sm"
+                onClick={loadAdminGiftCards}
+                disabled={loadingGiftCards}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loadingGiftCards ? 'animate-spin' : ''}`} />
+                <span>Actualizar</span>
+              </LuxuryButton>
+
+              <LuxuryButton
+                size="sm"
+                onClick={() => setShowGiftCardModal(true)}
+              >
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                <span>Generar Tarjeta de Regalo</span>
+              </LuxuryButton>
+            </div>
+          </div>
+
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-[var(--bg-subcard)] p-4 rounded-2xl border border-[var(--border-color)]">
+              <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-1">Total Emitidas</span>
+              <span className="text-2xl font-black font-serif text-[var(--text-primary)]">{giftCards.length}</span>
+            </div>
+            <div className="bg-[var(--bg-subcard)] p-4 rounded-2xl border border-[var(--border-color)]">
+              <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-1">Activas / Circulantes</span>
+              <span className="text-2xl font-black font-serif text-emerald-500">
+                {giftCards.filter(c => c.status === 'activa' || c.active === true).length}
+              </span>
+            </div>
+            <div className="bg-[var(--bg-subcard)] p-4 rounded-2xl border border-[var(--border-color)]">
+              <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-1">Saldo en Circulación</span>
+              <span className="text-2xl font-black font-serif text-[#C9A55B]">
+                ${giftCards.reduce((acc, c) => acc + (c.currentBalance || 0), 0).toLocaleString()} MXN
+              </span>
+            </div>
+          </div>
+
+          {/* Cards List */}
+          {loadingGiftCards ? (
+            <div className="py-12 text-center text-xs text-[var(--text-muted)]">Cargando tarjetas de regalo...</div>
+          ) : giftCards.length === 0 ? (
+            <div className="py-12 text-center space-y-3 bg-[var(--bg-subcard)] rounded-2xl border border-dashed border-[var(--border-color)]">
+              <Gift className="w-10 h-10 text-[#C9A55B]/40 mx-auto" />
+              <p className="text-sm font-semibold text-[var(--text-primary)]">No hay tarjetas de regalo emitidas aún</p>
+              <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto">
+                Haz clic en "Generar Tarjeta de Regalo" para emitir el primer código activo (ej. REGALO-ESS-1400) para un cliente especial.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {giftCards.map((gc) => (
+                <div 
+                  key={gc.id} 
+                  className="bg-[var(--bg-subcard)] border border-[var(--border-color)] hover:border-[#C9A55B]/40 rounded-2xl p-5 space-y-3 transition-all"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      gc.status === 'activa' || gc.active === true
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                        : gc.status === 'canjeada'
+                        ? 'bg-blue-500/15 text-blue-500 border-blue-500/30'
+                        : 'bg-amber-500/15 text-amber-500 border-amber-500/30'
+                    }`}>
+                      {gc.status === 'activa' || gc.active === true ? '● Activa' : gc.status === 'canjeada' ? '✓ Canjeada' : '⏳ Pendiente Pago'}
+                    </span>
+                    <span className="text-[11px] text-[var(--text-muted)]">
+                      Vence: {gc.expirationDate || '1 año'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-semibold">Código de Canje</div>
+                    <div className="flex items-center justify-between bg-black/5 dark:bg-black/30 p-2 rounded-xl mt-1 border border-[var(--border-color)]">
+                      <span className="font-mono font-bold text-sm text-[#806020] dark:text-[#E6CA65] select-all">
+                        {gc.code}
+                      </span>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(gc.code);
+                          showToast('Código Copiado', `Código ${gc.code} copiado al portapapeles.`, 'info');
+                        }}
+                        className="text-[var(--text-muted)] hover:text-[#C9A55B] p-1 rounded transition-colors"
+                        title="Copiar código"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 text-[10px] text-amber-600 dark:text-amber-400 font-semibold bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                    <Lock className="w-3 h-3 flex-shrink-0" />
+                    <span>Uso Único Garantizado (Se quema al canjear)</span>
+                  </div>
+
+                  <div className="text-xs space-y-1 pt-1">
+                    <div className="flex justify-between">
+                      <span className="text-[var(--text-muted)]">Beneficiario:</span>
+                      <span className="font-semibold text-[var(--text-primary)]">{gc.recipientName || 'Alguien especial'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[var(--text-muted)]">Remitente:</span>
+                      <span className="text-[var(--text-primary)]">{gc.senderName || 'ESSENYA'}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-[var(--border-color)] pt-1 mt-1">
+                      <span className="font-bold text-[var(--text-primary)]">Saldo Disponible:</span>
+                      <span className="font-bold text-[#C9A55B] font-mono">${(gc.currentBalance || 0).toLocaleString()} MXN</span>
+                    </div>
+                  </div>
+
+                  {/* WhatsApp Message Copier */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const msg = `🎁 *¡Hola ${gc.recipientName || 'Especial'}!*\n` +
+                        `Te compartimos tu Tarjeta de Regalo ESSENYA por *$${(gc.initialAmount || 1400).toLocaleString()} MXN*.\n\n` +
+                        `🎟️ *Código de Uso Único:* ${gc.code}\n` +
+                        `💆 *Servicio:* Válido para cualquier masaje a domicilio de nuestra carta oficial.\n` +
+                        `📅 *Vigencia:* ${gc.expirationDate || '1 año'}\n\n` +
+                        `👉 Para utilizarlo, sólo ingresa este código al momento de agendar tu cita en la plataforma ESSENYA. ¡Que disfrutes tu experiencia de bienestar! ✨`;
+                      navigator.clipboard.writeText(msg);
+                      showToast('Mensaje Copiado', 'Texto para WhatsApp copiado al portapapeles listo para enviar al cliente.', 'success');
+                    }}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 bg-[#C9A55B]/15 hover:bg-[#C9A55B]/25 text-[#806020] dark:text-[#E6CA65] border border-[#C9A55B]/30 rounded-xl text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>Copiar Voucher para WhatsApp</span>
+                  </button>
+
+                  {gc.status === 'pendiente_pago' && (
+                    <button
+                      type="button"
+                      onClick={() => handleActivateGiftCard(gc.code)}
+                      className="w-full mt-2 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition-all shadow-xs"
+                    >
+                      ✓ Confirmar Pago y Activar ($1,400)
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MODAL PARA GENERAR TARJETA DE REGALO */}
+      {showGiftCardModal && (
+        <div 
+          onClick={() => setShowGiftCardModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl relative text-[var(--text-primary)]"
+          >
+            <div className="flex items-center space-x-2 text-[#C9A55B]">
+              <Gift className="w-5 h-5" />
+              <h3 className="text-lg font-serif font-bold text-[var(--text-primary)]">
+                Vender / Emitir Tarjeta de Regalo
+              </h3>
+            </div>
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-[11px] text-amber-700 dark:text-amber-300 space-y-1">
+              <div className="font-bold flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5" />
+                <span>Garantía de Uso Único:</span>
+              </div>
+              <p>
+                Al generar este código, quedará activo de inmediato. Cuando el cliente lo ingrese en su reserva o en su billetera, el sistema lo marcará como <strong>Canjeado</strong> y no podrá volver a usarse.
+              </p>
+            </div>
+
+            <form onSubmit={handleGenerateGiftCard} className="space-y-3.5 pt-2">
+              <div>
+                <label className="text-xs font-bold text-[var(--text-primary)] block mb-1">
+                  Código Personalizado (Opcional)
+                </label>
+                <input 
+                  type="text" 
+                  value={gcCodeInput}
+                  onChange={(e) => setGcCodeInput(e.target.value.toUpperCase())}
+                  placeholder="ej. REGALO-ESS-1400 (o déjalo vacío para automático)"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3.5 py-2 text-xs font-mono uppercase focus:outline-none focus:border-[#C9A55B]"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-[var(--text-primary)] block mb-1">
+                  Monto / Saldo en Tarjeta (MXN)
+                </label>
+                <input 
+                  type="number" 
+                  value={gcAmountInput}
+                  onChange={(e) => setGcAmountInput(e.target.value)}
+                  placeholder="1400"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3.5 py-2 text-xs font-bold focus:outline-none focus:border-[#C9A55B]"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-[var(--text-primary)] block mb-1">
+                  Nombre del Destinatario (Beneficiario)
+                </label>
+                <input 
+                  type="text" 
+                  value={gcRecipientInput}
+                  onChange={(e) => setGcRecipientInput(e.target.value)}
+                  placeholder="ej. María Morales"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:border-[#C9A55B]"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-[var(--text-primary)] block mb-1">
+                  Nombre de Quien Envía (Remitente)
+                </label>
+                <input 
+                  type="text" 
+                  value={gcSenderInput}
+                  onChange={(e) => setGcSenderInput(e.target.value)}
+                  placeholder="ej. Administración ESSENYA"
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:border-[#C9A55B]"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-[var(--text-primary)] block mb-1">
+                  Mensaje Especial
+                </label>
+                <textarea 
+                  value={gcMessageInput}
+                  onChange={(e) => setGcMessageInput(e.target.value)}
+                  rows={2}
+                  className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:border-[#C9A55B]"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-3 border-t border-[var(--border-color)]">
+                <LuxuryButton
+                  variant="outline"
+                  className="w-1/2"
+                  type="button"
+                  onClick={() => setShowGiftCardModal(false)}
+                >
+                  Cancelar
+                </LuxuryButton>
+                <LuxuryButton
+                  className="w-1/2"
+                  type="submit"
+                  disabled={generatingGc}
+                >
+                  {generatingGc ? 'Emitiendo...' : 'Crear y Activar'}
+                </LuxuryButton>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -62,6 +62,8 @@ export interface Therapist {
   vehicleType: 'Auto Ejecutivo' | 'SUV Premium' | 'Servicio Chofer';
   lat: number;
   lng: number;
+  lastLocationUpdate?: string;
+  estado?: 'activo' | 'bloqueado' | 'pendiente';
   specialties?: string[];
   completedServicesCount?: number;
 }
@@ -98,6 +100,31 @@ export interface ServicePreference {
   focusAreas?: string[];
 }
 
+export type DispatchState = 'buscando' | 'asignada' | 'sin_disponibilidad' | 'cancelada';
+
+export interface DispatchLevelConfig {
+  maxEtaMinutes: number;
+  responseWindowSeconds: number;
+}
+
+export interface DispatchOffer {
+  therapistId: string;
+  therapistName?: string;
+  etaMinutes: number;
+  level: number;
+  offeredAt: string;
+  expiresAt: string;
+}
+
+export interface DispatchHistoryItem {
+  therapistId: string;
+  therapistName?: string;
+  level: number;
+  etaMinutes: number;
+  action: 'contacted' | 'rejected' | 'timeout' | 'accepted';
+  timestamp: string;
+}
+
 export interface Booking {
   id: string;
   code: string; // e.g. ESS-8921
@@ -106,6 +133,8 @@ export interface Booking {
   clientPhone: string;
   clientAddress: string;
   cityZone: string;
+  clientLat?: number;
+  clientLng?: number;
   therapistId?: string;
   therapistName?: string;
   therapistPhoto?: string;
@@ -129,6 +158,15 @@ export interface Booking {
   etaMinutes: number;
   liveLat?: number;
   liveLng?: number;
+  // Dispatch engine telemetry fields
+  dispatchState?: DispatchState;
+  currentDispatchLevel?: number;
+  dispatchStartedAt?: string;
+  dispatchLevelStartedAt?: string;
+  dispatchExpiresAt?: string;
+  activeOfferTherapistIds?: string[];
+  activeOffers?: DispatchOffer[];
+  dispatchHistory?: DispatchHistoryItem[];
   paymentMethod: 'Tarjeta de Crédito / Débito' | 'Tarjeta Crédito VIP' | 'Transferencia Interbancaria (SPEI)' | 'Transferencia Bank VIP' | 'Efectivo (Pago al Recibir)' | 'Tarjeta de Regalo (Saldo Billetera)';
   paymentStatus: 'pagado' | 'pendiente' | 'reembolsado' | 'rechazado';
   applyGiftCard?: boolean;

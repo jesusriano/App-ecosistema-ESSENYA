@@ -837,12 +837,15 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
           // Normal single therapist booking
           updatePayload = {
             state: 'aceptada',
+            dispatchState: 'asignada',
             therapistId: updatedTherapistId,
             therapistName: updatedTherapistName,
             therapistPhoto: updatedTherapistPhoto,
             therapistPhone: updatedTherapistPhone,
             therapistIds: [updatedTherapistId],
             assignedTherapistsCount: 1,
+            activeOfferTherapistIds: [],
+            activeOffers: [],
             acceptedAt: nowIso,
             updatedAt: nowIso,
           };
@@ -965,6 +968,19 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     const bookingRef = doc(db, 'reservas', bookingId);
     
     try {
+      if (firebaseUser) {
+        try {
+          const token = await firebaseUser.getIdToken();
+          fetch('/api/dispatch/reject', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ bookingId, reason: reason || 'Declinada por terapeuta' })
+          }).catch(e => console.warn('[Dispatch] Server reject error:', e));
+        } catch (e) {
+          // Non-blocking
+        }
+      }
+
       await updateDoc(bookingRef, {
         rejectedBy: arrayUnion(therapistId),
         updatedAt: new Date().toISOString()

@@ -100,16 +100,19 @@ export const BilleteraPage: React.FC<BilleteraPageProps> = ({ onGoToReservas }) 
               <Gift className="w-4 h-4 text-[#C9A55B]" />
               Canjear Tarjeta de Regalo
             </h4>
+            <p className="text-[11px] text-[var(--text-muted)] mb-3 leading-relaxed">
+              Introduce el código de regalo que te obsequiaron (ej. <strong className="text-[#C9A55B] font-mono">REGALO-ESS-1400</strong>) para abonar su saldo a tu cuenta.
+            </p>
             <div className="space-y-3">
               <input 
                 type="text" 
                 placeholder="REGALO-ESS-1234" 
-                className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#C9A55B] text-[var(--text-primary)]"
+                className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm font-mono uppercase focus:outline-none focus:border-[#C9A55B] text-[var(--text-primary)]"
                 value={redeemCode}
-                onChange={(e) => setRedeemCode(e.target.value)}
+                onChange={(e) => setRedeemCode(e.target.value.toUpperCase())}
               />
               <LuxuryButton className="w-full" onClick={handleRedeem} disabled={redeemLoading || !redeemCode}>
-                {redeemLoading ? 'Verificando...' : 'Canjear Código'}
+                {redeemLoading ? 'Verificando...' : 'Canjear Código a mi Billetera'}
               </LuxuryButton>
               {message && (
                 <div className={`p-3 rounded-xl text-xs flex items-start gap-2 ${message.type === 'error' ? 'bg-red-500/10 text-red-500' : 'bg-green-500/10 text-green-600'}`}>
@@ -117,6 +120,11 @@ export const BilleteraPage: React.FC<BilleteraPageProps> = ({ onGoToReservas }) 
                   <p>{message.text}</p>
                 </div>
               )}
+            </div>
+
+            <div className="mt-4 p-3 bg-[#FAF8F5] dark:bg-[#1E1E1E] rounded-xl border border-[var(--border-color)] text-[11px] text-[var(--text-muted)] space-y-1">
+              <span className="font-bold text-[var(--text-primary)] block">¿Cómo usarlo al reservar?</span>
+              <p>También puedes ingresar este mismo código directamente en la pantalla de pago al agendar cualquier masaje a domicilio para cubrir su costo total o parcial.</p>
             </div>
           </div>
         </div>
