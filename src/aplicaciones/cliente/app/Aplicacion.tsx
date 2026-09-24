@@ -2215,29 +2215,6 @@ export const ClientApp: React.FC<ClientAppProps> = ({
               </div>
             </div>
 
-            {/* WhatsApp Payment Receipt Banner */}
-            <div className="bg-gradient-to-r from-emerald-950/30 via-[#141414] to-emerald-950/20 dark:bg-[#141414] p-6 rounded-2xl border border-emerald-500/40 flex flex-col md:flex-row items-center justify-between gap-6 shadow-md">
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-500 shrink-0">
-                  <MessageSquare className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-serif font-bold text-[#1C1917] dark:text-white">Envía tu Comprobante de Pago por WhatsApp</h4>
-                  <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] mt-0.5">
-                    Para validar tu reserva <span className="font-mono font-bold text-[#C9A55B]">{activeBooking.code}</span> por <span className="font-bold text-[#1C1917] dark:text-white">${activeBooking.total?.toLocaleString()} MXN</span>, envía tu comprobante directamente con nuestro Concierge.
-                  </p>
-                </div>
-              </div>
-              <WhatsAppButton
-                phoneNumber="525511318971"
-                message={`Hola Concierge ESSENYA, acabo de reservar la cita ${activeBooking.code} para ${activeBooking.serviceName} ($${activeBooking.total} MXN). Adjunto mi comprobante de pago.`}
-                buttonText="Enviar Comprobante por WhatsApp"
-                variant="primary"
-                size="md"
-                className="whitespace-nowrap shrink-0"
-              />
-            </div>
-
             {/* Stepper Status Bar */}
             <div className="bg-white dark:bg-[#141414] p-6 rounded-2xl border border-[#E5DFD3] dark:border-[#C9A55B]/20 space-y-4 shadow-sm">
               <h4 className="text-xs uppercase text-[#6B655F] dark:text-[#AAAAAA] tracking-wider font-semibold">Estado de Progreso en Tiempo Real</h4>
