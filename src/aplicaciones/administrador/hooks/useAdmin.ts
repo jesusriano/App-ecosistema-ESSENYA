@@ -37,6 +37,7 @@ export const useAdmin = () => {
     handleCancelBooking: ecosystem.handleCancelBooking,
     handleConfirmPayment: ecosystem.handleConfirmPayment,
     handleRejectPayment: ecosystem.handleRejectPayment,
+    handleDeleteBooking: ecosystem.handleDeleteBooking,
     panicAlerts: ecosystem.panicAlerts,
     activePanicAlertsCount: ecosystem.activePanicAlertsCount,
     handleResolvePanicAlert: ecosystem.handleResolvePanicAlert,

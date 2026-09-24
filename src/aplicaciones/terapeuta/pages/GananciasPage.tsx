@@ -6,7 +6,9 @@ export const GananciasPage: React.FC = () => {
   const { bookings, therapist } = useTerapeuta();
 
   const completed = bookings.filter(b => b.state === 'servicio_finalizado');
-  const totalEarnings = completed.reduce((acc, b) => acc + ((b.total || b.price || 0) * 0.70), 0) + 1450; // Base minimum guaranteed earnings
+  const totalEarnings = completed.reduce((acc, b) => acc + Math.round(((b.durationMinutes || 60) / 60) * 650), 0);
+  const totalTips = completed.reduce((acc, b) => acc + (b.tip || 0), 0);
+  const completedCount = completed.length;
 
   return (
     <div className="space-y-6">
@@ -32,13 +34,13 @@ export const GananciasPage: React.FC = () => {
 
         <div className="bg-white dark:bg-[#141414] border border-[#E5DFD3] dark:border-[#262626] rounded-2xl p-5 space-y-2">
           <span className="text-[#6B655F] dark:text-[#888888] text-xs font-semibold block">Propinas Recibidas</span>
-          <p className="text-2xl font-serif font-bold text-[#1C1917] dark:text-white">$1,850 MXN</p>
+          <p className="text-2xl font-serif font-bold text-[#1C1917] dark:text-white">${totalTips.toLocaleString()} MXN</p>
           <span className="text-[10px] text-[#6B655F] dark:text-[#888888]">100% abonado directo a tu cuenta</span>
         </div>
 
         <div className="bg-white dark:bg-[#141414] border border-[#E5DFD3] dark:border-[#262626] rounded-2xl p-5 space-y-2">
           <span className="text-[#6B655F] dark:text-[#888888] text-xs font-semibold block">Servicios Completados</span>
-          <p className="text-2xl font-serif font-bold text-[#1C1917] dark:text-white">{therapist?.totalServices || 342}</p>
+          <p className="text-2xl font-serif font-bold text-[#1C1917] dark:text-white">{completedCount} Sesiones</p>
           <span className="text-[10px] text-[#806020] dark:text-[#C9A55B] font-bold">Nivel Senior Certificado</span>
         </div>
       </div>

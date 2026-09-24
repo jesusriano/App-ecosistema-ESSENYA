@@ -66,6 +66,7 @@ interface EcosystemContextType {
   handleCancelBooking: (bookingId: string, reason: string) => void;
   handleConfirmPayment: (bookingId: string) => void;
   handleRejectPayment: (bookingId: string, reason: string) => void;
+  handleDeleteBooking: (bookingId: string) => Promise<void>;
   handleDataCleanup: () => Promise<boolean | void>;
   handleUpdateLiveLocation: (bookingId: string, lat: number, lng: number) => Promise<void>;
   handleResolvePanicAlert: (alertId: string, adminName?: string) => Promise<void>;
@@ -1773,6 +1774,26 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     );
   };
 
+  const handleDeleteBooking = async (bookingId: string) => {
+    const bookingToDelete = bookings.find(b => b.id === bookingId);
+    if (!bookingToDelete) return;
+
+    setBookings(prev => prev.filter(b => b.id !== bookingId));
+
+    try {
+      await deleteDoc(doc(db, 'reservas', bookingId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `reservas/${bookingId}`);
+    }
+
+    addLog(
+      'Administrador',
+      'Panel Admin',
+      'Eliminación de Solicitud/Reserva',
+      `La solicitud ${bookingToDelete.code} (${bookingToDelete.serviceName}) ha sido eliminada por administración.`
+    );
+  };
+
   // Booking Operational Handlers
   const handleRescheduleBooking = async (bookingId: string, newDate: string, newTime: string) => {
     setBookings(prev => prev.map(b => {
@@ -2025,6 +2046,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     handleCancelBooking,
     handleConfirmPayment,
     handleRejectPayment,
+    handleDeleteBooking,
     handleDataCleanup,
     handleUpdateLiveLocation,
     handleResolvePanicAlert,
@@ -2047,7 +2069,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     handleToggleServiceActive, handleBulkToggleServices,
     handleAddClient, handleEditClient, handleToggleBlockClient, handleDeleteClient,
     handleRescheduleBooking, handleCancelBooking, handleConfirmPayment,
-    handleRejectPayment, handleDataCleanup, handleUpdateLiveLocation,
+    handleRejectPayment, handleDeleteBooking, handleDataCleanup, handleUpdateLiveLocation,
     handleResolvePanicAlert, handleAttendPanicAlert, handleUpdateSystemConfig, completedServicesCount,
     activeBookingCount, pendingQueue.length, systemConfig
   ]);

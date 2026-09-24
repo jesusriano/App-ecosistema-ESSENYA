@@ -2189,7 +2189,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                 </div>
               </div>
               <WhatsAppButton
-                phoneNumber="525512345678"
+                phoneNumber="525511318971"
                 message={`Hola Concierge ESSENYA, acabo de reservar la cita ${activeBooking.code} para ${activeBooking.serviceName} ($${activeBooking.total} MXN). Adjunto mi comprobante de pago.`}
                 buttonText="Enviar Comprobante por WhatsApp"
                 variant="primary"

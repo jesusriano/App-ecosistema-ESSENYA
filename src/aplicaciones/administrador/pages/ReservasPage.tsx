@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Calendar, Search, Filter, RefreshCw, UserCheck, Clock, MapPin, 
   Sparkles, CheckCircle2, AlertTriangle, X, ShieldAlert, FileText, Check, ChevronRight, ChevronDown, Banknote,
-  Radio, Navigation, Zap, MessageSquare
+  Radio, Navigation, Zap, MessageSquare, Trash2
 } from 'lucide-react';
 import { useAdmin } from '../hooks/useAdmin';
 import { useToast } from '../../../shared/context/ToastContext';
@@ -89,7 +89,8 @@ export const ReservasPage: React.FC = () => {
   const { 
     bookings, therapists, handleUpdateBookingState, 
     handleReassignTherapist, handleRescheduleBooking, handleCancelBooking,
-    handleAdminAcceptBooking, handleAdminRejectBooking, handleConfirmPayment
+    handleAdminAcceptBooking, handleAdminRejectBooking, handleConfirmPayment,
+    handleDeleteBooking
   } = useAdmin();
   const { showToast } = useToast();
 
@@ -152,6 +153,17 @@ export const ReservasPage: React.FC = () => {
       setProcessingId(null);
     }
   };
+  const onDeleteBooking = async (b: Booking) => {
+    if (window.confirm(`¿Estás seguro de eliminar permanentemente la solicitud ${b.code} (${b.serviceName})? Los registros de finanzas permanecerán intactos.`)) {
+      try {
+        await handleDeleteBooking(b.id);
+        showToast(`Solicitud ${b.code} eliminada exitosamente.`);
+      } catch (err: any) {
+        showToast('Error al eliminar la solicitud.', 'error');
+      }
+    }
+  };
+
   // Filter Bookings
   const filteredBookings = (bookings || [])
     .filter(Boolean)
@@ -517,6 +529,14 @@ export const ReservasPage: React.FC = () => {
                               Cancelar
                             </button>
                           )}
+
+                          <button
+                            onClick={() => onDeleteBooking(b)}
+                            className="p-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-500 dark:text-red-400 rounded-xl transition-all cursor-pointer"
+                            title="Eliminar solicitud/reserva (Finanzas intactas)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       )}
                     </div>

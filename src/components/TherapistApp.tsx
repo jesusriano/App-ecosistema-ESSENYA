@@ -1637,8 +1637,8 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-[#141414] p-5 rounded-2xl border border-[#C9A55B]/30">
-                <span className="text-xs text-[#888888] uppercase block">Total Ganancias ($650/sesión)</span>
-                <span className="text-2xl font-bold text-gold-gradient">${(mergedCompletedBookings.length * 650 + mergedCompletedBookings.reduce((sum, b) => sum + (b.tip || 0), 0)).toLocaleString()} MXN</span>
+                <span className="text-xs text-[#888888] uppercase block">Total Ganancias ($650/hr)</span>
+                <span className="text-2xl font-bold text-gold-gradient">${(mergedCompletedBookings.reduce((sum, b) => sum + Math.round(((b.durationMinutes || 60) / 60) * 650), 0) + mergedCompletedBookings.reduce((sum, b) => sum + (b.tip || 0), 0)).toLocaleString()} MXN</span>
               </div>
 
               <div className="bg-[#141414] p-5 rounded-2xl border border-[#C9A55B]/30">
@@ -1745,7 +1745,9 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
 
             {/* Scrollable List Container */}
             <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 no-scrollbar">
-              {filteredCompletedBookings.map((bk) => (
+              {filteredCompletedBookings.map((bk) => {
+                const sessionRate = Math.round(((bk.durationMinutes || 60) / 60) * 650);
+                return (
                 <div
                   key={bk.id}
                   className="bg-white dark:bg-[#141414] p-5 rounded-2xl border border-[#E5DFD3] dark:border-[#C9A55B]/20 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-[#C9A55B]/40 dark:hover:border-[#C9A55B]/40 transition-all duration-300 shadow-md"
@@ -1809,8 +1811,8 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                       <table className="w-full text-left border-collapse">
                         <tbody className="divide-y divide-[#E5DFD3] dark:divide-[#333333]">
                           <tr>
-                            <td className="px-4 py-2 text-[10px] text-[#6B655F] dark:text-[#888888] uppercase tracking-wider font-bold">Tarifa Sesión</td>
-                            <td className="px-4 py-2 text-xs font-bold text-[#1C1917] dark:text-white text-right font-mono">$650</td>
+                            <td className="px-4 py-2 text-[10px] text-[#6B655F] dark:text-[#888888] uppercase tracking-wider font-bold">Tarifa Sesión ({bk.durationMinutes || 60}m)</td>
+                            <td className="px-4 py-2 text-xs font-bold text-[#1C1917] dark:text-white text-right font-mono">${sessionRate}</td>
                           </tr>
                           <tr>
                             <td className="px-4 py-2 text-[10px] text-[#6B655F] dark:text-[#888888] uppercase tracking-wider font-bold">Propina</td>
@@ -1818,14 +1820,15 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                           </tr>
                           <tr className="bg-[#C9A55B]/10 dark:bg-[#C9A55B]/5">
                             <td className="px-4 py-2 text-[10px] text-[#806020] dark:text-[#C9A55B] uppercase tracking-wider font-black">Pago Total</td>
-                            <td className="px-4 py-2 text-sm font-black text-[#806020] dark:text-[#C9A55B] text-right font-mono">${(650 + (bk.tip || 0)).toLocaleString()}</td>
+                            <td className="px-4 py-2 text-sm font-black text-[#806020] dark:text-[#C9A55B] text-right font-mono">${(sessionRate + (bk.tip || 0)).toLocaleString()}</td>
                           </tr>
                         </tbody>
                       </table>
                     </div>
                   </div>
                 </div>
-              ))}
+              );
+              })}
 
               {filteredCompletedBookings.length === 0 && (
                 <div className="bg-white dark:bg-[#141414] p-8 rounded-2xl border border-[#E5DFD3] dark:border-[#333333] text-center space-y-2 text-[#6B655F] dark:text-[#888888]">
