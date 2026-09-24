@@ -149,8 +149,6 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </button>
 
-          <PWAInstallButton />
-
           <a
             href="https://essenyamexico.com"
             target="_blank"

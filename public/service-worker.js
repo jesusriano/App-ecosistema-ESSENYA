@@ -17,6 +17,7 @@ self.addEventListener('push', (event) => {
     url: '/',
     tag: 'essenya-notification',
     soundPreset: 'classic',
+    sound: '/sounds/notification_default.mp3',
     data: { type: 'general' }
   };
 
@@ -30,7 +31,8 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  // Map sound preset to sound file if needed or vibrate pattern
+  const soundFile = data.sound || (data.soundPreset ? `/sounds/${data.soundPreset}.mp3` : '/sounds/notification_default.mp3');
+
   const vibrateMap = {
     classic: [200, 100, 200],
     bell: [300, 150, 300, 150],
@@ -44,8 +46,10 @@ self.addEventListener('push', (event) => {
     icon: data.icon || '/icons/icon-192.png',
     badge: data.badge || '/icons/badge-72.png',
     tag: data.tag || 'essenya-notification',
+    sound: soundFile,
     data: {
       url: data.url || '/',
+      sound: soundFile,
       soundPreset: data.soundPreset || 'classic',
       ...data.data
     },
@@ -54,7 +58,17 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    (async () => {
+      await self.registration.showNotification(data.title, options);
+      const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const client of allClients) {
+        client.postMessage({
+          type: 'PUSH_NOTIFICATION_RECEIVED',
+          payload: data,
+          sound: soundFile
+        });
+      }
+    })()
   );
 });
 

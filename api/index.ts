@@ -2,23 +2,42 @@ import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import fs from "fs";
 import webPush from "web-push";
+import { sendPushNotificationToUser } from "./pushNotificationService.js";
 import * as adminApp from "firebase-admin/app";
 import * as adminAuth from "firebase-admin/auth";
 import * as adminFirestore from "firebase-admin/firestore";
 
-// Initialize VAPID Keys for Web Push
+// Initialize VAPID Keys for Web Push with persistent file storage
 let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY;
 let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
 
+const vapidFilePath = path.join(process.cwd(), 'vapid-keys.json');
+
 if (!vapidPublicKey || !vapidPrivateKey) {
-  try {
-    const vapidKeys = webPush.generateVAPIDKeys();
-    vapidPublicKey = vapidKeys.publicKey;
-    vapidPrivateKey = vapidKeys.privateKey;
-    console.log('[WebPush] Auto-generated VAPID keys for backend.');
-  } catch (err) {
-    vapidPublicKey = vapidPublicKey || 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nwh8W4';
-    vapidPrivateKey = vapidPrivateKey || 'v8_private_key_placeholder';
+  if (fs.existsSync(vapidFilePath)) {
+    try {
+      const savedKeys = JSON.parse(fs.readFileSync(vapidFilePath, 'utf-8'));
+      if (savedKeys.publicKey && savedKeys.privateKey) {
+        vapidPublicKey = savedKeys.publicKey;
+        vapidPrivateKey = savedKeys.privateKey;
+        console.log('[WebPush] Loaded VAPID keys from persistent file.');
+      }
+    } catch (e) {
+      console.warn('[WebPush] Failed to read vapid-keys.json:', e);
+    }
+  }
+
+  if (!vapidPublicKey || !vapidPrivateKey) {
+    try {
+      const vapidKeys = webPush.generateVAPIDKeys();
+      vapidPublicKey = vapidKeys.publicKey;
+      vapidPrivateKey = vapidKeys.privateKey;
+      fs.writeFileSync(vapidFilePath, JSON.stringify({ publicKey: vapidPublicKey, privateKey: vapidPrivateKey }, null, 2));
+      console.log('[WebPush] Auto-generated and persisted new VAPID keys.');
+    } catch (err) {
+      vapidPublicKey = vapidPublicKey || 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nwh8W4';
+      vapidPrivateKey = vapidPrivateKey || 'v8_private_key_placeholder';
+    }
   }
 }
 
@@ -2677,6 +2696,72 @@ app.put("/api/dispatch/config", requireAdmin, async (req: Request, res: Response
 
     await getAdminFirestore().collection('configuraciones').doc('dispatch').set(payload, { merge: true });
     res.json({ success: true, message: "Configuración de despacho actualizada" });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ========================================================
+// POST /api/bookings/state - Update booking state & notify with sound
+// ========================================================
+app.post("/api/bookings/state", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { bookingId, state } = req.body;
+    if (!bookingId || !state) {
+      return res.status(400).json({ success: false, error: "bookingId y state son requeridos" });
+    }
+
+    const db = getAdminFirestore();
+    const bookingRef = db.collection("reservas").doc(bookingId);
+    const bookingSnap = await bookingRef.get();
+    if (!bookingSnap.exists) {
+      return res.status(404).json({ success: false, error: "Reserva no encontrada" });
+    }
+
+    const bookingData = bookingSnap.data()!;
+    const nowIso = new Date().toISOString();
+    await bookingRef.update({ state, updatedAt: nowIso });
+
+    let title = "Actualización de Servicio";
+    let body = `Tu reserva #${bookingData.code || bookingId} ha cambiado a estado: ${state}`;
+    let sound = "/sounds/notification_default.mp3";
+    let soundPreset: string = "classic";
+
+    if (state === "en_camino") {
+      title = "🚗 Terapeuta En Camino";
+      body = `${bookingData.therapistName || "Tu terapeuta"} va en camino a tu domicilio.`;
+      sound = "/sounds/notification_arrived.mp3";
+      soundPreset = "bell";
+    } else if (state === "llegue") {
+      title = "📍 ¡Terapeuta Ha Llegado!";
+      body = `${bookingData.therapistName || "Tu terapeuta"} ha llegado al domicilio.`;
+      sound = "/sounds/notification_arrived.mp3";
+      soundPreset = "alert";
+    } else if (state === "servicio_iniciado") {
+      title = "🌸 Sesión Iniciada";
+      body = `Tu masaje ${bookingData.serviceName || ""} ha comenzado. ¡Disfruta la experiencia ESSENYA!`;
+      sound = "/sounds/notification_started.mp3";
+      soundPreset = "soft";
+    } else if (state === "servicio_finalizado") {
+      title = "✨ Sesión Finalizada";
+      body = `Tu experiencia ha concluido con éxito. ¡Gracias por confiar en ESSENYA!`;
+      sound = "/sounds/notification_completed.mp3";
+      soundPreset = "classic";
+    }
+
+    if (bookingData.clientId) {
+      sendPushNotificationToUser(db, bookingData.clientId, {
+        title,
+        body,
+        url: "/cliente",
+        tag: `booking-state-${bookingId}`,
+        soundPreset,
+        sound,
+        data: { type: "booking_state_update", bookingId, state }
+      }).catch(e => console.warn("[Push] Error sending booking state push:", e));
+    }
+
+    res.json({ success: true, message: "Estado actualizado y notificación enviada." });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

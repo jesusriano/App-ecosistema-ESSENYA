@@ -20,6 +20,7 @@ import {
   LocateFixed, Crown, Gem, Shield, Gift, Wallet, Lock
 } from 'lucide-react';
 import { PanicModal } from '../../../shared/components/PanicModal';
+import { BookingChatDrawer } from '../../../shared/components/BookingChatDrawer';
 import { WhatsAppButton } from '../../../shared/components/WhatsAppButton';
 import { TechSupportWhatsAppButton } from '../../../shared/components/TechSupportWhatsAppButton';
 import { LiveTrackingMap } from '../../../shared/components/LiveTrackingMap';
@@ -781,23 +782,8 @@ export const ClientApp: React.FC<ClientAppProps> = ({
             </div>
           </div>
 
-          {/* Quick Stats & AI Concierge Trigger & Panic SOS */}
+          {/* Quick Stats & AI Concierge Trigger */}
           <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 w-full md:w-auto">
-            <LuxuryButton
-              onClick={() => {
-                setShowPanicModal(true);
-                showToast('Protocolo de Seguridad SOS', 'Activando geolocalización de emergencia...', 'error');
-              }}
-              variant="danger"
-              size="sm"
-              id="panic-sos-btn"
-              title="Botón de Pánico / Seguridad 24/7"
-              className="py-2.5"
-            >
-              <AlertTriangle className="w-4 h-4" />
-              <span className="inline text-xs">Pánico SOS</span>
-            </LuxuryButton>
-
             <LuxuryButton
               onClick={() => setShowAiConcierge(true)}
               variant="gold"
@@ -1890,7 +1876,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                   )}
                 </div>
 
-                {/* Tarjeta de Regalo Recibida ($1,400 MXN) — Billetera ESSENYA Section */}
+                {/* Tarjeta de Regalo / Billetera ESSENYA Info */}
                 <div className="pt-2">
                   <div className="bg-gradient-to-br from-[#FAF8F5] via-white to-[#FAF8F5] dark:from-[#1A1A1A] dark:via-[#141414] dark:to-[#1A1A1A] p-4 rounded-2xl border border-[#C9A55B]/40 space-y-3 shadow-xs">
                     <div className="flex justify-between items-center">
@@ -1901,14 +1887,14 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold text-[#1C1917] dark:text-white block">
-                              ¿Tienes una Tarjeta de Regalo ESSENYA?
+                              Billetera & Tarjetas de Regalo ESSENYA
                             </span>
                             <span className="text-[9px] font-semibold bg-[#C9A55B]/15 text-[#806020] dark:text-[#E6CA65] border border-[#C9A55B]/30 px-1.5 py-0.2 rounded">
-                              Opcional
+                              Oficial
                             </span>
                           </div>
                           <span className="text-[10px] text-[#6B655F] dark:text-[#AAAAAA]">
-                            Si te regalaron un código de cortesía, ingrésalo aquí para cubrir el valor de tu cita ($1,400 MXN).
+                            Los códigos oficiales de regalo son generados por administración y se canjean directamente en tu Billetera.
                           </span>
                         </div>
                       </div>
@@ -1920,23 +1906,19 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                       )}
                     </div>
 
-                    {appliedGiftCard ? (
+                    {appliedGiftCard && (
                       <div className="bg-white dark:bg-[#202020] p-3 rounded-xl border border-[#C9A55B]/30 space-y-2 text-xs">
                         <div className="flex justify-between items-center">
                           <span className="text-[#6B655F] dark:text-[#AAAAAA]">Tarjeta Activa:</span>
                           <span className="font-mono font-bold text-[#806020] dark:text-[#E6CA65]">{appliedGiftCard.code}</span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-[#6B655F] dark:text-[#AAAAAA]">Saldo Total en Tarjeta:</span>
+                          <span className="text-[#6B655F] dark:text-[#AAAAAA]">Saldo Total:</span>
                           <span className="font-bold text-[#1C1917] dark:text-white">${appliedGiftCard.currentBalance.toLocaleString()} MXN</span>
                         </div>
                         <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400 font-bold">
                           <span>Saldo a Descontar en esta Cita:</span>
                           <span>-${giftCardDeduction.toLocaleString()} MXN</span>
-                        </div>
-                        <div className="flex justify-between items-center text-[#806020] dark:text-[#E6CA65] font-semibold border-t border-dashed border-[#E5DFD3] dark:border-[#333333] pt-1.5 text-[11px]">
-                          <span>Saldo Remanente Conservado:</span>
-                          <span>${giftCardRemainingBalance.toLocaleString()} MXN</span>
                         </div>
                         <div className="pt-1 flex justify-end">
                           <button
@@ -1947,28 +1929,6 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                             Quitar Tarjeta de Regalo
                           </button>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-1.5">
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <input
-                            type="text"
-                            value={giftCardCodeInput}
-                            onChange={(e) => setGiftCardCodeInput(e.target.value)}
-                            placeholder="Código de regalo (ej. REGALO-ESS-1400) — Dejar vacío si no tienes"
-                            className="flex-1 bg-white dark:bg-[#202020] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-3 py-2 text-xs text-[#1C1917] dark:text-white uppercase focus:outline-none focus:border-[#C9A55B]"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleApplyGiftCard()}
-                            className="px-4 py-2 bg-[#C9A55B] hover:bg-[#E6CA65] text-black font-bold text-xs rounded-xl transition-all shadow-xs"
-                          >
-                            Aplicar Saldo
-                          </button>
-                        </div>
-                        <p className="text-[10px] text-[#888888] dark:text-[#999999] italic">
-                          💡 Si no cuentas con una tarjeta de regalo, omite este campo y elige tu método de pago preferido abajo (Tarjeta, Transferencia SPEI o Efectivo).
-                        </p>
                       </div>
                     )}
                   </div>
@@ -2398,7 +2358,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                       <p className="text-xs text-[#806020] dark:text-[#C9A55B] font-semibold">
                         {(activeBooking.requiresDualTherapist || activeBooking.serviceId === 'srv-pareja')
                           ? 'Dúo de Especialistas Certificadas en Masaje en Pareja'
-                          : `Terapeuta Profesional Asignada • ${activeBooking.therapistPhone || 'Atención VIP'}`}
+                          : 'Terapeuta Profesional Asignada • Verificada por ESSENYA'}
                       </p>
                     </div>
                   </div>
@@ -2417,7 +2377,6 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                       cityZone={activeBooking.cityZone}
                       therapistName={activeBooking.therapistName || 'Terapeuta ESSENYA'}
                       therapistPhoto={activeBooking.therapistPhoto || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=600&q=80'}
-                      therapistPhone={activeBooking.therapistPhone}
                       bookingState={activeBooking.state}
                       therapistLat={activeBooking.liveLat}
                       therapistLng={activeBooking.liveLng}
@@ -3023,76 +2982,23 @@ export const ClientApp: React.FC<ClientAppProps> = ({
         </div>
       )}
 
-      {/* CHAT DRAWER */}
-      {showChat && (
-        <div className="fixed bottom-4 right-4 z-50 w-full max-w-sm bg-white dark:bg-[#141414] border border-[#E5DFD3] dark:border-[#C9A55B]/40 rounded-2xl shadow-2xl overflow-hidden flex flex-col h-96">
-          <div className="p-3 bg-[#FAF8F5] dark:bg-[#1A1A1A] border-b border-[#E5DFD3] dark:border-[#C9A55B]/20 flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span className="text-xs font-bold text-[#1C1917] dark:text-white">Chat con {activeBooking.therapistName}</span>
-            </div>
-            <button onClick={() => setShowChat(false)} className="text-[#6B655F] dark:text-[#888888] hover:text-[#1C1917] dark:hover:text-white">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="flex-1 p-3 overflow-y-auto space-y-3 text-xs">
-            {chatMessages.map((msg, idx) => (
-              <div 
-                key={idx}
-                className={`flex flex-col ${msg.sender === (client?.name || 'Don Alejandro') ? 'items-end' : 'items-start'}`}
-              >
-                <div className={`p-2.5 rounded-xl max-w-[80%] ${
-                  msg.sender === (client?.name || 'Don Alejandro')
-                    ? 'bg-[#C9A55B] text-black font-medium'
-                    : 'bg-[#F5F1EA] dark:bg-[#222222] text-[#1C1917] dark:text-white border border-[#E5DFD3] dark:border-[#333333]'
-                }`}>
-                  <p>{msg.text}</p>
-                </div>
-                <div className="flex items-center space-x-1.5 mt-0.5">
-                  <span className="text-[9px] text-[#888888] dark:text-[#666666]">{msg.sender} • {msg.time}</span>
-                  {msg.sender === (client?.name || 'Don Alejandro') && (
-                    <span className="flex items-center text-[9px] text-[#C9A55B]" title={msg.read ? "Visto" : "Enviado"}>
-                      {msg.read ? (
-                        <span className="flex items-center space-x-0.5 font-semibold text-[#C9A55B]">
-                          <CheckCheck className="w-3 h-3 text-[#C9A55B] inline" />
-                          <span className="text-[8px]">Visto</span>
-                        </span>
-                      ) : (
-                        <Check className="w-3 h-3 text-[#888888] inline" />
-                      )}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-            {isOtherTyping && (
-              <div className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#F5F1EA] dark:bg-[#1C1917] rounded-xl w-fit text-[10px] text-[#C9A55B] italic border border-[#C9A55B]/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#C9A55B] animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                <span className="w-1.5 h-1.5 rounded-full bg-[#C9A55B] animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                <span className="w-1.5 h-1.5 rounded-full bg-[#C9A55B] animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                <span>{activeBooking.therapistName || 'La terapeuta'} está escribiendo...</span>
-              </div>
-            )}
-          </div>
-
-          <div className="p-2 bg-[#FAF8F5] dark:bg-[#1A1A1A] border-t border-[#E5DFD3] dark:border-[#333333] flex items-center space-x-2">
-            <input 
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-              placeholder="Escribe un mensaje..."
-              className="flex-1 bg-white dark:bg-[#141414] border border-[#E5DFD3] dark:border-[#333333] rounded-lg px-3 py-2 text-xs text-[#1C1917] dark:text-white focus:outline-none focus:border-[#C9A55B]"
-            />
-            <button
-              onClick={handleSendChat}
-              className="p-2 bg-[#C9A55B] text-black rounded-lg hover:bg-[#E6CA65]"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+      {/* REALTIME CHAT DRAWER */}
+      {activeBooking && (
+        <BookingChatDrawer
+          isOpen={showChat}
+          onClose={() => setShowChat(false)}
+          bookingId={activeBooking.id}
+          bookingCode={activeBooking.code}
+          currentUserId={client?.id || 'cliente_vip'}
+          currentUserName={client?.name || 'Cliente VIP'}
+          currentUserRole="cliente"
+          otherUserName={activeBooking.therapistName || 'Terapeuta Asignada'}
+          otherUserRole="terapeuta"
+          clientId={activeBooking.clientId}
+          clientName={client?.name || activeBooking.clientName}
+          therapistId={activeBooking.therapistId}
+          therapistName={activeBooking.therapistName}
+        />
       )}
 
       {/* Reschedule Booking Modal */}

@@ -1,4 +1,5 @@
 import type { Firestore, Transaction } from 'firebase-admin/firestore';
+import { sendPushNotificationToUser } from './pushNotificationService.js';
 
 export interface DispatchLevelConfig {
   maxEtaMinutes: number;
@@ -284,6 +285,36 @@ export async function getEligibleTherapistCandidates(
     // Exclude if busy in another booking
     if (busyTherapistIds.has(tId)) continue;
 
+    // Check therapist work zones (coverage)
+    const therapistZones: string[] = Array.isArray(tData.zonasCobertura) && tData.zonasCobertura.length > 0
+      ? tData.zonasCobertura
+      : (Array.isArray(tData.coverageZones) && tData.coverageZones.length > 0 ? tData.coverageZones : []);
+
+    // Therapist must only receive work if she has configured zones in her profile
+    if (therapistZones.length === 0) {
+      continue;
+    }
+
+    // Match booking zone or address against therapist's configured work zones
+    const bookingZone = (booking.cityZone || '').toLowerCase().trim();
+    const bookingAddress = (booking.clientAddress || booking.address || '').toLowerCase().trim();
+
+    const matchesCoverage = therapistZones.some((zone: string) => {
+      const normZone = (zone || '').toLowerCase().trim();
+      if (!normZone) return false;
+      return (
+        bookingZone === normZone ||
+        bookingZone.includes(normZone) ||
+        normZone.includes(bookingZone) ||
+        bookingAddress.includes(normZone)
+      );
+    });
+
+    if (!matchesCoverage) {
+      // The therapist does NOT work in this zone! Exclude candidate.
+      continue;
+    }
+
     // Check location coordinates
     const lat = typeof tData.lat === 'number' ? tData.lat : null;
     const lng = typeof tData.lng === 'number' ? tData.lng : null;
@@ -531,6 +562,21 @@ export async function stepDispatchEngine(
       etaMinutes: cand.etaMinutes,
       details: `Solicitud despachada a ${cand.therapistName} (ETA estimado: ${cand.etaMinutes} min)`
     });
+
+    // Send native Web Push Notification with sound to candidate therapist
+    sendPushNotificationToUser(db, cand.therapistId, {
+      title: '🔔 Nueva Solicitud de Reserva',
+      body: `${booking.serviceName || 'Masaje a Domicilio'} en ${booking.cityZone || 'tu zona'} (${booking.time || 'Ahora'} - ETA ${cand.etaMinutes} min)`,
+      url: '/terapeuta/servicios',
+      tag: `booking-offer-${bookingId}`,
+      soundPreset: 'bell',
+      sound: '/sounds/notification_reservation.mp3',
+      data: {
+        type: 'new_booking_offer',
+        bookingId,
+        bookingCode: booking.code
+      }
+    }).catch(e => console.warn('[Dispatch] Error sending push to therapist:', e));
   }
 
   const updatePayload: Record<string, any> = {
@@ -805,6 +851,23 @@ export async function acceptDispatchOfferAtomic(
       therapistName: result.therapistName,
       details: `Despacho completado con éxito. Reserva ${result.bookingCode} confirmada y asignada.`
     });
+  }
+
+  // Send native push notification to client
+  if (result.clientId) {
+    sendPushNotificationToUser(db, result.clientId, {
+      title: '✨ ¡Reserva Confirmada!',
+      body: `Tu terapeuta ${result.therapistName} ha aceptado tu servicio #${result.bookingCode}.`,
+      url: '/cliente',
+      tag: `booking-accepted-${bookingId}`,
+      soundPreset: 'classic',
+      sound: '/sounds/notification_accepted.mp3',
+      data: {
+        type: 'booking_accepted',
+        bookingId,
+        bookingCode: result.bookingCode
+      }
+    }).catch(e => console.warn('[Dispatch] Error sending acceptance push to client:', e));
   }
 
   return { success: true, ...result };

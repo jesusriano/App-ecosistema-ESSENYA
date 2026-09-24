@@ -90,8 +90,33 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
           setSubscribed(!!sub);
         }
       });
+
+      // Listen for push messages broadcasted by service worker
+      const handleSwMessage = (event: MessageEvent) => {
+        if (event.data && event.data.type === 'PUSH_NOTIFICATION_RECEIVED') {
+          const { payload, sound } = event.data;
+          if (soundEnabled) {
+            playNotificationSound(sound || soundPreset, volume);
+          }
+          if (payload && payload.title) {
+            addInAppNotification({
+              userId: userId || 'anonymous',
+              title: payload.title,
+              description: payload.body,
+              eventType: payload.data?.type || 'general',
+              category: 'reservas',
+              url: payload.url || '/'
+            });
+          }
+        }
+      };
+
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+      return () => {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      };
     }
-  }, []);
+  }, [soundEnabled, soundPreset, volume, userId]);
 
   const setSoundPreset = useCallback((preset: SoundPreset) => {
     setSoundPresetState(preset);

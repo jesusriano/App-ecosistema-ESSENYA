@@ -9,6 +9,7 @@ import {
   AlertTriangle, X, Volume2, VolumeX, Vibrate, BellRing, Sparkles, Smartphone, Mic, Square, Bell
 } from 'lucide-react';
 import { PanicModal } from './PanicModal';
+import { BookingChatDrawer } from '../shared/components/BookingChatDrawer';
 import { WhatsAppButton } from './WhatsAppButton';
 import { fetchPostCareProtocol } from '../shared/services/api';
 import { LiveTrackingMap } from '../shared/components/LiveTrackingMap';
@@ -88,8 +89,12 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
     gender: 'femenino',
     specialties: ['Masaje Tejido Profundo', 'Descontracturante VIP'],
     status: 'disponible',
-    currentZone: 'Polanco',
-    coverageZones: ['Polanco', 'Lomas de Chapultepec'],
+    currentZone: therapist?.currentZone || therapist?.coverageZones?.[0] || 'Zona no configurada',
+    coverageZones: Array.isArray(therapist?.coverageZones) && therapist.coverageZones.length > 0
+      ? therapist.coverageZones
+      : (Array.isArray((therapist as any)?.zonasCobertura) && (therapist as any).zonasCobertura.length > 0
+          ? (therapist as any).zonasCobertura
+          : []),
     certifications: ['Certificación Internacional Spa & Wellness'],
     vehicleType: 'Auto Ejecutivo',
     lat: 19.4326,
@@ -281,12 +286,33 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
 
   const [showPanicModal, setShowPanicModal] = useState<boolean>(false);
   const [declinedBookingIds, setDeclinedBookingIds] = useState<string[]>([]);
+  const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
 
-  // Pending bookings that need therapist acceptance according to dispatch levels
+  // Pending bookings that need therapist acceptance according to dispatch levels and coverage zones
   const pendingBookings = bookings.filter(b => {
     if (b.state !== 'pendiente') return false;
     if (declinedBookingIds.includes(b.id)) return false;
     if (Array.isArray(b.rejectedBy) && b.rejectedBy.includes(activeTherapist.id)) return false;
+
+    // Strict Zone matching: therapist only receives services in her configured zones
+    const zones = Array.isArray(activeTherapist.coverageZones) && activeTherapist.coverageZones.length > 0
+      ? activeTherapist.coverageZones
+      : (Array.isArray((activeTherapist as any).zonasCobertura) && (activeTherapist as any).zonasCobertura.length > 0
+          ? (activeTherapist as any).zonasCobertura
+          : []);
+
+    if (zones.length > 0) {
+      const bZone = (b.cityZone || '').toLowerCase().trim();
+      const inZone = zones.some(z => {
+        const normZ = z.toLowerCase().trim();
+        return normZ === bZone || bZone.includes(normZ) || normZ.includes(bZone);
+      });
+      if (!inZone) return false;
+    } else {
+      // No zones configured -> cannot receive bookings
+      return false;
+    }
+
     // If progressive dispatch engine is targeting this booking, only show if this therapist is in activeOfferTherapistIds
     if (Array.isArray(b.activeOfferTherapistIds) && b.activeOfferTherapistIds.length > 0) {
       return b.activeOfferTherapistIds.includes(activeTherapist.id);
@@ -742,22 +768,13 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                   {activeTherapist.rating} ({activeTherapist.reviewCount} reseñas)
                 </span>
                 <span>•</span>
-                <span>{activeTherapist.coverageZones?.[0] || 'Polanco / Lomas'}</span>
+                <span>{activeTherapist.coverageZones?.length ? activeTherapist.coverageZones.join(', ') : 'Sin zonas configuradas'}</span>
               </p>
             </div>
           </div>
 
-          {/* Availability Toggle & Panic SOS Button */}
+          {/* Availability Toggle */}
           <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 w-full md:w-auto">
-            <button
-              onClick={() => setShowPanicModal(true)}
-              id="therapist-panic-sos-btn"
-              title="Botón de Pánico Emergencia SOS"
-              className="fixed top-4 right-[4.5rem] z-50 flex items-center justify-center space-x-1.5 bg-gradient-to-r from-red-600 via-red-500 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-md animate-pulse shrink-0 cursor-pointer min-h-[38px]"
-            >
-              <AlertTriangle className="w-4 h-4 text-white" />
-              <span>Botón Pánico SOS</span>
-            </button>
 
             <div className="bg-white dark:bg-[#141414] border border-[#E5DFD3] dark:border-[#C9A55B]/30 p-1 rounded-xl flex items-center space-x-1 shadow-xs shrink-0">
               <button
@@ -956,7 +973,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                 </div>
                 <h3 className="text-2xl font-serif font-bold text-white">{activePending.serviceName}</h3>
                 <p className="text-xs text-[#AAAAAA]">
-                  Cliente: <strong className="text-white font-semibold">{activePending.clientName}</strong> • {activePending.clientPhone}
+                  Cliente: <strong className="text-white font-semibold">{activePending.clientName}</strong> • Zona: {activePending.cityZone || 'CDMX'}
                 </p>
               </div>
 
@@ -1315,8 +1332,18 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                   </div>
                 </div>
 
-                {/* Audio & Tactile Notification Controls */}
+                {/* Audio & Tactile Notification Controls & Chat Drawer Trigger */}
                 <div className="flex items-center gap-1.5 self-start sm:self-auto bg-[#1A1A1A] p-1 rounded-xl border border-[#333333] shadow-inner">
+                  <button
+                    type="button"
+                    onClick={() => setIsChatOpen(true)}
+                    title="Abrir ventana de chat completa y segura"
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-[#C9A55B] text-black hover:bg-[#E6CA65] transition-all flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>Chat en Vivo</span>
+                  </button>
+
                   {/* Subtle Sound Toggle */}
                   <button
                     type="button"
@@ -1744,7 +1771,6 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                       </h4>
                       <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] mt-0.5">
                         Socio VIP: <span className="text-[#1C1917] dark:text-white font-semibold">{bk.clientName}</span>
-                        {bk.clientPhone && <span className="ml-1.5 text-[#888888]">({bk.clientPhone})</span>}
                       </p>
                     </div>
 
@@ -1897,18 +1923,24 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
         onSendPostCare={() => setActiveTab('postcare')}
       />
 
-      {/* Mobile Floating Quick-Access Panic SOS Button (Fixed for Small Screens) */}
-      <motion.button
-        id="therapist-floating-panic-sos-btn"
-        whileTap={{ scale: 0.92 }}
-        onClick={() => setShowPanicModal(true)}
-        className="sm:hidden fixed bottom-6 right-4 z-40 bg-gradient-to-r from-red-600 via-red-500 to-red-700 text-white font-bold text-xs p-3 rounded-full shadow-2xl shadow-red-600/50 border-2 border-red-400 flex items-center gap-1.5 cursor-pointer animate-pulse"
-        title="Botón de Pánico Emergencia SOS"
-        aria-label="Botón de Pánico Emergencia SOS"
-      >
-        <AlertTriangle className="w-5 h-5 text-white shrink-0" />
-        <span className="text-[11px] uppercase tracking-wider font-extrabold pr-1">SOS</span>
-      </motion.button>
+      {/* Realtime Chat Drawer with Client */}
+      {currentBooking && (
+        <BookingChatDrawer
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+          bookingId={currentBooking.id}
+          bookingCode={currentBooking.code}
+          currentUserId={activeTherapist.id}
+          currentUserName={activeTherapist.name || 'Terapeuta'}
+          currentUserRole="terapeuta"
+          otherUserName={currentBooking.clientName || 'Cliente VIP'}
+          otherUserRole="cliente"
+          clientId={currentBooking.clientId}
+          clientName={currentBooking.clientName}
+          therapistId={activeTherapist.id}
+          therapistName={activeTherapist.name}
+        />
+      )}
 
       {/* Global Safety Emergency Panic Modal - Mobile-Optimized Full-Screen Overlay */}
       <PanicModal 
@@ -1918,7 +1950,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
         userRole="terapeuta"
         userId={activeTherapist.userId || activeTherapist.id}
         userName={activeTherapist.name || 'Terapeuta Certificada'}
-        userLocation={currentBooking?.clientAddress || activeTherapist.coverageZones?.[0] || 'Polanco VIP / Cobertura CDMX'}
+        userLocation={currentBooking?.clientAddress || activeTherapist.coverageZones?.[0] || 'CDMX'}
         bookingCode={currentBooking?.code || 'EMERGENCY-THERAPIST'}
         fullScreenOnMobile={true}
       />

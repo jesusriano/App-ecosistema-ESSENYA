@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { 
   Calendar, Search, Filter, RefreshCw, UserCheck, Clock, MapPin, 
   Sparkles, CheckCircle2, AlertTriangle, X, ShieldAlert, FileText, Check, ChevronRight, ChevronDown, Banknote,
-  Radio, Navigation, Zap
+  Radio, Navigation, Zap, MessageSquare
 } from 'lucide-react';
 import { useAdmin } from '../hooks/useAdmin';
 import { useToast } from '../../../shared/context/ToastContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { Booking, Therapist, BookingState } from '../../../shared/types';
 import { AdminRecordingsSection } from '../components/AdminRecordingsSection';
+import { AdminChatSupervisorModal } from '../components/AdminChatSupervisorModal';
 
 export const sanitizeBooking = (raw: any): Booking => {
   if (!raw) {
@@ -19,7 +20,7 @@ export const sanitizeBooking = (raw: any): Booking => {
       clientName: 'Cliente',
       clientPhone: '',
       clientAddress: '',
-      cityZone: 'Polanco',
+      cityZone: 'Ciudad de México',
       serviceId: 'serv-1',
       serviceName: 'Masaje Holístico',
       durationMinutes: 60,
@@ -112,6 +113,9 @@ export const ReservasPage: React.FC = () => {
   // Cancel Modal
   const [cancelBookingModal, setCancelBookingModal] = useState<Booking | null>(null);
   const [cancelReasonInput, setCancelReasonInput] = useState('');
+
+  // Chat Supervisor Modal
+  const [chatSupervisorBooking, setChatSupervisorBooking] = useState<Booking | null>(null);
 
   // Custom Administrative Handlers
   const onAcceptBooking = async (booking: Booking) => {
@@ -495,6 +499,16 @@ export const ReservasPage: React.FC = () => {
                             </button>
                           )}
 
+                          {/* Supervisar Chat button */}
+                          <button
+                            onClick={() => setChatSupervisorBooking(b)}
+                            className="px-3 py-1.5 bg-[#C9A55B]/15 hover:bg-[#C9A55B]/25 border border-[#C9A55B]/40 text-[#806020] dark:text-[#C9A55B] text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
+                            title="Supervisar chat en vivo entre cliente y terapeuta"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            <span>Supervisar Chat</span>
+                          </button>
+
                           {b.state !== 'cancelado' && b.state !== 'rechazada' && b.state !== 'servicio_finalizado' && (
                             <button
                               onClick={() => setCancelBookingModal(b)}
@@ -872,6 +886,13 @@ export const ReservasPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Realtime Admin Chat Supervisor Modal */}
+      <AdminChatSupervisorModal
+        booking={chatSupervisorBooking}
+        isOpen={!!chatSupervisorBooking}
+        onClose={() => setChatSupervisorBooking(null)}
+      />
     </div>
   );
 };

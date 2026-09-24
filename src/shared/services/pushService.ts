@@ -96,6 +96,29 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
     const convertedVapidKey = urlBase64ToUint8Array(keyData.publicKey);
 
     let subscription = await registration.pushManager.getSubscription();
+    if (subscription) {
+      // Check if existing subscription applicationServerKey matches current VAPID public key
+      const existingKey = subscription.options?.applicationServerKey;
+      let keyMatch = false;
+      if (existingKey) {
+        const existingArray = new Uint8Array(existingKey);
+        if (existingArray.length === convertedVapidKey.length) {
+          keyMatch = true;
+          for (let i = 0; i < existingArray.length; i++) {
+            if (existingArray[i] !== convertedVapidKey[i]) {
+              keyMatch = false;
+              break;
+            }
+          }
+        }
+      }
+      if (!keyMatch) {
+        console.log('[WebPush] VAPID key changed or missing key, re-subscribing...');
+        await subscription.unsubscribe();
+        subscription = null;
+      }
+    }
+
     if (!subscription) {
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
@@ -171,8 +194,36 @@ export async function sendTestPushNotification(userId?: string, title?: string, 
   }
 }
 
-// Advanced Web Audio API synthesizer for sound presets (Classic, Bell, Alert, Soft, Urgent) and volume
-export function playNotificationSound(preset: SoundPreset = 'classic', volume: number = 0.8) {
+// Advanced Sound Player supporting real audio files and Web Audio API synth fallback
+export function playNotificationSound(preset: SoundPreset | string = 'classic', volume: number = 0.8) {
+  try {
+    const soundFileMap: Record<string, string> = {
+      classic: '/sounds/notification_default.mp3',
+      bell: '/sounds/notification_reservation.mp3',
+      alert: '/sounds/notification_arrived.mp3',
+      soft: '/sounds/notification_started.mp3',
+      urgent: '/sounds/notification_completed.mp3',
+      reservation: '/sounds/notification_reservation.mp3',
+      accepted: '/sounds/notification_accepted.mp3',
+      arrived: '/sounds/notification_arrived.mp3',
+      started: '/sounds/notification_started.mp3',
+      completed: '/sounds/notification_completed.mp3',
+      message: '/sounds/notification_message.mp3'
+    };
+
+    const audioUrl = soundFileMap[preset] || (preset.startsWith('/') ? preset : `/sounds/${preset}.mp3`);
+    const audio = new Audio(audioUrl);
+    audio.volume = Math.max(0, Math.min(1, volume));
+    audio.play().catch(() => {
+      // Fallback to Web Audio API synthesis if HTML5 Audio fails or blocked
+      playSynthFallback(preset, volume);
+    });
+  } catch (e) {
+    playSynthFallback(preset, volume);
+  }
+}
+
+function playSynthFallback(preset: SoundPreset | string, volume: number = 0.8) {
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
@@ -184,56 +235,48 @@ export function playNotificationSound(preset: SoundPreset = 'classic', volume: n
     const now = ctx.currentTime;
     gain.gain.setValueAtTime(Math.max(0, Math.min(1, volume)) * 0.4, now);
 
-    if (preset === 'classic') {
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(523.25, now); // C5
-      osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
-      osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-      osc.start(now);
-      osc.stop(now + 0.5);
-    } else if (preset === 'bell') {
+    if (preset === 'bell' || preset === 'reservation') {
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(880, now); // A5
+      osc.frequency.setValueAtTime(880, now);
       osc.frequency.exponentialRampToValueAtTime(440, now + 0.4);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
       osc.start(now);
       osc.stop(now + 0.6);
-    } else if (preset === 'alert') {
+    } else if (preset === 'alert' || preset === 'arrived') {
       osc.type = 'square';
       osc.frequency.setValueAtTime(600, now);
       osc.frequency.setValueAtTime(800, now + 0.12);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
       osc.start(now);
       osc.stop(now + 0.35);
-    } else if (preset === 'soft') {
+    } else if (preset === 'soft' || preset === 'started') {
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(392, now); // G4
+      osc.frequency.setValueAtTime(392, now);
       osc.frequency.exponentialRampToValueAtTime(523.25, now + 0.3);
       gain.gain.setValueAtTime(0.2, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
       osc.start(now);
       osc.stop(now + 0.7);
-    } else if (preset === 'urgent') {
+    } else if (preset === 'urgent' || preset === 'completed') {
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(900, now);
       osc.frequency.setValueAtTime(1100, now + 0.08);
-      osc.frequency.setValueAtTime(900, now + 0.16);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
       osc.start(now);
       osc.stop(now + 0.4);
     } else {
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(440, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+      osc.frequency.setValueAtTime(523.25, now);
+      osc.frequency.setValueAtTime(659.25, now + 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
       osc.start(now);
-      osc.stop(now + 0.3);
+      osc.stop(now + 0.5);
     }
 
     osc.connect(gain);
     gain.connect(ctx.destination);
-  } catch (e) {
-    console.warn('[WebPush] Could not play notification sound preset:', e);
+  } catch (err) {
+    console.warn('[WebPush] Synth fallback audio error:', err);
   }
 }
 

@@ -13,6 +13,7 @@ import {
 } from '../data/mockData';
 import { OFFICIAL_SERVICES } from '../data/catalog';
 import { getServiceImage } from '../utils/serviceImage';
+import { sendChatMessage } from '../services/chatService';
 
 interface EcosystemContextType {
   currentPortal: PortalType;
@@ -143,8 +144,8 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         certifications: (authTherapist as any).certificaciones || ['Certificación Holística SEP-CONOCER'],
         specialties: (authTherapist as any).especialidades || ['Masaje Relajante'],
         status: 'disponible',
-        currentZone: 'Polanco',
-        coverageZones: (authTherapist as any).zonasCobertura || ['Polanco'],
+        currentZone: (authTherapist as any).currentZone || (authTherapist as any).zonasCobertura?.[0] || 'Zona no configurada',
+        coverageZones: (authTherapist as any).zonasCobertura || (authTherapist as any).coverageZones || [],
         vehicleType: 'Auto Ejecutivo',
         lat: 19.4326,
         lng: -99.1332,
@@ -463,13 +464,20 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         ? d.assignedTherapistsCount 
         : therapistIds.length;
 
+      // Phone Privacy: Neither client nor therapist may see the other's phone number
+      const isClientViewer = !isUserAdmin && !isUserTherapist;
+      const isTherapistViewer = isUserTherapist && !isUserAdmin;
+      const safeClientPhone = isTherapistViewer ? '' : (d.clientPhone || d.telefono || '');
+      const safeTherapistPhone = isClientViewer ? undefined : d.therapistPhone;
+      const safeTherapistPhone2 = isClientViewer ? undefined : d.therapistPhone2;
+
       return {
         ...d,
         id: docSnap.id || d.id || '',
         code: d.code || d.folio || `ESS-${(docSnap.id || d.id || '0000').substring(0, 6).toUpperCase()}`,
         clientId: d.clientId || '',
         clientName: d.clientName || d.nombreCliente || 'Cliente VIP',
-        clientPhone: d.clientPhone || d.telefono || '',
+        clientPhone: safeClientPhone,
         clientAddress: d.clientAddress || d.direccion || '',
         cityZone: d.cityZone || d.zona || d.ciudad || 'Ciudad de México',
         serviceId: d.serviceId || 'serv-1',
@@ -497,11 +505,11 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         therapistId: d.therapistId,
         therapistName: d.therapistName,
         therapistPhoto: d.therapistPhoto,
-        therapistPhone: d.therapistPhone,
+        therapistPhone: safeTherapistPhone,
         therapistId2: d.therapistId2,
         therapistName2: d.therapistName2,
         therapistPhoto2: d.therapistPhoto2,
-        therapistPhone2: d.therapistPhone2,
+        therapistPhone2: safeTherapistPhone2,
         therapistIds,
         assignedTherapistsCount: assignedCount,
         createdAt: d.createdAt || new Date().toISOString()
@@ -583,8 +591,32 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       let pendingBookings: Booking[] = [];
 
       const syncTherapistBookings = () => {
+        // Therapist coverage zones (never default to Polanco)
+        const tZones: string[] = Array.isArray((authTherapist as any)?.zonasCobertura) && (authTherapist as any).zonasCobertura.length > 0
+          ? (authTherapist as any).zonasCobertura
+          : (Array.isArray((authTherapist as any)?.coverageZones) && (authTherapist as any).coverageZones.length > 0
+              ? (authTherapist as any).coverageZones
+              : []);
+
+        // Filter pending bookings: therapist must ONLY receive and see bookings from her configured zones
+        const filteredPending = pendingBookings.filter(b => {
+          // If assigned directly to therapist or active offer
+          if (b.therapistId === uid || b.therapistId2 === uid || (Array.isArray(b.therapistIds) && b.therapistIds.includes(uid))) {
+            return true;
+          }
+          if (Array.isArray(b.activeOfferTherapistIds) && b.activeOfferTherapistIds.includes(uid)) {
+            return true;
+          }
+          if (tZones.length === 0) return false;
+          const bZone = (b.cityZone || '').toLowerCase().trim();
+          return tZones.some(z => {
+            const normZ = z.toLowerCase().trim();
+            return normZ === bZone || bZone.includes(normZ) || normZ.includes(bZone);
+          });
+        });
+
         const mergedMap = new Map<string, Booking>();
-        [...assignedBookings1, ...assignedBookings2, ...pendingBookings].forEach(b => mergedMap.set(b.id, b));
+        [...assignedBookings1, ...assignedBookings2, ...filteredPending].forEach(b => mergedMap.set(b.id, b));
         const list = Array.from(mergedMap.values()).sort(
           (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
         );
@@ -1193,8 +1225,8 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
             certifications: dData.certifications || ['Certificación Holística SEP-CONOCER'],
             specialties: dData.specialties || ['Masaje Relajante'],
             status: 'disponible',
-            currentZone: dData.currentZone || 'Polanco',
-            coverageZones: dData.coverageZones || ['Polanco'],
+            currentZone: dData.currentZone || dData.zonasCobertura?.[0] || 'Zona no configurada',
+            coverageZones: dData.coverageZones || dData.zonasCobertura || [],
             vehicleType: dData.vehicleType || 'Auto Ejecutivo',
             lat: dData.lat || 19.4326,
             lng: dData.lng || -99.1332,
