@@ -110,7 +110,10 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
     if (shouldRedirectActiveSession && activeSessionRole) {
       const targetPath = rolePaths[activeSessionRole];
       if (targetPath && location.pathname !== targetPath) {
-        navigate(targetPath, { replace: true });
+        const timer = setTimeout(() => {
+          navigate(targetPath, { replace: true });
+        }, 0);
+        return () => clearTimeout(timer);
       }
     }
   }, [shouldRedirectActiveSession, activeSessionRole, location.pathname, navigate]);
@@ -121,7 +124,10 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
     if (currentUser && currentUser.rol && currentUser.rol !== role) {
       const targetPath = rolePaths[currentUser.rol as UserRole];
       if (targetPath && location.pathname !== targetPath) {
-        navigate(targetPath, { replace: true });
+        const timer = setTimeout(() => {
+          navigate(targetPath, { replace: true });
+        }, 0);
+        return () => clearTimeout(timer);
       }
     }
   }, [isAuthReady, currentUser, role, location.pathname, navigate]);

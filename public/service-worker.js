@@ -31,7 +31,7 @@ self.addEventListener('push', (event) => {
   }
 
   // Map sound preset to sound file if needed or vibrate pattern
-  const vibrateMap: Record<string, number[]> = {
+  const vibrateMap = {
     classic: [200, 100, 200],
     bell: [300, 150, 300, 150],
     alert: [100, 50, 100, 50, 100],
