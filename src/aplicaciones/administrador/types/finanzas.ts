@@ -21,7 +21,6 @@ export type ExpenseCategory =
 export type PaymentMethod = 
   | 'Transferencia SPEI'
   | 'Tarjeta de Crédito/Débito'
-  | 'Efectivo'
   | 'PayPal'
   | 'Otro';
 

@@ -1933,7 +1933,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     addLog(
       'Administrador',
       'Módulo Finanzas',
-      'Confirmación de Pago SPEI/Efectivo',
+      'Confirmación de Pago SPEI/Transferencia',
       `Pago de la reserva ${bookingId} verificado y acreditado. Contador de masajes incrementado.`
     );
   };

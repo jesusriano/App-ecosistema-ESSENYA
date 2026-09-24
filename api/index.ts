@@ -642,9 +642,16 @@ app.post("/api/auth/verify-token", async (req: Request, res: Response) => {
 // Secure booking creation endpoint
 app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { serviceId, date, time, preferences, clientAddress, cityZone } = req.body;
+    const { serviceId, date, time, preferences, clientAddress, cityZone, paymentMethod } = req.body;
     const uid = (req as any).user?.uid;
     const email = (req as any).user.email;
+
+    if (paymentMethod) {
+      const pmStr = String(paymentMethod).toLowerCase();
+      if (pmStr.includes('efectivo') || pmStr.includes('cash')) {
+        return res.status(400).json({ success: false, error: "El pago en efectivo no está disponible. Solo se admiten tarjeta y transferencia bancaria." });
+      }
+    }
 
     // Log the raw incoming request payload as requested
     console.log("=== API BOOKING INCOMING PAYLOAD ===");
@@ -843,6 +850,7 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
       date,
       time,
       preferences: preferences || {},
+      paymentMethod: paymentMethod || 'Tarjeta de Crédito / Débito',
       state: "pendiente",
       paymentStatus: "pendiente", // ALWAYS pendiente on creation
       dispatchState: "buscando",
@@ -1791,6 +1799,13 @@ app.post("/api/wallet/purchase", requireAuth, async (req, res) => {
     const uid = (req as any).user?.uid;
     if (!uid) return res.status(401).json({ error: "No autorizado" });
 
+    if (paymentMethod) {
+      const pmStr = String(paymentMethod).toLowerCase();
+      if (pmStr.includes('efectivo') || pmStr.includes('cash')) {
+        return res.status(400).json({ success: false, error: "El pago en efectivo no está permitido. Solo se admite tarjeta y transferencia bancaria." });
+      }
+    }
+
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const code = `REGALO-ESS-${randomSuffix}`;
 
@@ -2145,11 +2160,20 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
       expectedWalletDeduction, 
       expectedFinalTotal, 
       applyCourtesy,
-      giftCardCode 
+      giftCardCode,
+      paymentMethod
     } = req.body;
 
     const uid = (req as any).user?.uid;
     if (!uid) return res.status(401).json({ error: "No autorizado" });
+
+    // Strict payment method validation: reject 'efectivo' or any unauthorized cash method
+    if (paymentMethod) {
+      const pmStr = String(paymentMethod).toLowerCase();
+      if (pmStr.includes('efectivo') || pmStr.includes('cash')) {
+        return res.status(400).json({ success: false, error: "El pago en efectivo no está disponible. Solo se admiten tarjeta y transferencia bancaria." });
+      }
+    }
 
     // Validate inputs
     if (!serviceId || typeof serviceId !== 'string') {
@@ -2455,6 +2479,7 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
         tip,
         date,
         time,
+        paymentMethod: paymentMethod || (calculatedFinalTotal === 0 ? 'Tarjeta de Regalo (Saldo Billetera)' : 'Tarjeta de Crédito / Débito'),
         state: "pendiente",
         paymentStatus: calculatedFinalTotal === 0 ? "pagado" : "pendiente",
         courtesyApplied,

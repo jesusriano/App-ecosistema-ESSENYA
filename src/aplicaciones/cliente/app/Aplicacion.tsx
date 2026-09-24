@@ -1980,10 +1980,10 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                     <span className="text-[#C9A55B] text-base">💡</span>
                     <div>
                       <label className="text-xs font-bold text-[#1C1917] dark:text-white uppercase tracking-wider block">
-                        Propina a tu elección (En efectivo directamente con la terapeuta)
+                        Propina a tu elección (Directamente con la terapeuta)
                       </label>
                       <p className="text-[11px] text-[#6B655F] dark:text-[#AAAAAA] mt-0.5">
-                        La propina o gratificación <strong>no es obligatoria</strong>. Si deseas reconocer la atención de tu terapeuta, puedes entregársela en efectivo al finalizar el servicio.
+                        La propina o gratificación <strong>no es obligatoria</strong>. Si deseas reconocer la atención de tu terapeuta, puedes entregársela directamente al finalizar el servicio.
                       </p>
                     </div>
                   </div>
