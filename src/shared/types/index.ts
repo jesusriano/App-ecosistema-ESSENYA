@@ -78,6 +78,10 @@ export interface ClientUser {
   totalBookings: number;
   spentTotal: number;
   address: string;
+  street?: string;
+  interior?: string;
+  colonia?: string;
+  postalCode?: string;
   cityZone: string;
   photo: string;
   rewardsPoints: number;

@@ -37,7 +37,10 @@ export const PerfilPage: React.FC = () => {
     return client?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
   });
 
-  const [addressInput, setAddressInput] = useState<string>(client?.address || 'Av. Paseo de las Palmas 735, Polanco');
+  const [streetInput, setStreetInput] = useState<string>(client?.street || '');
+  const [interiorInput, setInteriorInput] = useState<string>(client?.interior || '');
+  const [coloniaInput, setColoniaInput] = useState<string>(client?.colonia || '');
+  const [postalCodeInput, setPostalCodeInput] = useState<string>(client?.postalCode || '');
   const [cityZoneInput, setCityZoneInput] = useState<string>(client?.cityZone || 'Polanco / Lomas CDMX');
   const [isEditingAddress, setIsEditingAddress] = useState<boolean>(false);
   const [savingAddress, setSavingAddress] = useState<boolean>(false);
@@ -49,10 +52,12 @@ export const PerfilPage: React.FC = () => {
       showToast('Sesión no encontrada', 'Por favor inicia sesión de nuevo para guardar tu dirección.', 'error');
       return;
     }
-    if (!addressInput.trim() || !cityZoneInput.trim()) {
-      showToast('Campos requeridos', 'La dirección y la zona son obligatorias.', 'error');
+    if (!streetInput.trim() || !coloniaInput.trim() || !postalCodeInput.trim()) {
+      showToast('Campos requeridos', 'Por favor completa la calle, colonia y código postal.', 'error');
       return;
     }
+
+    const fullAddress = `${streetInput.trim()}${interiorInput ? `, Int. ${interiorInput.trim()}` : ''}, Col. ${coloniaInput.trim()}, C.P. ${postalCodeInput.trim()}, ${cityZoneInput}`;
 
     setSavingAddress(true);
     try {
@@ -64,7 +69,11 @@ export const PerfilPage: React.FC = () => {
         name: client?.name || authUser?.nombre || 'Socio VIP',
         email: client?.email || authUser?.correo || '',
         membershipTier: client?.membershipTier || 'Platino',
-        address: addressInput.trim(),
+        address: fullAddress,
+        street: streetInput.trim(),
+        interior: interiorInput.trim(),
+        colonia: coloniaInput.trim(),
+        postalCode: postalCodeInput.trim(),
         cityZone: cityZoneInput.trim(),
         updatedAt: new Date().toISOString()
       }, { merge: true });
@@ -418,7 +427,10 @@ export const PerfilPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setAddressInput(client?.address || 'Av. Paseo de las Palmas 735, Polanco');
+                    setStreetInput(client?.street || '');
+                    setInteriorInput(client?.interior || '');
+                    setColoniaInput(client?.colonia || '');
+                    setPostalCodeInput(client?.postalCode || '');
                     setCityZoneInput(client?.cityZone || 'Polanco / Lomas CDMX');
                     setIsEditingAddress(true);
                   }}
@@ -443,23 +455,70 @@ export const PerfilPage: React.FC = () => {
                 <p className="text-[#6B655F] dark:text-[#888888] mt-0.5">Zona: {client?.cityZone || 'Polanco / Lomas CDMX'}</p>
               </div>
             ) : (
-              <form onSubmit={handleSaveAddress} className="p-3 bg-[#FAF8F5] dark:bg-[#1A1A1A] rounded-xl border border-[#C9A55B]/40 space-y-3">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-[#6B655F] dark:text-[#AAAAAA] mb-1">
-                    Dirección (Calle, Número, Int, Colonia)
-                  </label>
-                  <input
-                    type="text"
-                    value={addressInput}
-                    onChange={(e) => setAddressInput(e.target.value)}
-                    placeholder="Ej. Av. Campos Elíseos 204, Polanco"
-                    className="w-full bg-white dark:bg-[#202020] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
-                  />
+              <form onSubmit={handleSaveAddress} className="p-4 bg-[#FAF8F5] dark:bg-[#1A1A1A] rounded-2xl border border-[#C9A55B]/40 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-[#6B655F] dark:text-[#AAAAAA] mb-1">
+                      Calle y Número *
+                    </label>
+                    <input
+                      type="text"
+                      value={streetInput}
+                      onChange={(e) => setStreetInput(e.target.value)}
+                      placeholder="Ej. Av. Campos Elíseos 204"
+                      className="w-full bg-white dark:bg-[#202020] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-[#6B655F] dark:text-[#AAAAAA] mb-1">
+                      Núm. Interior / Depto / Torre
+                    </label>
+                    <input
+                      type="text"
+                      value={interiorInput}
+                      onChange={(e) => setInteriorInput(e.target.value)}
+                      placeholder="Ej. Torre A, Int. 502"
+                      className="w-full bg-white dark:bg-[#202020] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-[#6B655F] dark:text-[#AAAAAA] mb-1">
+                      Colonia / Fraccionamiento *
+                    </label>
+                    <input
+                      type="text"
+                      value={coloniaInput}
+                      onChange={(e) => setColoniaInput(e.target.value)}
+                      placeholder="Ej. Polanco V Sección"
+                      className="w-full bg-white dark:bg-[#202020] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-[#6B655F] dark:text-[#AAAAAA] mb-1">
+                      Código Postal (C.P.) *
+                    </label>
+                    <input
+                      type="text"
+                      value={postalCodeInput}
+                      onChange={(e) => setPostalCodeInput(e.target.value)}
+                      placeholder="Ej. 11560"
+                      maxLength={5}
+                      className="w-full bg-white dark:bg-[#202020] border border-[#E5DFD3] dark:border-[#333333] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                      required
+                    />
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-[#6B655F] dark:text-[#AAAAAA] mb-1">
-                    Zona o Colonia CDMX / Zona Metropolitana
+                    Zona o Alcaldía / Municipio *
                   </label>
                   <select
                     value={cityZoneInput}
@@ -472,13 +531,13 @@ export const PerfilPage: React.FC = () => {
                   </select>
                 </div>
 
-                <div className="flex justify-end pt-1">
+                <div className="flex justify-end pt-2">
                   <button
                     type="submit"
                     disabled={savingAddress}
-                    className="px-4 py-1.5 bg-[#C9A55B] hover:bg-[#E6CA65] text-black font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                    className="px-5 py-2 bg-[#C9A55B] hover:bg-[#E6CA65] text-black font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
                   >
-                    {savingAddress ? 'Guardando...' : 'Guardar Dirección'}
+                    {savingAddress ? 'Guardando Dirección...' : 'Guardar Dirección Principal'}
                   </button>
                 </div>
               </form>
