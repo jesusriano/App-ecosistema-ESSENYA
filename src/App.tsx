@@ -13,6 +13,7 @@ import { ThemeToggle } from './shared/components/ThemeToggle';
 import { Header } from './shared/components/Header';
 import { PortalType } from './shared/types';
 import { PushNotifications } from '@capacitor/push-notifications';
+import { Capacitor } from '@capacitor/core';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
 
@@ -63,6 +64,7 @@ function MainAppContent() {
   // Initialize Capacitor Push Notifications and save device push token to Firestore
   React.useEffect(() => {
     const initPushNotifications = async () => {
+      if (!Capacitor.isNativePlatform()) return;
       try {
         const permStatus = await PushNotifications.requestPermissions();
         if (permStatus.receive === 'granted') {

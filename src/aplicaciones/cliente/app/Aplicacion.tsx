@@ -265,7 +265,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   };
 
   // Payment Method Selection State
-  const [paymentMethodType, setPaymentMethodType] = useState<'transferencia' | 'efectivo' | 'stripe'>('stripe');
+  const [paymentMethodType, setPaymentMethodType] = useState<'transferencia' | 'stripe'>('stripe');
   const [clabeCopied, setClabeCopied] = useState<boolean>(false);
 
   // Safety & Emergency Panic Modal State
@@ -536,9 +536,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       paymentMethod: totalPrice === 0 && giftCardDeduction > 0
         ? 'Tarjeta de Regalo (Saldo Billetera)'
         : paymentMethodType === 'stripe'
-        ? 'Tarjeta de Crédito / Débito (Stripe Checkout)'
-        : paymentMethodType === 'efectivo'
-        ? 'Efectivo (Pago al Recibir)'
+        ? 'Tarjeta de Crédito / Débito'
         : paymentMethodType === 'transferencia'
         ? 'Transferencia Interbancaria (SPEI)'
         : 'Tarjeta de Crédito / Débito',
@@ -2010,8 +2008,8 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                     <label className="text-xs text-[#6B655F] dark:text-[#AAAAAA] uppercase font-semibold block">
                       Selecciona tu Método de Pago
                     </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {/* Option 1: Tarjeta con Stripe */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Option 1: Tarjeta de Crédito o Débito */}
                       <button
                         type="button"
                         onClick={() => setPaymentMethodType('stripe')}
@@ -2022,7 +2020,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                         }`}
                       >
                         <CreditCard className="w-5 h-5 text-[#C9A55B]" />
-                        <span>Tarjeta (Stripe)</span>
+                        <span>Tarjeta de Crédito / Débito</span>
                       </button>
 
                       {/* Option 2: Transferencia Bancaria SPEI */}
@@ -2038,30 +2036,16 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                         <Building2 className="w-5 h-5 text-[#C9A55B]" />
                         <span>Transferencia (SPEI)</span>
                       </button>
-
-                      {/* Option 3: Efectivo (Pago al Recibir) */}
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethodType('efectivo')}
-                        className={`p-3.5 rounded-xl border flex flex-col items-center justify-center space-y-1.5 transition-all text-xs font-bold ${
-                          paymentMethodType === 'efectivo'
-                            ? 'bg-[#C9A55B]/15 border-[#C9A55B] text-[#806020] dark:text-[#C9A55B] ring-1 ring-[#C9A55B]'
-                            : 'bg-[#F5F1EA] dark:bg-[#1A1A1A] border-[#E5DFD3] dark:border-[#333333] text-[#6B655F] dark:text-[#AAAAAA]'
-                        }`}
-                      >
-                        <Banknote className="w-5 h-5 text-[#C9A55B]" />
-                        <span>Efectivo</span>
-                      </button>
                     </div>
 
                     {paymentMethodType === 'stripe' && (
                       <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 rounded-xl border border-[#C9A55B]/50 space-y-2">
                         <div className="flex items-center space-x-2 text-xs font-bold text-[#806020] dark:text-[#C9A55B]">
                           <CreditCard className="w-4 h-4 text-[#C9A55B]" />
-                          <span>Pago Seguro con Stripe Checkout</span>
+                          <span>Pago Seguro con Tarjeta de Crédito o Débito</span>
                         </div>
                         <p className="text-xs text-[#1C1917] dark:text-white font-medium">
-                          Al hacer clic en "Confirmar y Pagar", serás redirigido a la pasarela cifrada de Stripe para procesar tu tarjeta con total seguridad.
+                          Al hacer clic en "Confirmar y Pagar", serás redirigido a la pasarela cifrada para procesar tu tarjeta con total seguridad.
                         </p>
                       </div>
                     )}
@@ -2109,21 +2093,6 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                             <span className="font-bold text-[#1C1917] dark:text-white">156 942 7152</span>
                           </div>
                         </div>
-                      </div>
-                    )}
-
-                    {paymentMethodType === 'efectivo' && (
-                      <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 rounded-xl border border-[#C9A55B]/50 space-y-2">
-                        <div className="flex items-center space-x-2 text-xs font-bold text-[#806020] dark:text-[#C9A55B]">
-                          <Banknote className="w-4 h-4 text-[#C9A55B]" />
-                          <span>Pago en Efectivo (Pago al Recibir)</span>
-                        </div>
-                        <p className="text-xs text-[#1C1917] dark:text-white font-medium">
-                          Pago en efectivo directo a la masajista antes de iniciar el masaje.
-                        </p>
-                        <p className="text-[11px] text-[#6B655F] dark:text-[#AAAAAA]">
-                          Se solicita entregar el importe exacto de <strong className="text-[#806020] dark:text-[#C9A55B]">${totalPrice.toLocaleString()} MXN</strong> al momento de recibir a la terapeuta en tu domicilio.
-                        </p>
                       </div>
                     )}
                   </div>
