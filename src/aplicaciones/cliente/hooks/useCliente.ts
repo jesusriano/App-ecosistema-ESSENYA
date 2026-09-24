@@ -9,7 +9,7 @@ export const useCliente = () => {
     therapists: ecosystem.therapists,
     bookings: ecosystem.bookings,
     invoices: ecosystem.invoices,
-    activeBooking: ecosystem.bookings.find(b => b.state !== 'servicio_finalizado' && b.state !== 'cancelado') || ecosystem.bookings[0],
+    activeBooking: ecosystem.bookings.find(b => b.state !== 'servicio_finalizado' && b.state !== 'cancelado') || null,
     handleNewBooking: ecosystem.handleNewBooking,
     handleUpdateBookingState: ecosystem.handleUpdateBookingState,
     handleRescheduleBooking: ecosystem.handleRescheduleBooking,

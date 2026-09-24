@@ -254,50 +254,10 @@ service cloud.firestore {
     // ========================================================
     
     match /reservas/{reservaId} {
-      allow get: if isSignedIn() && isValidId(reservaId) && (
-        resource.data.clientId == request.auth.uid || 
-        resource.data.therapistId == request.auth.uid || 
-        (resource.data.keys().hasAny(['therapistId2']) && resource.data.therapistId2 == request.auth.uid) ||
-        (resource.data.keys().hasAny(['therapistIds']) && request.auth.uid in resource.data.therapistIds) ||
-        resource.data.state == 'pendiente' ||
-        isAdmin()
-      );
-      allow list: if isSignedIn() && (
-        resource.data.clientId == request.auth.uid || 
-        resource.data.therapistId == request.auth.uid || 
-        (resource.data.keys().hasAny(['therapistId2']) && resource.data.therapistId2 == request.auth.uid) ||
-        (resource.data.keys().hasAny(['therapistIds']) && request.auth.uid in resource.data.therapistIds) ||
-        resource.data.state == 'pendiente' ||
-        isAdmin()
-      );
-      allow create: if false;
-      allow update: if isSignedIn() && isValidId(reservaId) && (
-        isAdmin() ||
-        (!isTerminalState(existing().state) && (
-          isValidBooking(incoming()) &&
-          // Action: Client Update (Rating/Comment or cancel)
-          (isOwner(existing().clientId) && incoming().total == existing().total && 
-           incoming().diff(existing()).affectedKeys().hasOnly(['state', 'rating', 'reviewComment', 'reviewComment', 'reviewedAt', 'updatedAt']) &&
-           isValidStateTransition(existing().state, incoming().state)) ||
-          isValidBooking(incoming()) &&
-          // Action: Therapist Update (Location or status change)
-          ((isOwner(existing().therapistId) || 
-            (existing().keys().hasAny(['therapistId2']) && isOwner(existing().therapistId2)) ||
-            (existing().keys().hasAny(['therapistIds']) && request.auth.uid in existing().therapistIds)) && 
-           incoming().total == existing().total && 
-           incoming().diff(existing()).affectedKeys().hasOnly(['state', 'liveLat', 'liveLng', 'updatedAt']) &&
-           isValidStateTransition(existing().state, incoming().state)) ||
-          // Action: Unassigned or Dual Booking Acceptance
-          (existing().state == 'pendiente' && 
-           incoming().diff(existing()).affectedKeys().hasOnly([
-             'state', 'therapistId', 'therapistName', 'therapistPhoto', 'therapistPhone',
-             'therapistId2', 'therapistName2', 'therapistPhoto2', 'therapistPhone2',
-             'therapistIds', 'assignedTherapistsCount', 'requiresDualTherapist',
-             'acceptedAt', 'updatedAt'
-           ]))
-        ))
-      );
-      allow delete: if isAdmin();
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn();
     }
     
     match /invoices/{invoiceId} {

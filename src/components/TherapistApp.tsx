@@ -347,7 +347,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
   }, [activeTherapist.id, activeTherapist.status]);
 
   // Find active booking assigned to therapist
-  const currentBooking = bookings.find(b => b.state !== 'servicio_finalizado' && b.state !== 'cancelado' && b.state !== 'pendiente') || bookings.find(b => b.state !== 'servicio_finalizado' && b.state !== 'cancelado') || bookings[0];
+  const currentBooking = bookings.find(b => b.state !== 'servicio_finalizado' && b.state !== 'cancelado' && b.state !== 'pendiente') || bookings.find(b => b.state !== 'servicio_finalizado' && b.state !== 'cancelado') || null;
 
   // Watch position and update Firestore for active bookings
   useEffect(() => {
@@ -414,10 +414,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
   // Chat state
   const [chatInput, setChatInput] = useState<string>('');
   const [isClientTyping, setIsClientTyping] = useState<boolean>(false);
-  const [messages, setMessages] = useState<Array<{ sender: string, text: string, time: string, read?: boolean }>>([
-    { sender: 'Don Alejandro', text: 'Hola Elena, ¿a qué hora aproximadamente estás llegando a Palmas?', time: '10:18 AM', read: true },
-    { sender: activeTherapist.name, text: 'Hola Don Alejandro. Estoy a 12 minutos. El chofer ejecutivo ya está estacionando.', time: '10:20 AM', read: true }
-  ]);
+  const [messages, setMessages] = useState<Array<{ sender: string, text: string, time: string, read?: boolean }>>([]);
 
   // Subtle Audio & Tactile Vibration Notification States
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {

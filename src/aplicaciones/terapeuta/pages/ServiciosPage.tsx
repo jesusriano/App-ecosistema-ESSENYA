@@ -15,7 +15,7 @@ export const ServiciosPage: React.FC = () => {
   const [completedCelebrationBooking, setCompletedCelebrationBooking] = useState<Booking | null>(null);
 
   const pendingBookings = bookings.filter(b => b.state === 'pendiente');
-  const activeAndCompletedBookings = bookings.filter(b => b.state !== 'pendiente');
+  const activeAndCompletedBookings = bookings.filter(b => b.state !== 'pendiente' && b.state !== 'servicio_finalizado' && b.state !== 'cancelado');
 
   const onAccept = async (bookingId: string) => {
     try {

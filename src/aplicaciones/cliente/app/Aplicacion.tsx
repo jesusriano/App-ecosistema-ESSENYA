@@ -308,10 +308,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   const [showChat, setShowChat] = useState<boolean>(false);
   const [chatInput, setChatInput] = useState<string>('');
   const [isOtherTyping, setIsOtherTyping] = useState<boolean>(false);
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: string, text: string, time: string, read?: boolean }>>([
-    { sender: 'AURA ESSENYA IA', text: 'Bienvenido a ESSENYA, Don Alejandro. Su terapeuta fue notificada y está coordinando el transporte ejecutivo.', time: '10:16 AM', read: true },
-    { sender: 'Dra. Elena Rostova', text: 'Buenas tardes. Me encuentro en camino con todo el equipo esterilizado y camilla VIP.', time: '10:20 AM', read: true }
-  ]);
+  const [chatMessages, setChatMessages] = useState<Array<{ sender: string, text: string, time: string, read?: boolean }>>([]);
 
   // Extras Selection State
   const [selectedReflexology, setSelectedReflexology] = useState<'none' | '15' | '30'>('none');
