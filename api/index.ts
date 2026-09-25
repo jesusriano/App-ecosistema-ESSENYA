@@ -2222,10 +2222,15 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
 
     // Atomic transaction
     const result = await getAdminFirestore().runTransaction(async (t) => {
-      // 1. Validate User / Auto-provision client doc if missing
+      // ----------------------------------------------------
+      // PHASE 1: ALL READS FIRST (No writes permitted in Phase 1)
+      // ----------------------------------------------------
+      
+      // 1. Read User documents
       const userRef = getAdminFirestore().collection('clientes').doc(uid);
       const userDoc = await t.get(userRef);
       let userData: any = {};
+      let userDocToCreate: any = null;
 
       if (!userDoc.exists) {
         const authUserDoc = await t.get(getAdminFirestore().collection('users').doc(uid));
@@ -2244,19 +2249,49 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
           isBlocked: false,
           createdAt: new Date().toISOString()
         };
-        t.set(userRef, userData);
+        // DO NOT write yet! Defer t.set(userRef, userData) to Phase 3.
+        userDocToCreate = userData;
       } else {
         userData = userDoc.data() || {};
       }
 
-      // 2. Validate Service & Official Pricing (NEVER default to 1100 if service is nonexistent)
+      // 2. Read Service document
       let srvDoc = await t.get(getAdminFirestore().collection("servicios").doc(serviceId));
       if (!srvDoc.exists) {
         if (serviceId === "SRB-relajante") srvDoc = await t.get(getAdminFirestore().collection("servicios").doc("srv-relajante"));
         else if (serviceId === "srv-relajante") srvDoc = await t.get(getAdminFirestore().collection("servicios").doc("SRB-relajante"));
       }
-      
-      let srvData = srvDoc.exists ? srvDoc.data() : null;
+
+      // 3. Read Courtesy Bookings (if requested)
+      let allClientBookings: any = null;
+      if (applyCourtesy) {
+        allClientBookings = await t.get(getAdminFirestore().collection('reservas')
+          .where('clientId', '==', uid));
+      }
+
+      // 4. Read Gift Card or Wallet documents (if requested)
+      const isWalletRequested = applyGiftCard === true || (typeof expectedWalletDeduction === 'number' && expectedWalletDeduction > 0) || !!giftCardCode;
+      let gcQuery: any = null;
+      let walletQuery: any = null;
+
+      if (isWalletRequested) {
+        if (giftCardCode && typeof giftCardCode === 'string') {
+          const cleanCode = giftCardCode.trim().toUpperCase();
+          gcQuery = await t.get(getAdminFirestore().collection('gift_cards').where('code', '==', cleanCode).limit(1));
+        } else {
+          walletQuery = await t.get(
+            getAdminFirestore().collection('clientes').doc(uid).collection('billetera')
+              .where('status', '==', 'activa')
+          );
+        }
+      }
+
+      // ----------------------------------------------------
+      // PHASE 2: COMPUTATION & VALIDATIONS (In-memory only)
+      // ----------------------------------------------------
+
+      // Validate Service & Official Pricing (NEVER default to 1100 if service is nonexistent)
+      let srvData = srvDoc && srvDoc.exists ? srvDoc.data() : null;
       if (!srvData) {
         srvData = OFFICIAL_SERVICES_CATALOG[serviceId] ||
           (serviceId === "SRB-relajante" ? OFFICIAL_SERVICES_CATALOG["srv-relajante"] : null) ||
@@ -2305,17 +2340,14 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
         }
       }
 
-      // 3. Evaluate VIP15 Courtesy (Strict 15% discount on duration price)
+      // Evaluate VIP15 Courtesy
       let courtesyApplied = false;
       let courtesyDiscount = 0;
-      if (applyCourtesy) {
-        const allClientBookings = await t.get(getAdminFirestore().collection('reservas')
-          .where('clientId', '==', uid));
-        
+      if (applyCourtesy && allClientBookings) {
         let finishedCount = 0;
         let usedCourtesiesCount = 0;
 
-        allClientBookings.forEach(docSnap => {
+        allClientBookings.forEach((docSnap: any) => {
           const bData = docSnap.data();
           if (bData.state === 'servicio_finalizado' && bData.paymentStatus === 'pagado') {
             finishedCount++;
@@ -2341,18 +2373,16 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
       const subtotal = officialDurationPrice + extrasTotal;
       const totalBeforeWallet = Math.max(0, subtotal - courtesyDiscount + tip);
 
-      // 4. Strict Option B Wallet Logic & Direct Gift Card Single-Use Deduction
+      // Strict Option B Wallet Logic & Direct Gift Card Single-Use Deduction
       let amountDeductedFromWallet = 0;
-      const walletUpdates = [];
-      const isWalletRequested = applyGiftCard === true || (typeof expectedWalletDeduction === 'number' && expectedWalletDeduction > 0) || !!giftCardCode;
+      let demoCardToCreate: any = null;
+      let giftCardUpdate: { ref: any; data: any } | null = null;
+      const walletUpdates: Array<{ ref: any; data: any; deduction: number; cardCode: string }> = [];
 
       if (isWalletRequested) {
         if (giftCardCode && typeof giftCardCode === 'string') {
-          // Direct centralized Gift Card redemption (Single-Use Enforced)
           const cleanCode = giftCardCode.trim().toUpperCase();
-          const gcQuery = await t.get(getAdminFirestore().collection('gift_cards').where('code', '==', cleanCode).limit(1));
-          
-          let gcDoc = !gcQuery.empty ? gcQuery.docs[0] : null;
+          let gcDoc = gcQuery && !gcQuery.empty ? gcQuery.docs[0] : null;
 
           // Support system demo card if not present yet
           if (!gcDoc && cleanCode === 'REGALO-ESS-1400') {
@@ -2377,7 +2407,7 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
               redeemed: false,
               history: []
             };
-            t.set(demoRef, demoCard);
+            demoCardToCreate = { ref: demoRef, data: demoCard };
             gcDoc = { ref: demoRef, data: () => demoCard } as any;
           }
 
@@ -2403,24 +2433,21 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
           amountDeductedFromWallet = deduction;
           const newBalance = Math.max(0, gcData.currentBalance - deduction);
 
-          // Atomic consumption: mark as redeemed/canjeada if fully used or single-use
-          t.update(gcDoc.ref, {
-            currentBalance: newBalance,
-            status: 'canjeada', // Strict single-use voucher policy
-            redeemed: true,
-            usedByClientId: uid,
-            usedAt: new Date().toISOString(),
-            usedForBookingTotal: totalBeforeWallet,
-            deductionApplied: deduction
-          });
-        } else {
-          // Normal personal wallet deduction
-          const walletQuery = await t.get(
-            getAdminFirestore().collection('clientes').doc(uid).collection('billetera')
-              .where('status', '==', 'activa')
-          );
-
-          const availableBalance = walletQuery.docs.reduce((sum, d) => sum + (d.data().currentBalance || 0), 0);
+          // Atomic consumption: prepare update for Phase 3
+          giftCardUpdate = {
+            ref: gcDoc.ref,
+            data: {
+              currentBalance: newBalance,
+              status: 'canjeada', // Strict single-use voucher policy
+              redeemed: true,
+              usedByClientId: uid,
+              usedAt: new Date().toISOString(),
+              usedForBookingTotal: totalBeforeWallet,
+              deductionApplied: deduction
+            }
+          };
+        } else if (walletQuery) {
+          const availableBalance = walletQuery.docs.reduce((sum: number, d: any) => sum + (d.data().currentBalance || 0), 0);
 
           const reqDeduction = typeof expectedWalletDeduction === 'number'
             ? expectedWalletDeduction
@@ -2443,7 +2470,10 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
               const newBalance = cardData.currentBalance - deduction;
               walletUpdates.push({
                 ref: cardDoc.ref,
-                newBalance,
+                data: {
+                  currentBalance: newBalance,
+                  status: newBalance === 0 ? 'agotada' : 'activa'
+                },
                 deduction,
                 cardCode: cardData.code
               });
@@ -2461,7 +2491,7 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
         }
       }
 
-      // 5. Create Booking with guaranteed 'id' field matching doc.id
+      // Booking parameters
       const codeNum = Math.floor(1000 + Math.random() * 9000);
       const code = `ESS-${codeNum}`;
       const newBookingRef = getAdminFirestore().collection('reservas').doc();
@@ -2516,14 +2546,28 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
         createdAt: new Date().toISOString()
       };
 
-      t.set(newBookingRef, newBooking);
+      // ----------------------------------------------------
+      // PHASE 3: ALL WRITES AFTERWARDS (Strictly no reads allowed here)
+      // ----------------------------------------------------
 
-      // 6. Consume Wallet Balance & Add Ledger Entries
+      // 1. Create client doc if missing
+      if (userDocToCreate) {
+        t.set(userRef, userDocToCreate);
+      }
+
+      // 2. Create demo gift card if needed
+      if (demoCardToCreate) {
+        t.set(demoCardToCreate.ref, demoCardToCreate.data);
+      }
+
+      // 3. Update gift card balance if used
+      if (giftCardUpdate) {
+        t.update(giftCardUpdate.ref, giftCardUpdate.data);
+      }
+
+      // 4. Update wallet cards and create ledger entries
       for (const update of walletUpdates) {
-        t.update(update.ref, { 
-          currentBalance: update.newBalance,
-          status: update.newBalance === 0 ? 'agotada' : 'activa'
-        });
+        t.update(update.ref, update.data);
         
         const ledgerRef = getAdminFirestore().collection('clientes').doc(uid).collection('wallet_ledger').doc();
         t.set(ledgerRef, {
@@ -2535,6 +2579,9 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
           description: `Pago de reserva ${code}`
         });
       }
+
+      // 5. Create Booking in Firestore
+      t.set(newBookingRef, newBooking);
 
       return { bookingId, booking: newBooking, calculatedFinalTotal, isAuthorizedForDispatch };
     });
