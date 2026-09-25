@@ -857,7 +857,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
             id="therapist-tab-active"
             className={`relative flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all shrink-0 whitespace-nowrap cursor-pointer ${
               unreadChatCount > 0 
-                ? 'ring-2 ring-amber-500/80 shadow-[0_0_15px_rgba(245,158,11,0.5)] animate-pulse text-amber-600 dark:text-amber-300 bg-amber-500/15 border border-amber-500/40' 
+                ? 'animate-pulse ring-2 ring-[#C9A55B] shadow-[0_0_20px_rgba(201,165,91,0.7)] text-[#806020] dark:text-[#E6CA65] bg-[#C9A55B]/25 border-2 border-[#C9A55B]' 
                 : activeTab === 'active'
                 ? 'text-[#806020] dark:text-[#C9A55B]'
                 : 'text-[#6B655F] dark:text-white/60 hover:text-[#1C1917] dark:hover:text-white'
