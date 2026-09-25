@@ -1820,7 +1820,12 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       setBookings(prev => prev.map(b => {
         if (b.id === bookingId) {
-          return { ...b, date: newDate, time: newTime };
+          return { 
+            ...b, 
+            date: newDate, 
+            time: newTime,
+            updatedAt: new Date().toISOString()
+          };
         }
         return b;
       }));
@@ -1866,7 +1871,16 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       setBookings(prev => prev.map(b => {
         if (b.id === bookingId) {
-          return { ...b, state: 'cancelado', cancellationReason: reason, refundedAmount: data.refundedAmount };
+          return { 
+            ...b, 
+            state: 'cancelado', 
+            dispatchState: 'cancelada',
+            activeOfferTherapistIds: [],
+            activeOffers: [],
+            cancellationReason: reason, 
+            refundedAmount: data.refundedAmount,
+            updatedAt: new Date().toISOString()
+          };
         }
         return b;
       }));

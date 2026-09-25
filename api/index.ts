@@ -2691,15 +2691,50 @@ app.post("/api/bookings/cancel", requireAuth, async (req, res) => {
 
       t.update(bookingRef, {
         state: 'cancelado',
+        dispatchState: 'cancelada',
+        activeOfferTherapistIds: [],
+        activeOffers: [],
         cancellationReason: reason || 'Cancelado por el usuario',
         canceledAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         refundedAmount: deduction
       });
 
-      return { bookingId, refundedAmount: deduction };
+      return { bookingId, refundedAmount: deduction, bookingData };
     });
 
-    res.json({ success: true, message: "Reserva cancelada y saldo reembolsado exitosamente.", ...result });
+    // Notify assigned therapists and client immediately via push
+    const db = getAdminFirestore();
+    const bData = result.bookingData;
+    const targetTherapistIds = [
+      bData.therapistId,
+      bData.therapistId2,
+      ...(Array.isArray(bData.therapistIds) ? bData.therapistIds : [])
+    ].filter(Boolean);
+
+    for (const tId of new Set(targetTherapistIds)) {
+      sendPushNotificationToUser(db, tId, {
+        title: '⚠️ Cita Cancelada',
+        body: `El servicio ${bData.code || ''} para el ${bData.date} ha sido cancelado. Motivo: ${reason || 'Cancelación de servicio'}.`,
+        url: '/terapeuta/servicios',
+        tag: `booking-cancelled-${bookingId}`,
+        soundPreset: 'gentle',
+        data: { type: 'booking_cancelled', bookingId }
+      }).catch(e => console.warn('[Cancel] Push error to therapist:', e));
+    }
+
+    if (bData.clientId && bData.clientId !== uid) {
+      sendPushNotificationToUser(db, bData.clientId, {
+        title: '⚠️ Cita Cancelada',
+        body: `Tu servicio ${bData.code || ''} ha sido cancelado. Motivo: ${reason || 'Cancelación'}.`,
+        url: '/cliente',
+        tag: `booking-cancelled-${bookingId}`,
+        soundPreset: 'gentle',
+        data: { type: 'booking_cancelled', bookingId }
+      }).catch(e => console.warn('[Cancel] Push error to client:', e));
+    }
+
+    res.json({ success: true, message: "Reserva cancelada y saldo reembolsado exitosamente.", bookingId: result.bookingId, refundedAmount: result.refundedAmount });
   } catch (err: any) {
     console.error("Error en cancelación atómica:", err);
     res.status(400).json({ success: false, error: err.message || "Error interno al cancelar." });
@@ -2757,8 +2792,39 @@ app.post("/api/bookings/reschedule", requireAuth, async (req, res) => {
     await bookingRef.update({
       date: newDate,
       time: newTime,
+      rescheduledAt: nowIso,
       updatedAt: nowIso
     });
+
+    // Notify assigned therapists and client immediately via push
+    const db = getAdminFirestore();
+    const targetTherapistIds = [
+      bookingData.therapistId,
+      bookingData.therapistId2,
+      ...(Array.isArray(bookingData.therapistIds) ? bookingData.therapistIds : [])
+    ].filter(Boolean);
+
+    for (const tId of new Set(targetTherapistIds)) {
+      sendPushNotificationToUser(db, tId, {
+        title: '🗓️ Cita Reprogramada',
+        body: `El servicio ${bookingData.code || ''} ha sido reprogramado para el ${newDate} a las ${newTime} hrs.`,
+        url: '/terapeuta/servicios',
+        tag: `booking-rescheduled-${bookingId}`,
+        soundPreset: 'bell',
+        data: { type: 'booking_rescheduled', bookingId, newDate, newTime }
+      }).catch(e => console.warn('[Reschedule] Push error to therapist:', e));
+    }
+
+    if (bookingData.clientId && bookingData.clientId !== uid) {
+      sendPushNotificationToUser(db, bookingData.clientId, {
+        title: '🗓️ Cita Reprogramada',
+        body: `Tu servicio ${bookingData.code || ''} ha sido reprogramado para el ${newDate} a las ${newTime} hrs.`,
+        url: '/cliente',
+        tag: `booking-rescheduled-${bookingId}`,
+        soundPreset: 'bell',
+        data: { type: 'booking_rescheduled', bookingId, newDate, newTime }
+      }).catch(e => console.warn('[Reschedule] Push error to client:', e));
+    }
 
     return res.json({ 
       success: true, 
