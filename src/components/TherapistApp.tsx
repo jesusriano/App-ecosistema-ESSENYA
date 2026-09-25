@@ -296,26 +296,42 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
     if (declinedBookingIds.includes(b.id)) return false;
     if (Array.isArray(b.rejectedBy) && b.rejectedBy.includes(activeTherapist.id)) return false;
 
-    // Strict Zone matching: therapist only receives services in her configured zones
-    const zones = Array.isArray(activeTherapist.coverageZones) && activeTherapist.coverageZones.length > 0
+    // Direct targeted dispatch offer override: if dispatch engine specifically targeted this therapist, always allow!
+    if (Array.isArray(b.activeOfferTherapistIds) && b.activeOfferTherapistIds.includes(activeTherapist.id)) {
+      return true;
+    }
+
+    // Direct assignment override: if therapist is explicitly assigned
+    if (b.therapistId === activeTherapist.id || b.therapistId2 === activeTherapist.id || (Array.isArray(b.therapistIds) && b.therapistIds.includes(activeTherapist.id))) {
+      return true;
+    }
+
+    // Normalize therapist coverage zones across all possible property names in Firestore profile
+    const zones: string[] = Array.isArray(activeTherapist.coverageZones) && activeTherapist.coverageZones.length > 0
       ? activeTherapist.coverageZones
       : (Array.isArray((activeTherapist as any).zonasCobertura) && (activeTherapist as any).zonasCobertura.length > 0
           ? (activeTherapist as any).zonasCobertura
-          : []);
+          : (activeTherapist.currentZone ? [activeTherapist.currentZone] : ((activeTherapist as any).zonaActual ? [(activeTherapist as any).zonaActual] : [])));
 
     if (zones.length > 0) {
       const bZone = (b.cityZone || '').toLowerCase().trim();
       const inZone = zones.some(z => {
-        const normZ = z.toLowerCase().trim();
+        const normZ = String(z).toLowerCase().trim();
         return normZ === bZone || bZone.includes(normZ) || normZ.includes(bZone);
       });
       if (!inZone) return false;
     } else {
-      // No zones configured -> cannot receive bookings
-      return false;
+      // If no zones configured on profile, check if therapist has a currentZone / zonaActual
+      const therapistCurrentZone = (activeTherapist.currentZone || (activeTherapist as any).zonaActual || '').toLowerCase().trim();
+      if (therapistCurrentZone) {
+        const bZone = (b.cityZone || '').toLowerCase().trim();
+        if (!bZone.includes(therapistCurrentZone) && !therapistCurrentZone.includes(bZone)) {
+          return false;
+        }
+      }
     }
 
-    // If progressive dispatch engine is targeting this booking, only show if this therapist is in activeOfferTherapistIds
+    // If progressive dispatch engine is targeting specific therapists and activeOfferTherapistIds is non-empty, only show if therapist is included
     if (Array.isArray(b.activeOfferTherapistIds) && b.activeOfferTherapistIds.length > 0) {
       return b.activeOfferTherapistIds.includes(activeTherapist.id);
     }

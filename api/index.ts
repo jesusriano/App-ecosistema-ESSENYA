@@ -2469,6 +2469,15 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
 
       const isDualTherapist = serviceId === 'srv-pareja' || !!(srvData && srvData.requiresDualTherapist);
 
+      const isAuthorizedForDispatch = calculatedFinalTotal === 0 || 
+        paymentMethod === 'Pago al Recibir' || 
+        paymentMethod === 'Transferencia Bank VIP' || 
+        paymentMethod === 'Transferencia Interbancaria (SPEI)' ||
+        paymentMethod === 'Tarjeta de Regalo (Saldo Billetera)';
+
+      const initialDispatchState = isAuthorizedForDispatch ? "buscando" : "en_espera_pago";
+      const initialDispatchStartedAt = isAuthorizedForDispatch ? new Date().toISOString() : "";
+
       const newBooking = {
         id: bookingId, // CRITICAL: REQUIRED FOR FIRESTORE RULES AND STATE PROGRESSION
         code,
@@ -2498,9 +2507,9 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
         assignedTherapistsCount: 0,
         clientLat: typeof req.body.clientLat === 'number' ? req.body.clientLat : null,
         clientLng: typeof req.body.clientLng === 'number' ? req.body.clientLng : null,
-        dispatchState: calculatedFinalTotal === 0 ? "buscando" : "en_espera_pago",
+        dispatchState: initialDispatchState,
         currentDispatchLevel: 10,
-        dispatchStartedAt: calculatedFinalTotal === 0 ? new Date().toISOString() : '',
+        dispatchStartedAt: initialDispatchStartedAt,
         activeOfferTherapistIds: [],
         activeOffers: [],
         dispatchHistory: [],
@@ -2527,11 +2536,11 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
         });
       }
 
-      return { bookingId, booking: newBooking, calculatedFinalTotal };
+      return { bookingId, booking: newBooking, calculatedFinalTotal, isAuthorizedForDispatch };
     });
 
-    // Trigger dispatch engine step immediately only if fully paid (e.g. 0 total via gift card)
-    if (result.calculatedFinalTotal === 0) {
+    // Trigger dispatch engine step immediately for bookings authorized for dispatch
+    if (result.isAuthorizedForDispatch) {
       stepDispatchEngine(getAdminFirestore(), result.bookingId, process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY).catch(e => {
         console.warn("[Dispatch] Initial step async error from atomic booking:", e);
       });
@@ -2753,6 +2762,47 @@ app.post("/api/bookings/accept", requireAuth, async (req, res) => {
       err.message.includes("ambos cupos")
     );
     res.status(isConflict ? 409 : 400).json({ success: false, error: err.message || "Error al procesar aceptación." });
+  }
+});
+
+// ========================================================
+// POST /api/bookings/confirm-stripe-payment - Confirm Stripe Payment and activate dispatch
+// ========================================================
+app.post("/api/bookings/confirm-stripe-payment", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { bookingId } = req.body;
+    if (!bookingId) return res.status(400).json({ success: false, error: "bookingId es requerido" });
+
+    const db = getAdminFirestore();
+    const bookingRef = db.collection('reservas').doc(bookingId);
+    const bookingSnap = await bookingRef.get();
+
+    if (!bookingSnap.exists) {
+      return res.status(404).json({ success: false, error: "Reserva no encontrada" });
+    }
+
+    const bData = bookingSnap.data()!;
+    const nowIso = new Date().toISOString();
+
+    if (bData.dispatchState === 'en_espera_pago' || bData.paymentStatus !== 'pagado') {
+      await bookingRef.update({
+        paymentStatus: 'pagado',
+        paid: true,
+        dispatchState: 'buscando',
+        dispatchStartedAt: bData.dispatchStartedAt || nowIso,
+        updatedAt: nowIso
+      });
+
+      console.log(`[Stripe Return] Booking ${bookingId} payment confirmed and moved to dispatch 'buscando'.`);
+
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
+      await stepDispatchEngine(db, bookingId, apiKey);
+    }
+
+    res.json({ success: true, bookingId });
+  } catch (err: any) {
+    console.error("Error al confirmar pago de Stripe:", err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

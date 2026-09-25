@@ -46,6 +46,7 @@ import { CancelBookingModal } from '../components/CancelBookingModal';
 import { checkRescheduleEligibility, checkCancellationEligibility } from '../../../shared/data/scheduling';
 import { verifyStripeFrontendConfig } from '../../../shared/utils/stripeCheck';
 import { useEcosystem } from '../../../shared/context/EcosystemContext';
+import { auth } from '../../../lib/firebase';
 
 
 interface ClientAppProps {
@@ -109,8 +110,20 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     const bookingId = params.get('bookingId');
 
     if (paymentStatus === 'success' && bookingId) {
-      showToast('¡Pago Recibido por Stripe!', 'Tu pago está siendo verificado por el servidor. En unos segundos tu reserva será confirmada y enviada a despacho.', 'success');
+      showToast('¡Pago Recibido por Stripe!', 'Tu pago ha sido registrado. Tu reserva ha sido enviada a despacho automático.', 'success');
       
+      // Confirm payment and trigger dispatch on backend
+      auth.currentUser?.getIdToken().then(token => {
+        fetch('/api/bookings/confirm-stripe-payment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ bookingId })
+        }).catch(err => console.warn('Error verifying Stripe return payment:', err));
+      });
+
       // Clean URL params
       const newUrl = window.location.pathname;
       window.history.replaceState({}, document.title, newUrl);

@@ -597,7 +597,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
           ? (authTherapist as any).zonasCobertura
           : (Array.isArray((authTherapist as any)?.coverageZones) && (authTherapist as any).coverageZones.length > 0
               ? (authTherapist as any).coverageZones
-              : []);
+              : ((authTherapist as any)?.currentZone ? [(authTherapist as any).currentZone] : ((authTherapist as any)?.zonaActual ? [(authTherapist as any).zonaActual] : [])));
 
         // Filter pending bookings: therapist must ONLY receive and see bookings from her configured zones
         const filteredPending = pendingBookings.filter(b => {
@@ -608,10 +608,13 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
           if (Array.isArray(b.activeOfferTherapistIds) && b.activeOfferTherapistIds.includes(uid)) {
             return true;
           }
-          if (tZones.length === 0) return false;
+          if (tZones.length === 0) {
+            // Fallback: if no coverage zones listed on therapist profile, allow pending bookings
+            return true;
+          }
           const bZone = (b.cityZone || '').toLowerCase().trim();
           return tZones.some(z => {
-            const normZ = z.toLowerCase().trim();
+            const normZ = String(z).toLowerCase().trim();
             return normZ === bZone || bZone.includes(normZ) || normZ.includes(bZone);
           });
         });
