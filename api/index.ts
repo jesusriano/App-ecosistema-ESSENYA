@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import webPush from "web-push";
 import Stripe from "stripe";
+import { stripeService } from "./stripe-service.js";
 import { sendPushNotificationToUser } from "./pushNotificationService.js";
 import * as adminApp from "firebase-admin/app";
 import * as adminAuth from "firebase-admin/auth";
@@ -2984,54 +2985,86 @@ app.post("/api/push/send", async (req: Request, res: Response) => {
 app.post("/api/create-stripe-checkout", async (req: Request, res: Response) => {
   try {
     const { bookingId, serviceName, total, customerEmail, successUrl, cancelUrl } = req.body;
-    if (!total || !serviceName) {
-      return res.status(400).json({ success: false, error: "Faltan datos de la reserva o monto." });
-    }
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price_data: {
-            currency: 'mxn',
-            product_data: {
-              name: `ESSENYA — ${serviceName}`,
-              description: `Reserva y Servicio de Masaje a Domicilio (${bookingId || 'VIP'})`
-            },
-            unit_amount: Math.round(Number(total) * 100),
-          },
-          quantity: 1,
-        },
-      ],
-      mode: 'payment',
-      success_url: successUrl || `${req.protocol}://${req.get('host')}/cliente?payment=success&bookingId=${bookingId || ''}`,
-      cancel_url: cancelUrl || `${req.protocol}://${req.get('host')}/cliente?payment=cancelled`,
-      customer_email: customerEmail || undefined,
-      metadata: {
-        bookingId: bookingId || ''
-      }
+    
+    const result = await stripeService.createCheckoutSession({
+      bookingId,
+      serviceName,
+      total,
+      customerEmail,
+      successUrl: successUrl || `${req.protocol}://${req.get('host')}/cliente?payment=success&bookingId=${bookingId || ''}`,
+      cancelUrl: cancelUrl || `${req.protocol}://${req.get('host')}/cliente?payment=cancelled`
     });
 
-    res.json({ success: true, url: session.url, sessionId: session.id });
+    res.json(result);
   } catch (err: any) {
     console.error("Error creating Stripe Checkout session:", err);
     res.status(500).json({ success: false, error: err.message || "Error al crear la sesión de pago con Stripe." });
   }
 });
 
+// Stripe Refund Endpoint
+app.post("/api/stripe/refund", async (req: Request, res: Response) => {
+  try {
+    const { bookingId, paymentIntentId, amount, reason } = req.body;
+    
+    if (!bookingId && !paymentIntentId) {
+      return res.status(400).json({ success: false, error: "Se requiere bookingId o paymentIntentId." });
+    }
+
+    const db = getAdminFirestore();
+    let targetPaymentIntent = paymentIntentId;
+
+    if (bookingId && !targetPaymentIntent) {
+      const bookingSnap = await db.collection('reservas').doc(bookingId).get();
+      if (bookingSnap.exists) {
+        targetPaymentIntent = bookingSnap.data()?.stripePaymentIntent;
+      }
+    }
+
+    if (!targetPaymentIntent) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "No se encontró un PaymentIntent asociado a esta reserva para procesar el reembolso en Stripe." 
+      });
+    }
+
+    const refund = await stripeService.createRefund({
+      paymentIntentId: targetPaymentIntent,
+      amount: amount ? Number(amount) : undefined,
+      reason: reason || 'requested_by_customer'
+    });
+
+    if (bookingId) {
+      const nowIso = new Date().toISOString();
+      await db.collection('reservas').doc(bookingId).update({
+        refundedAmount: refund.amount / 100,
+        refundStatus: refund.status,
+        stripeRefundId: refund.id,
+        updatedAt: nowIso
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      message: "Reembolso procesado exitosamente con Stripe.", 
+      refundId: refund.id,
+      amountRefunded: refund.amount / 100,
+      status: refund.status 
+    });
+  } catch (err: any) {
+    console.error("Error processing Stripe refund:", err);
+    res.status(500).json({ success: false, error: err.message || "Error al procesar reembolso en Stripe." });
+  }
+});
+
 // Stripe Webhook Handler Logic
 const handleStripeWebhook = async (req: Request, res: Response) => {
   const sig = req.headers['stripe-signature'];
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
 
   let event: Stripe.Event;
   try {
     const rawBody = (req as any).rawBody || req.body;
-    if (webhookSecret && sig) {
-      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
-    } else {
-      event = typeof rawBody === 'string' ? JSON.parse(rawBody) : rawBody;
-    }
+    event = stripeService.handleWebhook(rawBody, sig);
   } catch (err: any) {
     console.error(`[Stripe Webhook] Signature verification failed:`, err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
@@ -3057,6 +3090,7 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
               paid: true,
               dispatchState: 'buscando',
               dispatchStartedAt: nowIso,
+              stripePaymentIntent: typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id || undefined,
               updatedAt: nowIso
             });
 
