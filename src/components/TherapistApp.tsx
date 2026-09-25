@@ -6,7 +6,8 @@ import { Therapist, Booking, BookingState } from '../types';
 import { 
   Calendar, Clock, MapPin, Navigation, MessageSquare, DollarSign, 
   CheckCircle2, XCircle, Play, Shield, Award, Star, Bot, Send, UserCheck, Check, CheckCheck,
-  AlertTriangle, X, Volume2, VolumeX, Vibrate, BellRing, Sparkles, Smartphone, Mic, Square, Bell
+  AlertTriangle, X, Volume2, VolumeX, Vibrate, BellRing, Sparkles, Smartphone, Mic, Square, Bell,
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 import { PanicModal } from './PanicModal';
 import { BookingChatDrawer } from '../shared/components/BookingChatDrawer';
@@ -22,6 +23,7 @@ import {
   notifyTherapistNewMessage, 
   isUrgentChatMessage 
 } from '../shared/utils/notificationAudio';
+import { sendChatMessage, subscribeToChatMessages } from '../shared/services/chatService';
 
 
 interface TherapistAppProps {
@@ -319,6 +321,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
     }
     return true;
   });
+  const [expandedPendingId, setExpandedPendingId] = useState<string | null>(null);
   const activePending = pendingBookings[0] || null;
 
   // Periodically report live GPS to server so dispatch engine recognizes location as fresh
@@ -617,31 +620,55 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
   };
 
 
-  const handleSendChat = () => {
-    if (!chatInput.trim()) return;
-    const newMsg = { 
-      sender: activeTherapist.name, 
-      text: chatInput, 
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      read: false
-    };
-    setMessages(prev => [...prev, newMsg]);
+  // Real-time chat listener for active reservation
+  useEffect(() => {
+    if (!currentBooking?.id) return;
+
+    const unsubscribe = subscribeToChatMessages(currentBooking.id, (realMsgs) => {
+      if (realMsgs.length > 0) {
+        setMessages(realMsgs.map(m => ({
+          sender: m.senderName,
+          text: m.text,
+          time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          read: m.read
+        })));
+      }
+    });
+
+    return () => unsubscribe();
+  }, [currentBooking?.id]);
+
+  const handleSendChat = async () => {
+    const textToSend = chatInput.trim();
+    if (!textToSend || !currentBooking) return;
+
     setChatInput('');
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // Mark as read after 1s
-    setTimeout(() => {
-      setMessages(prev => prev.map(m => m === newMsg ? { ...m, read: true } : m));
-    }, 1000);
+    setMessages(prev => [...prev, { 
+      sender: activeTherapist.name || 'Terapeuta', 
+      text: textToSend, 
+      time: timeStr,
+      read: false
+    }]);
 
-    // Client typing after 800ms
-    setTimeout(() => {
-      setIsClientTyping(true);
-    }, 800);
-
-    // Client reply after 2500ms
-    setTimeout(() => {
-      handleIncomingMessage('Perfecto Elena, aquí te esperamos en la recepción con gusto.');
-    }, 2500);
+    try {
+      await sendChatMessage({
+        bookingId: currentBooking.id,
+        bookingCode: currentBooking.code,
+        senderId: activeTherapist.id,
+        senderName: activeTherapist.name || 'Terapeuta',
+        senderRole: 'terapeuta',
+        text: textToSend,
+        clientId: currentBooking.clientId,
+        clientName: currentBooking.clientName,
+        therapistId: activeTherapist.id,
+        therapistName: activeTherapist.name
+      });
+    } catch (err: any) {
+      console.error('[TherapistApp] Error sending chat message:', err);
+      showToast('Error de Mensajería', 'No se pudo enviar el mensaje al cliente.', 'error');
+    }
   };
 
   const [etaInfo, setEtaInfo] = useState<{distance: string, duration: string} | null>(null);
@@ -943,126 +970,205 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         
-        {/* INCOMING BOOKING ALERT MODAL / BANNER (FOR PENDING BOOKINGS) */}
-        {activePending && (() => {
-          const activeOffer = activePending.activeOffers?.find(o => o.therapistId === activeTherapist.id);
-          const displayedEta = activeOffer?.etaMinutes ?? activePending.etaMinutes ?? 15;
-          const currentLevel = activePending.currentDispatchLevel ?? 10;
+        {/* INCOMING BOOKING NOTIFICATIONS (FOR PENDING BOOKINGS) */}
+        {pendingBookings.length > 0 && (
+          <div className="space-y-3">
+            {pendingBookings.map((pendingBk) => {
+              const isExpanded = expandedPendingId === pendingBk.id;
+              const activeOffer = pendingBk.activeOffers?.find(o => o.therapistId === activeTherapist.id);
+              const displayedEta = activeOffer?.etaMinutes ?? pendingBk.etaMinutes ?? 15;
+              const currentLevel = pendingBk.currentDispatchLevel ?? 10;
+              const isDual = pendingBk.requiresDualTherapist || pendingBk.serviceId === 'srv-pareja';
+              const existingTherapistIds = Array.isArray(pendingBk.therapistIds)
+                ? pendingBk.therapistIds
+                : (pendingBk.therapistId ? [pendingBk.therapistId] : []);
+              const assignedCount = typeof pendingBk.assignedTherapistsCount === 'number'
+                ? pendingBk.assignedTherapistsCount
+                : existingTherapistIds.length;
 
-          return (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-gradient-to-r from-[#1C1A17] via-[#2A2418] to-[#1C1A17] border-2 border-[#C9A55B] p-6 rounded-2xl shadow-2xl relative overflow-hidden text-white space-y-4 ring-2 ring-[#C9A55B]/40"
-          >
-            <div className="absolute top-0 right-0 bg-[#C9A55B] text-black font-extrabold text-[11px] px-4 py-1 rounded-bl-2xl uppercase tracking-widest flex items-center gap-1.5 shadow-md">
-              <span className="w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
-              <span>🔔 Nueva Solicitud • Nivel ETA {currentLevel} min</span>
-            </div>
+              if (!isExpanded) {
+                return (
+                  <motion.div
+                    key={pendingBk.id}
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    onClick={() => setExpandedPendingId(pendingBk.id)}
+                    className="bg-gradient-to-r from-[#1C1A17] via-[#2A2418] to-[#1C1A17] border-2 border-[#C9A55B] p-4.5 rounded-2xl shadow-xl hover:border-[#E6CA65] transition-all cursor-pointer flex items-center justify-between gap-4 ring-2 ring-[#C9A55B]/30 group"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-10 h-10 rounded-xl bg-[#C9A55B]/20 border border-[#C9A55B]/40 flex items-center justify-center text-[#C9A55B] shrink-0 group-hover:scale-105 transition-transform">
+                        <Bell className="w-5 h-5 text-[#C9A55B] animate-bounce" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-base font-serif font-bold text-white flex items-center gap-2">
+                            🔔 Masaje solicitado
+                          </h4>
+                          {isDual && (
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#C9A55B]/20 text-[#C9A55B] border border-[#C9A55B]/40 uppercase tracking-wider">
+                              Pareja ({assignedCount}/2)
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-[#AAAAAA] mt-0.5 font-medium">
+                          Toca para ver los detalles
+                        </p>
+                      </div>
+                    </div>
 
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-[#C9A55B]/30 pb-4">
-              <div className="space-y-1">
-                <div className="flex items-center space-x-2">
-                  <span className="font-mono text-xs font-bold text-[#C9A55B]">Cita #{activePending.code || activePending.id}</span>
-                  <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-500/30">
-                    {activePending.paymentStatus === 'pagado' ? '✓ Pago Acreditado' : 'Pago al Recibir'}
-                  </span>
-                </div>
-                <h3 className="text-2xl font-serif font-bold text-white">{activePending.serviceName}</h3>
-                <p className="text-xs text-[#AAAAAA]">
-                  Cliente: <strong className="text-white font-semibold">{activePending.clientName}</strong> • Zona: {activePending.cityZone || 'CDMX'}
-                </p>
-              </div>
+                    <div className="flex items-center gap-2 text-xs font-bold text-[#C9A55B]">
+                      <span className="hidden sm:inline">Ver detalles</span>
+                      <ChevronDown className="w-5 h-5 text-[#C9A55B]" />
+                    </div>
+                  </motion.div>
+                );
+              }
 
-              <div className="text-left md:text-right">
-                <span className="text-xs text-[#AAAAAA] block">Ganancia por Servicio</span>
-                <span className="text-2xl font-bold text-gold-gradient">${(activePending.total ?? activePending.price ?? 0).toLocaleString()} MXN</span>
-              </div>
-            </div>
+              return (
+                <motion.div
+                  key={pendingBk.id}
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-gradient-to-r from-[#1C1A17] via-[#2A2418] to-[#1C1A17] border-2 border-[#C9A55B] p-6 rounded-2xl shadow-2xl relative overflow-hidden text-white space-y-4 ring-2 ring-[#C9A55B]/40"
+                >
+                  {/* Header with collapse toggle */}
+                  <div
+                    onClick={() => setExpandedPendingId(null)}
+                    className="flex items-center justify-between border-b border-[#C9A55B]/30 pb-3 cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-[#C9A55B]/20 border border-[#C9A55B]/40 flex items-center justify-center text-[#C9A55B]">
+                        <Bell className="w-4 h-4 text-[#C9A55B] animate-pulse" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-serif font-bold text-white flex items-center gap-2">
+                          🔔 Masaje solicitado
+                        </h3>
+                        <span className="text-[11px] text-[#C9A55B] font-mono">Cita #{pendingBk.code || pendingBk.id}</span>
+                      </div>
+                    </div>
 
-            {/* Real-time Route ETA & Response Window Banner */}
-            <div className="bg-gradient-to-r from-amber-500/20 via-amber-600/15 to-black/40 p-3.5 rounded-xl border border-amber-500/30 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-lg bg-[#C9A55B]/20 border border-[#C9A55B]/40 flex items-center justify-center text-amber-300">
-                  <Navigation className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-[10px] uppercase tracking-wider text-[#AAAAAA] font-bold">Tiempo Estimado de Llegada (ETA por Ruta)</div>
-                  <div className="text-xl font-bold text-white flex items-center gap-2">
-                    <span>⏱️ {displayedEta} minutos</span>
-                    <span className="text-[11px] font-normal text-amber-300/80 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">
-                      Ruta calculada a tu ubicación
-                    </span>
+                    <div className="flex items-center gap-2 text-xs text-[#C9A55B] font-bold group-hover:text-white transition-colors">
+                      <span>Contraer</span>
+                      <ChevronUp className="w-5 h-5 text-[#C9A55B]" />
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              {activePending.dispatchExpiresAt && (
-                <DispatchCountdownTimer
-                  expiresAt={activePending.dispatchExpiresAt}
-                />
-              )}
-            </div>
+                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-[#C9A55B]/30 pb-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-500/30">
+                          {pendingBk.paymentStatus === 'pagado' ? '✓ Pago Acreditado' : 'Pago al Recibir'}
+                        </span>
+                        {isDual && (
+                          <span className="bg-[#C9A55B]/20 text-[#C9A55B] text-[10px] font-bold px-2 py-0.5 rounded border border-[#C9A55B]/30">
+                            Masaje en Pareja ({assignedCount}/2)
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-2xl font-serif font-bold text-white">{pendingBk.serviceName}</h3>
+                      <p className="text-xs text-[#AAAAAA]">
+                        Cliente VIP: <strong className="text-white font-semibold">{pendingBk.clientName}</strong> • Zona: {pendingBk.cityZone || 'CDMX'}
+                      </p>
+                    </div>
 
-            {/* Service & Location Specs */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-black/40 p-4 rounded-xl border border-[#C9A55B]/20 text-xs">
-              <div className="space-y-1">
-                <span className="text-[#888888] flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-[#C9A55B]" />
-                  <span>📅 Fecha & Horario</span>
-                </span>
-                <p className="font-bold text-white">{activePending.date} a las {activePending.time}</p>
-                <p className="text-[11px] text-[#AAAAAA]">{activePending.durationMinutes} min de sesión</p>
-              </div>
+                    <div className="text-left md:text-right">
+                      <span className="text-xs text-[#AAAAAA] block">Ganancia por Servicio</span>
+                      <span className="text-2xl font-bold text-gold-gradient">${(pendingBk.total ?? pendingBk.price ?? 0).toLocaleString()} MXN</span>
+                    </div>
+                  </div>
 
-              <div className="space-y-1">
-                <span className="text-[#888888] flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5 text-[#C9A55B]" />
-                  <span>📍 Dirección del Cliente</span>
-                </span>
-                <p className="font-bold text-white">{activePending.clientAddress}</p>
-                <p className="text-[11px] text-[#AAAAAA]">Zona: {activePending.cityZone}</p>
-              </div>
+                  {/* Real-time Route ETA & Response Window Banner */}
+                  <div className="bg-gradient-to-r from-amber-500/20 via-amber-600/15 to-black/40 p-3.5 rounded-xl border border-amber-500/30 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-lg bg-[#C9A55B]/20 border border-[#C9A55B]/40 flex items-center justify-center text-amber-300">
+                        <Navigation className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider text-[#AAAAAA] font-bold">Tiempo Estimado de Llegada (ETA por Ruta)</div>
+                        <div className="text-xl font-bold text-white flex items-center gap-2">
+                          <span>⏱️ {displayedEta} minutos</span>
+                          <span className="text-[11px] font-normal text-amber-300/80 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">
+                            Ruta calculada a tu ubicación
+                          </span>
+                        </div>
+                      </div>
+                    </div>
 
-              <div className="space-y-1">
-                <span className="text-[#888888] flex items-center gap-1">
-                  <Star className="w-3.5 h-3.5 text-[#C9A55B]" />
-                  <span>💆 Preferencias & Molestias</span>
-                </span>
-                <p className="text-[#C9A55B] font-semibold">Presión: {activePending.preferences?.pressureLevel ?? 'Media'} • {activePending.preferences?.essentialOil ?? 'Lavanda Francesa'}</p>
-                {activePending.painPoints && (
-                  <p className="text-[11px] text-amber-300 font-medium truncate">Puntos dolor: {activePending.painPoints}</p>
-                )}
-              </div>
-            </div>
+                    {pendingBk.dispatchExpiresAt && (
+                      <DispatchCountdownTimer
+                        expiresAt={pendingBk.dispatchExpiresAt}
+                      />
+                    )}
+                  </div>
 
-            {/* Action Buttons: Accept / Decline */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-              <p className="text-xs text-[#AAAAAA] italic">
-                Al aceptar, el cliente verá tu nombre ({activeTherapist.name}) y fotografía oficial en su pantalla de seguimiento en vivo.
-              </p>
+                  {/* Service & Location Specs */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-black/40 p-4 rounded-xl border border-[#C9A55B]/20 text-xs">
+                    <div className="space-y-1">
+                      <span className="text-[#888888] flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-[#C9A55B]" />
+                        <span>📅 Fecha & Horario</span>
+                      </span>
+                      <p className="font-bold text-white">{pendingBk.date} a las {pendingBk.time} hrs</p>
+                      <p className="text-[11px] text-[#AAAAAA]">{pendingBk.durationMinutes} min de sesión</p>
+                    </div>
 
-              <div className="flex items-center space-x-3 w-full sm:w-auto">
-                <button
-                  onClick={() => handleDecline(activePending)}
-                  className="flex-1 sm:flex-none px-5 py-3 rounded-xl border border-white/20 text-xs font-semibold text-[#AAAAAA] hover:text-red-400 hover:border-red-400/50 transition-all cursor-pointer flex items-center justify-center space-x-1.5"
-                >
-                  <XCircle className="w-4 h-4" />
-                  <span>Declinar</span>
-                </button>
+                    <div className="space-y-1">
+                      <span className="text-[#888888] flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5 text-[#C9A55B]" />
+                        <span>📍 Dirección del Cliente</span>
+                      </span>
+                      <p className="font-bold text-white">{pendingBk.clientAddress}</p>
+                      <p className="text-[11px] text-[#AAAAAA]">Zona: {pendingBk.cityZone}</p>
+                    </div>
 
-                <button
-                  onClick={() => handleAccept(activePending)}
-                  className="flex-1 sm:flex-none px-8 py-3 rounded-xl bg-gradient-to-r from-[#E6CA65] via-[#C9A55B] to-[#9A7B38] text-black font-extrabold text-sm hover:opacity-95 shadow-lg shadow-[#C9A55B]/30 transition-all cursor-pointer flex items-center justify-center space-x-2"
-                >
-                  <CheckCircle2 className="w-5 h-5 text-black" />
-                  <span>Aceptar Masaje Ahora</span>
-                </button>
-              </div>
-            </div>
-          </motion.div>
-          );
-        })()}
+                    <div className="space-y-1">
+                      <span className="text-[#888888] flex items-center gap-1">
+                        <Star className="w-3.5 h-3.5 text-[#C9A55B]" />
+                        <span>💆 Preferencias & Molestias</span>
+                      </span>
+                      <p className="text-[#C9A55B] font-semibold">Presión: {pendingBk.preferences?.pressureLevel ?? 'Media'} • {pendingBk.preferences?.essentialOil ?? 'Lavanda Francesa'}</p>
+                      {pendingBk.painPoints && (
+                        <p className="text-[11px] text-amber-300 font-medium truncate">Puntos dolor: {pendingBk.painPoints}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Action Buttons: Accept / Decline */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                    <p className="text-xs text-[#AAAAAA] italic">
+                      Al aceptar, el cliente verá tu nombre ({activeTherapist.name}) y fotografía oficial en su pantalla de seguimiento en vivo.
+                    </p>
+
+                    <div className="flex items-center space-x-3 w-full sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={() => handleDecline(pendingBk)}
+                        className="flex-1 sm:flex-none px-5 py-3 rounded-xl border border-white/20 text-xs font-semibold text-[#AAAAAA] hover:text-red-400 hover:border-red-400/50 transition-all cursor-pointer flex items-center justify-center space-x-1.5"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        <span>Rechazar</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleAccept(pendingBk)}
+                        className="flex-1 sm:flex-none px-8 py-3 rounded-xl bg-gradient-to-r from-[#E6CA65] via-[#C9A55B] to-[#9A7B38] text-black font-extrabold text-sm hover:opacity-95 shadow-lg shadow-[#C9A55B]/30 transition-all cursor-pointer flex items-center justify-center space-x-2"
+                      >
+                        <CheckCircle2 className="w-5 h-5 text-black" />
+                        <span>
+                          {isDual 
+                            ? (assignedCount === 1 ? 'Aceptar 2º Cupo (Pareja)' : 'Aceptar Cupo (1 de 2)')
+                            : 'Aceptar Masaje Ahora'}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
 
         {/* TAB CONTENTS WITH SMOOTH ANIMATIONS */}
         <AnimatePresence mode="wait">

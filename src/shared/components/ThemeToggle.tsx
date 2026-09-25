@@ -12,7 +12,7 @@ export const ThemeToggle: React.FC = () => {
   return (
     <button
       onClick={toggleTheme}
-      className="fixed bottom-6 right-6 z-[100] w-12 h-12 rounded-full bg-[#1C1917] dark:bg-white text-white dark:text-black shadow-lg shadow-black/20 dark:shadow-white/20 flex items-center justify-center hover:scale-105 active:scale-95 transition-all duration-300"
+      className="fixed bottom-6 right-6 z-[60] w-12 h-12 rounded-full bg-[#1C1917] dark:bg-white text-white dark:text-black shadow-lg shadow-black/20 dark:shadow-white/20 flex items-center justify-center hover:scale-105 active:scale-95 transition-all duration-300"
       aria-label="Alternar tema oscuro/claro"
     >
       {effectiveTheme === 'dark' ? (

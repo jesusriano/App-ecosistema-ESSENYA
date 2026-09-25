@@ -43,6 +43,7 @@ import {
 import { getServiceImage, getStaticServiceImageFallback } from '../../../shared/utils/serviceImage';
 import { RescheduleBookingModal } from '../components/RescheduleBookingModal';
 import { CancelBookingModal } from '../components/CancelBookingModal';
+import { checkRescheduleEligibility, checkCancellationEligibility } from '../../../shared/data/scheduling';
 import { verifyStripeFrontendConfig } from '../../../shared/utils/stripeCheck';
 import { useEcosystem } from '../../../shared/context/EcosystemContext';
 
@@ -574,11 +575,34 @@ export const ClientApp: React.FC<ClientAppProps> = ({
           });
           const data = await res.json();
           if (data.success && data.url) {
-            window.location.href = data.url;
+            // Check if running inside an iframe preview
+            const isInIframe = window.self !== window.top;
+            if (isInIframe) {
+              // Open Stripe in new tab to bypass X-Frame-Options SAMEORIGIN restriction
+              const popup = window.open(data.url, '_blank');
+              if (!popup) {
+                try {
+                  window.top!.location.href = data.url;
+                } catch {
+                  window.location.href = data.url;
+                }
+              } else {
+                showToast(
+                  'Pasarela Stripe Abierta',
+                  'Se ha abierto la pasarela cifrada de Stripe en una nueva pestaña para completar tu pago.',
+                  'info'
+                );
+              }
+            } else {
+              window.location.href = data.url;
+            }
             return;
+          } else if (!data.success) {
+            showToast('Error en Pasarela Stripe', data.error || 'No fue posible generar la sesión de pago con Stripe.', 'error');
           }
-        } catch (stripeErr) {
+        } catch (stripeErr: any) {
           console.error("Stripe Checkout redirect error:", stripeErr);
+          showToast('Error de Conexión', 'No se pudo establecer comunicación con Stripe. Intenta de nuevo.', 'error');
         }
       }
 
@@ -648,40 +672,17 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
 
   const handleSendChat = () => {
-    if (!chatInput.trim()) return;
+    if (!chatInput.trim() || !activeBooking) return;
+    const textToSend = chatInput.trim();
     const newMsg = {
-      sender: client?.name || 'Don Alejandro',
-      text: chatInput,
+      sender: client?.name || 'Cliente VIP',
+      text: textToSend,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       read: false
     };
     setChatMessages(prev => [...prev, newMsg]);
-    onSendMessage(activeBooking.id, chatInput);
+    onSendMessage(activeBooking.id, textToSend);
     setChatInput('');
-
-    // Mark as read after 1s
-    setTimeout(() => {
-      setChatMessages(prev => prev.map(m => m === newMsg ? { ...m, read: true } : m));
-    }, 1000);
-
-    // Show typing indicator after 800ms
-    setTimeout(() => {
-      setIsOtherTyping(true);
-    }, 800);
-
-    // Therapist reply after 2200ms
-    setTimeout(() => {
-      setIsOtherTyping(false);
-      setChatMessages(prev => [
-        ...prev,
-        {
-          sender: activeBooking.therapistName || 'Dra. Elena Rostova',
-          text: 'Entendido, Don Alejandro. Llevo la mezcla de aromaterapia de Ylang Ylang Dorado indicada.',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          read: true
-        }
-      ]);
-    }, 2500);
   };
 
   return (
@@ -969,7 +970,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                 <div className="text-center max-w-xl mx-auto space-y-2">
                   <h3 className="text-2xl font-serif font-bold text-[#1C1917] dark:text-white">Selecciona tu Ritual de Bienestar</h3>
                   <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA]">
-                    Cada tratamiento incluye montaje completo de camilla VIP, lencería de algodón egipcio de 600 hilos y aromaterapia orgánica.
+                    Cada tratamiento incluye montaje completo de camilla VIP, sábanas de camilla en algodón egipcio de 600 hilos y aromaterapia orgánica.
                   </p>
                 </div>
 
@@ -2122,7 +2123,13 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                   <>
                     <button
                       type="button"
-                      onClick={() => setModalRescheduleBooking(activeBooking)}
+                      onClick={() => {
+                        const eligibility = checkRescheduleEligibility(activeBooking.date, activeBooking.time, activeBooking.state);
+                        if (!eligibility.canReschedule) {
+                          showToast('Reprogramación no disponible', 'Esta reserva ya no puede reprogramarse porque faltan menos de 4 horas para el inicio del servicio.', 'error');
+                        }
+                        setModalRescheduleBooking(activeBooking);
+                      }}
                       className="flex items-center space-x-1.5 bg-[#FAF6EE] dark:bg-[#222222] border border-[#C9A55B]/40 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-[#806020] dark:text-[#C9A55B] hover:bg-[#C9A55B] hover:text-black transition-all cursor-pointer"
                     >
                       <Calendar className="w-4 h-4 text-[#C9A55B]" />
@@ -2624,7 +2631,13 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => setModalRescheduleBooking(bk)}
+                              onClick={() => {
+                                const eligibility = checkRescheduleEligibility(bk.date, bk.time, bk.state);
+                                if (!eligibility.canReschedule) {
+                                  showToast('Reprogramación no disponible', 'Esta reserva ya no puede reprogramarse porque faltan menos de 4 horas para el inicio del servicio.', 'error');
+                                }
+                                setModalRescheduleBooking(bk);
+                              }}
                               className="flex items-center space-x-1.5 bg-[#FAF6EE] dark:bg-[#222222] border border-[#C9A55B]/40 px-3 py-1.5 rounded-xl text-xs text-[#806020] dark:text-[#C9A55B] font-semibold hover:bg-[#C9A55B] hover:text-black transition-all cursor-pointer"
                             >
                               <Calendar className="w-3.5 h-3.5 text-[#C9A55B]" />
@@ -2781,7 +2794,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                   tier: 'Imperial VIP',
                   price: '20,000',
                   desc: 'Elite (16+ masajes)',
-                  benefits: ['20% desc para siempre', 'Lencería de seda', 'Transferencia ilimitada'],
+                  benefits: ['20% desc para siempre', 'Sábanas de seda para camilla', 'Transferencia ilimitada'],
                   color: 'border-amber-600 dark:border-amber-400 shadow-2xl'
                 }
               ].map((m) => (

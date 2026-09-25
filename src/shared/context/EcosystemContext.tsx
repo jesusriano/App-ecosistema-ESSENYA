@@ -1796,25 +1796,42 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Booking Operational Handlers
   const handleRescheduleBooking = async (bookingId: string, newDate: string, newTime: string) => {
-    setBookings(prev => prev.map(b => {
-      if (b.id === bookingId) {
-        return { ...b, date: newDate, time: newTime };
-      }
-      return b;
-    }));
-
     try {
-      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore({ date: newDate, time: newTime }));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, { date: newDate, time: newTime });
-    }
+      const auth = getAuth();
+      const token = await auth.currentUser?.getIdToken();
 
-    addLog(
-      'Administrador',
-      'Panel Operaciones',
-      'Reprogramación de Servicio',
-      `Reserva ${bookingId} reprogramada para fecha ${newDate} a las ${newTime}.`
-    );
+      const response = await fetch('/api/bookings/reschedule', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ bookingId, newDate, newTime })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'No fue posible reprogramar la reserva.');
+      }
+
+      setBookings(prev => prev.map(b => {
+        if (b.id === bookingId) {
+          return { ...b, date: newDate, time: newTime };
+        }
+        return b;
+      }));
+
+      addLog(
+        'Operaciones',
+        'Sistema',
+        'Reprogramación de Servicio',
+        `Reserva ${bookingId} reprogramada para fecha ${newDate} a las ${newTime}.`
+      );
+    } catch (err: any) {
+      console.error("Error al reprogramar reserva:", err);
+      throw err;
+    }
   };
 
   const handleCancelBooking = async (bookingId: string, reason: string) => {

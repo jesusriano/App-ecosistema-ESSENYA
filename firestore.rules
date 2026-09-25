@@ -269,23 +269,74 @@ service cloud.firestore {
         resource.data.therapistId == request.auth.uid || 
         (resource.data.keys().hasAny(['therapistId2']) && resource.data.therapistId2 == request.auth.uid) ||
         (resource.data.keys().hasAny(['therapistIds']) && request.auth.uid in resource.data.therapistIds) ||
-        resource.data.state == 'pendiente' ||
+        resource.data.state in ['pendiente', 'aceptada', 'en_camino', 'llegue', 'servicio_iniciado'] ||
         isAdmin()
       );
       allow delete: if isAdmin();
+    }
+
+    match /conversaciones/{bookingId} {
+      allow get, list: if isSignedIn() && (
+        isAdmin() || 
+        resource.data.clientId == request.auth.uid || 
+        resource.data.therapistId == request.auth.uid ||
+        (exists(/databases/$(database)/documents/reservas/$(bookingId)) && (
+          get(/databases/$(database)/documents/reservas/$(bookingId)).data.clientId == request.auth.uid ||
+          get(/databases/$(database)/documents/reservas/$(bookingId)).data.therapistId == request.auth.uid
+        ))
+      );
+      allow create, update: if isSignedIn() && (
+        isAdmin() || 
+        incoming().clientId == request.auth.uid || 
+        incoming().therapistId == request.auth.uid ||
+        (exists(/databases/$(database)/documents/reservas/$(bookingId)) && (
+          get(/databases/$(database)/documents/reservas/$(bookingId)).data.clientId == request.auth.uid ||
+          get(/databases/$(database)/documents/reservas/$(bookingId)).data.therapistId == request.auth.uid
+        ))
+      );
+      allow delete: if isAdmin();
+
+      match /mensajes/{mensajeId} {
+        allow get, list: if isSignedIn() && (
+          isAdmin() || 
+          (exists(/databases/$(database)/documents/conversaciones/$(bookingId)) && (
+            get(/databases/$(database)/documents/conversaciones/$(bookingId)).data.clientId == request.auth.uid ||
+            get(/databases/$(database)/documents/conversaciones/$(bookingId)).data.therapistId == request.auth.uid
+          )) ||
+          (exists(/databases/$(database)/documents/reservas/$(bookingId)) && (
+            get(/databases/$(database)/documents/reservas/$(bookingId)).data.clientId == request.auth.uid ||
+            get(/databases/$(database)/documents/reservas/$(bookingId)).data.therapistId == request.auth.uid
+          ))
+        );
+        allow create: if isSignedIn() && (
+          isAdmin() || 
+          incoming().senderId == request.auth.uid ||
+          (exists(/databases/$(database)/documents/conversaciones/$(bookingId)) && (
+            get(/databases/$(database)/documents/conversaciones/$(bookingId)).data.clientId == request.auth.uid ||
+            get(/databases/$(database)/documents/conversaciones/$(bookingId)).data.therapistId == request.auth.uid
+          )) ||
+          (exists(/databases/$(database)/documents/reservas/$(bookingId)) && (
+            get(/databases/$(database)/documents/reservas/$(bookingId)).data.clientId == request.auth.uid ||
+            get(/databases/$(database)/documents/reservas/$(bookingId)).data.therapistId == request.auth.uid
+          ))
+        );
+        allow update, delete: if isAdmin() || (isSignedIn() && resource.data.senderId == request.auth.uid);
+      }
     }
     
     match /invoices/{invoiceId} {
       allow get: if isSignedIn() && isValidId(invoiceId) && (resource.data.clientId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
-      allow create, update: if isAdmin();
+      allow create: if isSignedIn() && isValidId(invoiceId) && (isAdmin() || incoming().clientId == request.auth.uid);
+      allow update: if isSignedIn() && isValidId(invoiceId) && (isAdmin() || resource.data.clientId == request.auth.uid);
       allow delete: if isAdmin();
     }
     
     match /pagos/{pagoId} {
       allow get: if isSignedIn() && isValidId(pagoId) && (resource.data.clientId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
-      allow create, update: if isAdmin();
+      allow create: if isSignedIn() && isValidId(pagoId) && (isAdmin() || incoming().clientId == request.auth.uid);
+      allow update: if isSignedIn() && isValidId(pagoId) && (isAdmin() || resource.data.clientId == request.auth.uid);
       allow delete: if isAdmin();
     }
     

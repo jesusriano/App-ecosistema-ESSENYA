@@ -8,6 +8,7 @@ import {
   evaluateTimeSlot, 
   getFirstAvailableSlot 
 } from '../../../shared/data/catalog';
+import { checkRescheduleEligibility } from '../../../shared/data/scheduling';
 
 interface RescheduleBookingModalProps {
   booking: Booking | null;
@@ -69,9 +70,11 @@ export const RescheduleBookingModal: React.FC<RescheduleBookingModalProps> = ({
 
   if (!isOpen || !booking) return null;
 
+  const eligibility = checkRescheduleEligibility(booking.date, booking.time, booking.state);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDate || !selectedTime || !selectedSlotStatus?.available) return;
+    if (!eligibility.canReschedule || !selectedDate || !selectedTime || !selectedSlotStatus?.available) return;
     setIsSubmitting(true);
     try {
       await onConfirmReschedule(booking.id, selectedDate, selectedTime);
@@ -118,7 +121,7 @@ export const RescheduleBookingModal: React.FC<RescheduleBookingModalProps> = ({
           </div>
 
           {/* Current schedule banner */}
-          <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-3.5 rounded-2xl border border-[#E5DFD3] dark:border-[#262626] mb-5 flex items-center justify-between text-xs">
+          <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-3.5 rounded-2xl border border-[#E5DFD3] dark:border-[#262626] mb-4 flex items-center justify-between text-xs">
             <div className="flex items-center space-x-2 text-[#6B655F] dark:text-[#AAAAAA]">
               <Clock className="w-4 h-4 text-[#806020] dark:text-[#C9A55B]" />
               <span>Horario actual programado:</span>
@@ -128,7 +131,33 @@ export const RescheduleBookingModal: React.FC<RescheduleBookingModalProps> = ({
             </span>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {!eligibility.canReschedule ? (
+            <div className="space-y-4">
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-xs space-y-2 text-amber-800 dark:text-amber-300">
+                <div className="flex items-center space-x-2 font-bold text-amber-700 dark:text-amber-400">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-amber-500" />
+                  <span>Restricción de Anticipación</span>
+                </div>
+                <p className="font-bold leading-snug text-amber-900 dark:text-amber-200">
+                  {eligibility.message}
+                </p>
+                <p className="text-[11px] opacity-90 leading-relaxed pt-1 border-t border-amber-500/20">
+                  Para garantizar la preparación de insumos, el bloqueo de agenda y la ruta de la terapeuta asignada hacia tu domicilio, las reprogramaciones directas requieren un mínimo de 4 horas de anticipación.
+                </p>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#C9A55B] text-black hover:bg-[#E6CA65] transition-colors cursor-pointer"
+                >
+                  Entendido
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
             {/* Date selection */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-[#6B655F] dark:text-[#AAAAAA] mb-2">
@@ -257,6 +286,7 @@ export const RescheduleBookingModal: React.FC<RescheduleBookingModalProps> = ({
               </button>
             </div>
           </form>
+          )}
         </motion.div>
       </div>
     </AnimatePresence>

@@ -32,7 +32,7 @@ export const calculateMembershipTier = (completedMassages: number): TierInfo => 
       progressPercent: 100,
       incentiveMessage: 'Has alcanzado el estatus Imperial. Disfrutas de 20% OFF siempre.',
       perk: '20% de descuento automático permanente',
-      perks: ['20% de descuento siempre', 'Terapeuta Master asignado', 'Lencería de seda'],
+      perks: ['20% de descuento siempre', 'Terapeuta Master asignado', 'Sábanas de seda para camilla'],
       isDiamondOrHigher: true
     };
   } else if (completedMassages >= 11) {

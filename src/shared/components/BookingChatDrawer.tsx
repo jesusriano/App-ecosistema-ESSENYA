@@ -125,7 +125,7 @@ export const BookingChatDrawer: React.FC<BookingChatDrawerProps> = ({
     : 'Usuario';
 
   return (
-    <div className="fixed inset-0 z-[80] flex justify-end">
+    <div className="fixed inset-0 z-[120] flex justify-end">
       {/* Backdrop */}
       <div 
         onClick={onClose}

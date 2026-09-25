@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Layers, Clock, MapPin, CheckCircle2, User, Bell, Sparkles, BookOpen, AlertCircle, Check, X } from 'lucide-react';
+import { Layers, Clock, MapPin, CheckCircle2, User, Bell, Sparkles, BookOpen, AlertCircle, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTerapeuta } from '../hooks/useTerapeuta';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { useToast } from '../../../shared/context/ToastContext';
@@ -13,6 +13,7 @@ export const ServiciosPage: React.FC = () => {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'citas' | 'catalogo'>('citas');
   const [completedCelebrationBooking, setCompletedCelebrationBooking] = useState<Booking | null>(null);
+  const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
 
   const pendingBookings = bookings.filter(b => b.state === 'pendiente');
   const activeAndCompletedBookings = bookings.filter(b => b.state !== 'pendiente' && b.state !== 'servicio_finalizado' && b.state !== 'cancelado');
@@ -128,14 +129,69 @@ export const ServiciosPage: React.FC = () => {
                   const alreadyAcceptedByMe = currentTherapistId && (
                     booking.therapistId === currentTherapistId || existingTherapistIds.includes(currentTherapistId)
                   );
+                  const isExpanded = expandedBookingId === booking.id;
+
+                  if (!isExpanded) {
+                    return (
+                      <div
+                        key={booking.id}
+                        onClick={() => setExpandedBookingId(booking.id)}
+                        className="bg-[#FAF6EE] dark:bg-[#1A1813] border-2 border-[#C9A55B] rounded-2xl p-4.5 shadow-md relative overflow-hidden cursor-pointer hover:border-[#E6CA65] transition-all flex items-center justify-between gap-4 group"
+                      >
+                        <div className="flex items-center gap-3.5">
+                          <div className="w-10 h-10 rounded-xl bg-[#C9A55B]/20 border border-[#C9A55B]/40 flex items-center justify-center text-[#806020] dark:text-[#C9A55B] shrink-0 group-hover:scale-105 transition-transform">
+                            <Bell className="w-5 h-5 text-[#C9A55B] animate-bounce" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-base font-serif font-bold text-[#1C1917] dark:text-white flex items-center gap-2">
+                                🔔 Masaje solicitado
+                              </h4>
+                              {isDual && (
+                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#C9A55B]/20 text-[#806020] dark:text-[#C9A55B] border border-[#C9A55B]/40 uppercase tracking-wider">
+                                  Pareja ({assignedCount}/2)
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] mt-0.5 font-medium">
+                              Toca para ver los detalles
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs font-bold text-[#806020] dark:text-[#C9A55B]">
+                          <span className="hidden sm:inline">Ver detalles</span>
+                          <ChevronDown className="w-5 h-5 text-[#C9A55B]" />
+                        </div>
+                      </div>
+                    );
+                  }
 
                   return (
                     <div
                       key={booking.id}
                       className="bg-[#FAF6EE] dark:bg-[#1A1813] border-2 border-[#C9A55B] rounded-2xl p-5 space-y-4 shadow-md relative overflow-hidden"
                     >
-                      <div className="absolute top-0 right-0 bg-[#C9A55B] text-black text-[10px] font-extrabold px-3 py-1 rounded-bl-xl uppercase tracking-wider">
-                        {isDual ? `¡Pareja (${assignedCount}/2)!` : '¡Nueva Solicitud!'}
+                      {/* Header with collapse button */}
+                      <div
+                        onClick={() => setExpandedBookingId(null)}
+                        className="flex items-center justify-between border-b border-[#E5DFD3] dark:border-[#333333] pb-3 cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Bell className="w-4 h-4 text-[#C9A55B]" />
+                          <h4 className="text-base font-serif font-bold text-[#1C1917] dark:text-white">
+                            🔔 Masaje solicitado
+                          </h4>
+                          {isDual && (
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#C9A55B]/20 text-[#806020] dark:text-[#C9A55B] border border-[#C9A55B]/30 uppercase">
+                              Pareja ({assignedCount}/2)
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-[#806020] dark:text-[#C9A55B] font-bold group-hover:text-black dark:group-hover:text-white transition-colors">
+                          <span>Contraer</span>
+                          <ChevronUp className="w-4 h-4 text-[#C9A55B]" />
+                        </div>
                       </div>
 
                       <div className="flex gap-4 items-start">
@@ -218,7 +274,7 @@ export const ServiciosPage: React.FC = () => {
                           className="flex items-center justify-center gap-1 bg-white dark:bg-[#262626] border border-[#E5DFD3] dark:border-[#444444] text-xs font-semibold text-[#6B655F] dark:text-[#AAAAAA] hover:text-red-500 py-2.5 px-3 rounded-xl transition-all cursor-pointer"
                         >
                           <X className="w-3.5 h-3.5" />
-                          <span>Declinar</span>
+                          <span>Rechazar</span>
                         </button>
                       </div>
                     </div>

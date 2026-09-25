@@ -1,5 +1,5 @@
 import { ServiceItem } from '../types';
-import imgRelaxing from '../../assets/images/relaxing_massage_essenya_1789423105022.jpg';
+import imgRelaxing from '../../assets/images/regenerated_image_1790367912901.png';
 import imgDeepTissue from '../../assets/images/deep_tissue_essenya_1789423125038.jpg';
 import imgSports from '../../assets/images/sports_massage_essenya_1789423135431.jpg';
 import imgPrenatal from '../../assets/images/prenatal_massage_essenya_1789423145499.jpg';

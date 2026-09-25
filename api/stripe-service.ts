@@ -21,6 +21,10 @@ export class StripeService {
    * Obtiene la instancia subyacente del SDK de Stripe
    */
   getStripeInstance(): Stripe {
+    const currentKey = process.env.STRIPE_SECRET_KEY || '';
+    if (currentKey && (!this.stripe || !(this.stripe as any)._apiKey || (this.stripe as any)._apiKey === '')) {
+      this.stripe = new Stripe(currentKey);
+    }
     return this.stripe;
   }
 
@@ -41,7 +45,8 @@ export class StripeService {
       throw new Error("Faltan datos requeridos de la reserva (total o serviceName).");
     }
 
-    const session = await this.stripe.checkout.sessions.create({
+    const stripe = this.getStripeInstance();
+    const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {

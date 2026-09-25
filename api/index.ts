@@ -2545,6 +2545,16 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
   }
 });
 
+function calculateHoursRemaining(dateStr?: string, timeStr?: string, now = new Date()): number {
+  if (!dateStr || !timeStr) return 99;
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  if (isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hours) || isNaN(minutes)) return 99;
+  const scheduledDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+  const diffMs = scheduledDate.getTime() - now.getTime();
+  return diffMs / (1000 * 60 * 60);
+}
+
 // Cancel endpoint with transactional refund
 app.post("/api/bookings/cancel", requireAuth, async (req, res) => {
   try {
@@ -2578,6 +2588,14 @@ app.post("/api/bookings/cancel", requireAuth, async (req, res) => {
       }
       if (['servicio_finalizado', 'servicio_iniciado'].includes(bookingData.state)) {
         throw new Error("No es posible cancelar un servicio que ya está en curso o finalizado.");
+      }
+
+      // 4-Hour Notice Rule check for client cancellations
+      if (bookingData.clientId === uid && !isAdmin) {
+        const hoursRem = calculateHoursRemaining(bookingData.date, bookingData.time);
+        if (hoursRem < 4) {
+          throw new Error("Esta reserva ya no puede cancelarse porque faltan menos de 4 horas para el inicio del servicio.");
+        }
       }
 
       // Check double-refund protection
@@ -2629,6 +2647,72 @@ app.post("/api/bookings/cancel", requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error("Error en cancelación atómica:", err);
     res.status(400).json({ success: false, error: err.message || "Error interno al cancelar." });
+  }
+});
+
+// Reschedule endpoint with 4-hour notice rule validation
+app.post("/api/bookings/reschedule", requireAuth, async (req, res) => {
+  try {
+    const { bookingId, newDate, newTime } = req.body;
+    const user = (req as any).user;
+    const uid = user?.uid;
+    const email = user?.email || '';
+    if (!uid) return res.status(401).json({ error: "No autorizado" });
+    if (!bookingId || !newDate || !newTime) {
+      return res.status(400).json({ error: "Faltan parámetros obligatorios (bookingId, newDate, newTime)" });
+    }
+
+    const adminCheck = await verifyAdminStatus(uid, email);
+    const isAdmin = adminCheck.isAdmin;
+
+    const bookingRef = getAdminFirestore().collection('reservas').doc(bookingId);
+    const bookingDoc = await bookingRef.get();
+    
+    if (!bookingDoc.exists) return res.status(404).json({ error: "Reserva no encontrada." });
+    const bookingData = bookingDoc.data()!;
+
+    const isTherapistAssigned = bookingData.therapistId === uid || 
+      (Array.isArray(bookingData.therapistIds) && bookingData.therapistIds.includes(uid)) || 
+      bookingData.therapistId2 === uid;
+
+    if (bookingData.clientId !== uid && !isAdmin && !isTherapistAssigned) {
+      return res.status(403).json({ error: "No tienes permiso para reprogramar esta reserva." });
+    }
+
+    if (bookingData.state === 'cancelado') {
+      return res.status(400).json({ error: "La reserva está cancelada y no puede reprogramarse." });
+    }
+
+    if (['servicio_finalizado', 'servicio_iniciado'].includes(bookingData.state)) {
+      return res.status(400).json({ error: "No es posible reprogramar un servicio que ya está en curso o finalizado." });
+    }
+
+    // 4-Hour Notice Rule check for non-admin client rescheduling
+    if (bookingData.clientId === uid && !isAdmin) {
+      const hoursRem = calculateHoursRemaining(bookingData.date, bookingData.time);
+      if (hoursRem < 4) {
+        return res.status(400).json({ 
+          error: "Esta reserva ya no puede reprogramarse porque faltan menos de 4 horas para el inicio del servicio." 
+        });
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+    await bookingRef.update({
+      date: newDate,
+      time: newTime,
+      updatedAt: nowIso
+    });
+
+    return res.json({ 
+      success: true, 
+      message: `Reserva reprogramada exitosamente para el ${newDate} a las ${newTime} hrs.`,
+      date: newDate,
+      time: newTime
+    });
+  } catch (err: any) {
+    console.error("Error en reprogramación de reserva:", err);
+    return res.status(500).json({ error: err.message || "Error al reprogramar la reserva." });
   }
 });
 

@@ -157,9 +157,16 @@ export interface CancellationEligibility {
   isPast?: boolean;
 }
 
+export interface RescheduleEligibility {
+  canReschedule: boolean;
+  hoursRemaining: number;
+  message: string;
+  isPast?: boolean;
+}
+
 /**
- * Evaluates whether a client can cancel an appointment up to 4 hours before the session.
- * Rule: El cliente puede cancelar la cita hasta 4 horas antes.
+ * Evaluates whether a client can cancel an appointment (minimum 4 hours notice required).
+ * Rule: El cliente puede cancelar la cita únicamente si faltan 4 horas o más para el inicio de la reserva.
  */
 export function checkCancellationEligibility(
   dateStr?: string,
@@ -195,15 +202,10 @@ export function checkCancellationEligibility(
   }
 
   if (hoursRemaining < 4) {
-    const totalMinutes = Math.round(hoursRemaining * 60);
-    const hours = Math.floor(totalMinutes / 60);
-    const mins = totalMinutes % 60;
-    const timeRemainingStr = hours > 0 ? `${hours}h ${mins}m` : `${mins} minutos`;
-
     return {
       canCancel: false,
       hoursRemaining,
-      message: `Solo se permite cancelar con un mínimo de 4 horas de anticipación. Faltan ${timeRemainingStr} para la cita.`
+      message: 'Esta reserva ya no puede cancelarse porque faltan menos de 4 horas para el inicio del servicio.'
     };
   }
 
@@ -211,5 +213,57 @@ export function checkCancellationEligibility(
     canCancel: true,
     hoursRemaining,
     message: `Cancelación disponible (faltan ${Math.floor(hoursRemaining)} horas para tu cita).`
+  };
+}
+
+/**
+ * Evaluates whether a client can reschedule an appointment (minimum 4 hours notice required).
+ * Rule: El cliente puede reprogramar un masaje únicamente si faltan 4 horas o más para el inicio de la reserva.
+ */
+export function checkRescheduleEligibility(
+  dateStr?: string,
+  timeStr?: string,
+  bookingState?: string,
+  now: Date = new Date()
+): RescheduleEligibility {
+  if (bookingState === 'cancelado') {
+    return { canReschedule: false, hoursRemaining: 0, message: 'La cita se encuentra cancelada y no puede reprogramarse.' };
+  }
+  if (bookingState === 'servicio_finalizado') {
+    return { canReschedule: false, hoursRemaining: 0, message: 'El servicio ya fue completado.' };
+  }
+  if (bookingState === 'servicio_iniciado') {
+    return { canReschedule: false, hoursRemaining: 0, message: 'El servicio ya se encuentra en curso y no puede reprogramarse.' };
+  }
+
+  const scheduled = getBookingScheduledDateTime(dateStr, timeStr);
+  if (!scheduled) {
+    return { canReschedule: true, hoursRemaining: 99, message: 'Reprogramación habilitada.' };
+  }
+
+  const diffMs = scheduled.getTime() - now.getTime();
+  const hoursRemaining = diffMs / (1000 * 60 * 60);
+
+  if (hoursRemaining <= 0) {
+    return {
+      canReschedule: false,
+      hoursRemaining,
+      isPast: true,
+      message: 'El horario programado de la cita ya ha transcurrido.'
+    };
+  }
+
+  if (hoursRemaining < 4) {
+    return {
+      canReschedule: false,
+      hoursRemaining,
+      message: 'Esta reserva ya no puede reprogramarse porque faltan menos de 4 horas para el inicio del servicio.'
+    };
+  }
+
+  return {
+    canReschedule: true,
+    hoursRemaining,
+    message: `Reprogramación disponible (faltan ${Math.floor(hoursRemaining)} horas para tu cita).`
   };
 }
