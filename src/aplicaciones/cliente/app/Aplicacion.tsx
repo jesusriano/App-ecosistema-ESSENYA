@@ -43,6 +43,7 @@ import {
 import { getServiceImage, getStaticServiceImageFallback } from '../../../shared/utils/serviceImage';
 import { RescheduleBookingModal } from '../components/RescheduleBookingModal';
 import { CancelBookingModal } from '../components/CancelBookingModal';
+import { verifyStripeFrontendConfig } from '../../../shared/utils/stripeCheck';
 import { useEcosystem } from '../../../shared/context/EcosystemContext';
 
 
@@ -264,6 +265,10 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   // Payment Method Selection State
   const [paymentMethodType, setPaymentMethodType] = useState<'transferencia' | 'stripe'>('stripe');
   const [clabeCopied, setClabeCopied] = useState<boolean>(false);
+
+  useEffect(() => {
+    verifyStripeFrontendConfig();
+  }, []);
 
   // Safety & Emergency Panic Modal State
   const [showPanicModal, setShowPanicModal] = useState<boolean>(false);
