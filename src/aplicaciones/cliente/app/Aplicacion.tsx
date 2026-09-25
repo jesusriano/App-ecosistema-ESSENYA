@@ -2008,95 +2008,18 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                 ) : (
                   <div className="pt-2 space-y-3">
                     <label className="text-xs text-[#6B655F] dark:text-[#AAAAAA] uppercase font-semibold block">
-                      Selecciona tu Método de Pago
+                      Método de Pago
                     </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {/* Option 1: Tarjeta de Crédito o Débito */}
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethodType('stripe')}
-                        className={`p-3.5 rounded-xl border flex flex-col items-center justify-center space-y-1.5 transition-all text-xs font-bold ${
-                          paymentMethodType === 'stripe'
-                            ? 'bg-[#C9A55B]/15 border-[#C9A55B] text-[#806020] dark:text-[#C9A55B] ring-1 ring-[#C9A55B]'
-                            : 'bg-[#F5F1EA] dark:bg-[#1A1A1A] border-[#E5DFD3] dark:border-[#333333] text-[#6B655F] dark:text-[#AAAAAA]'
-                        }`}
-                      >
-                        <CreditCard className="w-5 h-5 text-[#C9A55B]" />
-                        <span>Tarjeta de Crédito / Débito</span>
-                      </button>
 
-                      {/* Option 2: Transferencia Bancaria SPEI */}
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethodType('transferencia')}
-                        className={`p-3.5 rounded-xl border flex flex-col items-center justify-center space-y-1.5 transition-all text-xs font-bold ${
-                          paymentMethodType === 'transferencia'
-                            ? 'bg-[#C9A55B]/15 border-[#C9A55B] text-[#806020] dark:text-[#C9A55B] ring-1 ring-[#C9A55B]'
-                            : 'bg-[#F5F1EA] dark:bg-[#1A1A1A] border-[#E5DFD3] dark:border-[#333333] text-[#6B655F] dark:text-[#AAAAAA]'
-                        }`}
-                      >
-                        <Building2 className="w-5 h-5 text-[#C9A55B]" />
-                        <span>Transferencia (SPEI)</span>
-                      </button>
+                    <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 rounded-xl border border-[#C9A55B]/50 space-y-2">
+                      <div className="flex items-center space-x-2 text-xs font-bold text-[#806020] dark:text-[#C9A55B]">
+                        <CreditCard className="w-4 h-4 text-[#C9A55B]" />
+                        <span>Pago Seguro con Tarjeta de Crédito o Débito (Stripe)</span>
+                      </div>
+                      <p className="text-xs text-[#1C1917] dark:text-white font-medium">
+                        Al hacer clic en "Confirmar y Pagar", serás redirigido a la pasarela cifrada de Stripe para procesar tu pago con total seguridad.
+                      </p>
                     </div>
-
-                    {paymentMethodType === 'stripe' && (
-                      <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 rounded-xl border border-[#C9A55B]/50 space-y-2">
-                        <div className="flex items-center space-x-2 text-xs font-bold text-[#806020] dark:text-[#C9A55B]">
-                          <CreditCard className="w-4 h-4 text-[#C9A55B]" />
-                          <span>Pago Seguro con Tarjeta de Crédito o Débito</span>
-                        </div>
-                        <p className="text-xs text-[#1C1917] dark:text-white font-medium">
-                          Al hacer clic en "Confirmar y Pagar", serás redirigido a la pasarela cifrada para procesar tu tarjeta con total seguridad.
-                        </p>
-                      </div>
-                    )}
-
-
-                    {paymentMethodType === 'transferencia' && (
-                      <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 rounded-xl border border-[#C9A55B]/40 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-[#806020] dark:text-[#C9A55B] flex items-center">
-                            <Building2 className="w-4 h-4 mr-1.5 text-[#C9A55B]" />
-                            Datos para Transferencia Interbancaria (SPEI)
-                          </span>
-                          <span className="text-[10px] text-[#C9A55B] font-bold">BBVA Mexico</span>
-                        </div>
-
-                        <div className="bg-white dark:bg-[#141414] p-3 rounded-lg border border-[#E5DFD3] dark:border-[#333333] space-y-1.5 text-xs">
-                          <div className="flex justify-between items-center">
-                            <span className="text-[#6B655F] dark:text-[#AAAAAA]">CLABE Interbancaria:</span>
-                            <div className="flex items-center space-x-2">
-                              <span className="font-mono font-bold text-[#1C1917] dark:text-white">012 180 01569427152 0</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  navigator.clipboard.writeText('012180015694271520');
-                                  setClabeCopied(true);
-                                  setTimeout(() => setClabeCopied(false), 2000);
-                                }}
-                                className="text-[10px] bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B] px-2 py-0.5 rounded border border-[#C9A55B]/30 font-bold flex items-center space-x-1"
-                              >
-                                {clabeCopied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                                <span>{clabeCopied ? 'Copiado' : 'Copiar'}</span>
-                              </button>
-                            </div>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-[#6B655F] dark:text-[#AAAAAA]">Beneficiario:</span>
-                            <span className="font-bold text-[#1C1917] dark:text-white">Elizabeth Lopez</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-[#6B655F] dark:text-[#AAAAAA]">Banco Receptivo:</span>
-                            <span className="font-bold text-[#1C1917] dark:text-white">Bancomer (BBVA)</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-[#6B655F] dark:text-[#AAAAAA]">Cuenta:</span>
-                            <span className="font-bold text-[#1C1917] dark:text-white">156 942 7152</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
 
