@@ -264,14 +264,14 @@ export const ReservasPage: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0">
           <Filter className="w-3.5 h-3.5 text-[#C9A55B] shrink-0" />
           <span className="text-xs text-[var(--text-muted)] shrink-0">Estado:</span>
           {['todos', 'pendiente', 'aceptada', 'rechazada', 'en_camino', 'llegue', 'servicio_iniciado', 'servicio_finalizado', 'cancelado'].map((st) => (
             <button
               key={st}
               onClick={() => setStatusFilter(st)}
-              className={`px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all whitespace-nowrap cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all whitespace-nowrap cursor-pointer shrink-0 ${
                 statusFilter === st
                   ? 'bg-[#C9A55B] text-black font-bold'
                   : 'bg-[var(--bg-subcard)] text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
@@ -437,13 +437,13 @@ export const ReservasPage: React.FC = () => {
                     </div>
 
                     {/* Actions Column */}
-                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <div className="flex flex-wrap items-center gap-2 shrink-0 w-full lg:w-auto">
                       {b.state === 'pendiente' ? (
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
                           <button
                             disabled={!!processingId}
                             onClick={() => onAcceptBooking(b)}
-                            className={`px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-md shadow-emerald-900/10 flex items-center gap-1 ${
+                            className={`flex-1 sm:flex-initial px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-md shadow-emerald-900/10 flex items-center justify-center gap-1 ${
                               processingId === b.id ? 'opacity-80' : ''
                             }`}
                           >
@@ -462,14 +462,14 @@ export const ReservasPage: React.FC = () => {
                               setRejectBookingModal(b);
                               setRejectReasonInput('');
                             }}
-                            className="px-4 py-2 bg-rose-600/10 hover:bg-rose-600/20 disabled:bg-rose-950/10 border border-rose-500/30 text-rose-500 dark:text-rose-400 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1"
+                            className="flex-1 sm:flex-initial px-4 py-2 bg-rose-600/10 hover:bg-rose-600/20 disabled:bg-rose-950/10 border border-rose-500/30 text-rose-500 dark:text-rose-400 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1"
                           >
                             <X className="w-3.5 h-3.5" />
                             <span>RECHAZAR RESERVA</span>
                           </button>
                         </div>
                       ) : (
-                        <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto">
                           {b.state === 'aceptada' && (
                             <LuxuryButton
                               variant="gold"

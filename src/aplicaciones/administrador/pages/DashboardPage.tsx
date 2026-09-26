@@ -107,17 +107,17 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="space-y-8 pb-12">
       {/* Top Banner / Hero Title */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 relative overflow-hidden">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl sm:rounded-3xl p-4 sm:p-6 relative overflow-hidden">
         <div className="absolute -right-12 -top-12 w-64 h-64 bg-[#C9A55B]/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="space-y-1 relative z-10">
           <div className="flex items-center space-x-2 text-[#C9A55B]">
-            <Activity className="w-4 h-4 animate-pulse" />
-            <span className="text-xs font-mono font-bold uppercase tracking-widest">
+            <Activity className="w-4 h-4 animate-pulse shrink-0" />
+            <span className="text-[10px] sm:text-xs font-mono font-bold uppercase tracking-widest">
               CENTRO DE OPERACIONES SERVICIOS A DOMICILIO ESSENYA
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[var(--text-primary)]">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-serif font-bold text-[var(--text-primary)]">
             Monitoreo en Tiempo Real CDMX
           </h1>
           <p className="text-xs text-[var(--text-muted)] max-w-xl">
@@ -125,8 +125,8 @@ export const DashboardPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center space-x-3 relative z-10">
-          <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] px-4 py-2 rounded-2xl text-right">
+        <div className="flex items-center space-x-3 relative z-10 w-full sm:w-auto justify-end">
+          <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] px-4 py-2 rounded-2xl text-right w-full sm:w-auto">
             <span className="text-[10px] text-[var(--text-muted)] block">Servicios Activos Hoy</span>
             <span className="text-lg font-serif font-bold text-[#C9A55B]">{activeCount} En Curso</span>
           </div>
@@ -223,7 +223,7 @@ export const DashboardPage: React.FC = () => {
                     </p>
 
                     {/* GPS Exact Coordinates Display */}
-                    <div className="bg-[var(--bg-main)] p-2 rounded-xl text-[11px] font-mono flex items-center justify-between text-emerald-600 dark:text-emerald-400 border border-[var(--border-color)]">
+                    <div className="bg-[var(--bg-main)] p-2 rounded-xl text-[10px] sm:text-[11px] font-mono flex flex-wrap sm:flex-nowrap items-center justify-between gap-1 text-emerald-600 dark:text-emerald-400 border border-[var(--border-color)]">
                       <span>Lat: {alert.latitude?.toFixed(5) || '19.4326'}</span>
                       <span>Lng: {alert.longitude?.toFixed(5) || '-99.1913'}</span>
                       <span className="text-[9px] text-[var(--text-muted)]">±{Math.round(alert.accuracy || 10)}m</span>

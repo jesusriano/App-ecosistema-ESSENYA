@@ -195,13 +195,13 @@ export const ClientesPage: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto">
+        <div className="flex items-center gap-1.5 sm:gap-2 w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0">
           <span className="text-xs text-[var(--text-muted)] shrink-0">Membresía:</span>
           {['todos', 'Platino', 'Gold', 'Diamond'].map((tier) => (
             <button
               key={tier}
               onClick={() => setTierFilter(tier)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 tierFilter === tier
                   ? 'bg-[#C9A55B] text-black font-bold'
                   : 'bg-[var(--bg-subcard)] text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'

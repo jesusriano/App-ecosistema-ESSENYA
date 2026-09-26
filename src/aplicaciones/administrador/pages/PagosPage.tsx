@@ -52,7 +52,7 @@ export const PagosPage: React.FC = () => {
 
         <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 space-y-2">
           <span className="text-[var(--text-muted)] text-xs font-semibold block">Cuenta Elizabeth Lopez</span>
-          <p className="text-[10px] font-mono text-[var(--text-primary)] leading-relaxed">
+          <p className="text-[10px] font-mono text-[var(--text-primary)] leading-relaxed break-all">
             BANCOMER • CLABE: 012 180 01569427152 0<br />
             CUENTA: 156 942 7152
           </p>
@@ -67,11 +67,11 @@ export const PagosPage: React.FC = () => {
       </div>
 
       {/* Tab Controls */}
-      <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 flex flex-col md:flex-row justify-between items-center gap-4">
-        <div className="flex items-center space-x-2">
+      <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-3 sm:p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 sm:gap-4">
+        <div className="flex items-center space-x-1.5 sm:space-x-2 overflow-x-auto no-scrollbar w-full md:w-auto pb-1 md:pb-0">
           <button
             onClick={() => setActiveTab('todos')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'todos' ? 'bg-[#C9A55B] text-black' : 'bg-[var(--bg-subcard)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
@@ -79,7 +79,7 @@ export const PagosPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('pendientes')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'pendientes' ? 'bg-amber-500 text-white' : 'bg-[var(--bg-subcard)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
@@ -87,7 +87,7 @@ export const PagosPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('pagados')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'pagados' ? 'bg-emerald-500 text-white' : 'bg-[var(--bg-subcard)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
@@ -95,8 +95,8 @@ export const PagosPage: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 px-4 py-2 rounded-xl">
-          <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+        <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 px-3 sm:px-4 py-2 rounded-xl w-full md:w-auto justify-center md:justify-start">
+          <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
           <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">Validación Manual Requerida</span>
         </div>
       </div>

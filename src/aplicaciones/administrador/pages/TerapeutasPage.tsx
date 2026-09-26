@@ -378,10 +378,10 @@ export const TerapeutasPage: React.FC = () => {
       <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Quick Filter Tabs */}
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full lg:w-auto pb-1 lg:pb-0">
             <button
               onClick={() => setFilterStatus('todos')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 filterStatus === 'todos' 
                   ? 'bg-[#C9A55B] text-black font-bold' 
                   : 'bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
@@ -392,7 +392,7 @@ export const TerapeutasPage: React.FC = () => {
 
             <button
               onClick={() => setFilterStatus('pendiente')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
                 filterStatus === 'pendiente' 
                   ? 'bg-[#C9A55B] text-black font-bold' 
                   : 'bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
@@ -408,7 +408,7 @@ export const TerapeutasPage: React.FC = () => {
 
             <button
               onClick={() => setFilterStatus('activo')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 filterStatus === 'activo' 
                   ? 'bg-emerald-600 text-white font-bold' 
                   : 'bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
@@ -419,7 +419,7 @@ export const TerapeutasPage: React.FC = () => {
 
             <button
               onClick={() => setFilterStatus('rechazado')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 filterStatus === 'rechazado' 
                   ? 'bg-red-600 text-white font-bold' 
                   : 'bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
@@ -430,7 +430,7 @@ export const TerapeutasPage: React.FC = () => {
 
             <button
               onClick={() => setFilterStatus('bloqueado')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 filterStatus === 'bloqueado' 
                   ? 'bg-amber-600 text-white font-bold' 
                   : 'bg-[var(--bg-subcard)] text-[var(--text-primary)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'

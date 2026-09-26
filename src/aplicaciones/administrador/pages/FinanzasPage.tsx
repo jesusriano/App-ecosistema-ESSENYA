@@ -407,40 +407,40 @@ export const FinanzasPage: React.FC = () => {
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[var(--border-color)] pb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[var(--border-color)] pb-4">
         <div>
-          <h1 className="text-2xl font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <DollarSign className="w-6 h-6 text-[#C9A55B]" />
-            <span>Módulo de Finanzas — Sistema Central de Operaciones ESSENYA</span>
+          <h1 className="text-xl sm:text-2xl font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
+            <DollarSign className="w-5 h-5 sm:w-6 sm:h-6 text-[#C9A55B] shrink-0" />
+            <span>Módulo de Finanzas</span>
           </h1>
           <p className="text-xs text-[var(--text-muted)] mt-1">
             Control claro, editable y organizado de inversiones, gastos operativos y costos recurrentes de ESSENYA.
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3 w-full sm:w-auto justify-between sm:justify-end">
           <button
             onClick={loadData}
             title="Actualizar datos"
-            className="p-2 rounded-xl bg-[var(--bg-subcard)] hover:bg-[var(--border-color)] text-[var(--text-primary)] transition-all cursor-pointer"
+            className="p-2 rounded-xl bg-[var(--bg-subcard)] hover:bg-[var(--border-color)] text-[var(--text-primary)] transition-all cursor-pointer shrink-0"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <LuxuryButton
             onClick={() => { resetForm(); setShowExpenseModal(true); }}
-            className="text-xs py-2 px-4 flex items-center space-x-2"
+            className="text-xs py-2 px-3 sm:px-4 flex items-center space-x-1.5 sm:space-x-2 flex-1 sm:flex-initial justify-center"
           >
-            <Plus className="w-4 h-4" />
-            <span>+ Agregar Gasto / Inversión</span>
+            <Plus className="w-4 h-4 shrink-0" />
+            <span className="truncate">+ Agregar Gasto / Inversión</span>
           </LuxuryButton>
         </div>
       </div>
 
       {/* Navigation Tabs for Finance */}
-      <div className="flex items-center space-x-2 bg-[var(--bg-card)] border border-[var(--border-color)] p-1.5 rounded-2xl w-fit">
+      <div className="w-full overflow-x-auto no-scrollbar flex items-center space-x-1.5 sm:space-x-2 bg-[var(--bg-card)] border border-[var(--border-color)] p-1.5 rounded-2xl">
         <button
           onClick={() => setActiveTab('dashboard')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
             activeTab === 'dashboard' ? 'bg-[#C9A55B] text-black shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
           }`}
         >
@@ -448,7 +448,7 @@ export const FinanzasPage: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('gastos')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
             activeTab === 'gastos' ? 'bg-[#C9A55B] text-black shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
           }`}
         >
@@ -456,7 +456,7 @@ export const FinanzasPage: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('ingresos')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
             activeTab === 'ingresos' ? 'bg-[#C9A55B] text-black shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
           }`}
         >
@@ -464,7 +464,7 @@ export const FinanzasPage: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('reportes')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
             activeTab === 'reportes' ? 'bg-[#C9A55B] text-black shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
           }`}
         >
@@ -472,26 +472,28 @@ export const FinanzasPage: React.FC = () => {
         </button>
         <button
           onClick={() => { setActiveTab('giftcards'); loadAdminGiftCards(); }}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+          className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
             activeTab === 'giftcards' ? 'bg-[#C9A55B] text-black shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
           }`}
         >
-          <Gift className="w-3.5 h-3.5" />
-          Tarjetas de Regalo ({giftCards.length})
+          <Gift className="w-3.5 h-3.5 shrink-0" />
+          <span>Tarjetas de Regalo ({giftCards.length})</span>
         </button>
       </div>
 
       {/* Period Selector Bar */}
-      <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center space-x-3">
-          <Calendar className="w-4 h-4 text-[#C9A55B]" />
-          <span className="text-xs font-bold text-[var(--text-primary)]">Periodo de Análisis:</span>
-          <div className="flex items-center space-x-1.5 bg-[var(--bg-subcard)] p-1 rounded-xl border border-[var(--border-color)]">
+      <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-3 sm:p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:space-x-3">
+          <div className="flex items-center space-x-2">
+            <Calendar className="w-4 h-4 text-[#C9A55B] shrink-0" />
+            <span className="text-xs font-bold text-[var(--text-primary)]">Periodo:</span>
+          </div>
+          <div className="flex items-center space-x-1 bg-[var(--bg-subcard)] p-1 rounded-xl border border-[var(--border-color)] overflow-x-auto no-scrollbar">
             {(['este_mes', 'mes_anterior', 'anio_actual'] as PeriodFilter[]).map((p) => (
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
-                className={`px-3 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer capitalize ${
+                className={`px-2.5 sm:px-3 py-1 rounded-lg text-[10px] sm:text-[11px] font-semibold transition-all cursor-pointer capitalize whitespace-nowrap shrink-0 ${
                   period === p ? 'bg-[#C9A55B] text-black font-bold' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
               >
@@ -501,12 +503,12 @@ export const FinanzasPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center space-x-3">
-          <Filter className="w-4 h-4 text-[#C9A55B]" />
+        <div className="flex items-center space-x-2 w-full sm:w-auto">
+          <Filter className="w-4 h-4 text-[#C9A55B] shrink-0" />
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs rounded-xl px-3 py-1.5 focus:outline-none"
+            className="bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs rounded-xl px-3 py-1.5 focus:outline-none flex-1 sm:flex-initial cursor-pointer"
           >
             <option value="todos">Todas las Categorías</option>
             <option value="Uniformes">Uniformes</option>

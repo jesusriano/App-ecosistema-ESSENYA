@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AdminHeader } from './AdminHeader';
 import { AdminSidebar, AdminRoutePath } from './AdminSidebar';
 import { AdminNavigation } from './AdminNavigation';
-import { Menu, X, LayoutGrid } from 'lucide-react';
+import { X, Shield } from 'lucide-react';
 import { ErrorBoundary } from '../../../shared/components/ErrorBoundary';
 
 interface AdminLayoutProps {
@@ -25,48 +25,48 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
   return (
     <div className="min-h-screen bg-[var(--bg-main)] text-[var(--text-primary)] flex flex-col font-sans overflow-x-hidden w-full">
-      {/* Header exclusivo de Administrador */}
-      <AdminHeader />
+      {/* Header exclusivo de Administrador con botón de menú móvil integrado */}
+      <AdminHeader 
+        onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        isMobileMenuOpen={isMobileMenuOpen}
+      />
 
-      {/* Barra de Navegación Horizontal Accesible (Mobile & Desktop) */}
+      {/* Barra de Navegación Horizontal Accesible (Mobile touch-scroll & Desktop) */}
       <AdminNavigation 
         currentRoute={currentRoute} 
         onNavigate={handleNavigate} 
       />
 
-      {/* Bar for Mobile Hamburger Menu if user wants full drawer */}
-      <div className="md:hidden bg-[var(--bg-card)] border-b border-[var(--border-color)] px-4 py-2 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="px-3 py-1.5 rounded-xl bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[#C9A55B] hover:text-[var(--text-primary)] flex items-center gap-2 text-xs font-bold cursor-pointer transition-all"
-        >
-          {isMobileMenuOpen ? <X className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />}
-          <span>Ver Menú Detallado</span>
-        </button>
-        <span className="text-[11px] text-[var(--text-muted)] font-mono">Panel Administrador</span>
-      </div>
-
-      <div className="flex-1 flex flex-col md:flex-row relative w-full">
+      <div className="flex-1 flex flex-col md:flex-row relative w-full min-w-0">
         {/* Mobile Backdrop Drawer */}
         {isMobileMenuOpen && (
           <div 
             onClick={() => setIsMobileMenuOpen(false)}
-            className="md:hidden fixed inset-0 bg-black/70 backdrop-blur-xs z-[65] transition-opacity cursor-pointer"
+            aria-hidden="true"
+            className="md:hidden fixed inset-0 bg-black/75 backdrop-blur-xs z-[65] transition-opacity cursor-pointer"
           />
         )}
 
         {/* Mobile Sidebar Drawer */}
-        <div className={`
-          md:hidden fixed inset-y-0 left-0 z-[70] w-72 bg-[var(--bg-card)] border-r border-[var(--border-color)] shadow-2xl
-          transform transition-transform duration-300 ease-in-out overflow-y-auto flex flex-col
-          ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none'}
-        `}>
+        <div 
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menú Administrativo"
+          className={`
+            md:hidden fixed inset-y-0 left-0 z-[70] w-72 max-w-[85vw] bg-[var(--bg-card)] border-r border-[var(--border-color)] shadow-2xl
+            transform transition-transform duration-300 ease-in-out overflow-y-auto flex flex-col
+            ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none'}
+          `}
+        >
           <div className="p-4 flex justify-between items-center border-b border-[var(--border-color)] bg-[var(--bg-subcard)] sticky top-0 z-10">
-            <span className="font-bold text-xs text-[#C9A55B] tracking-wider uppercase">Menú Administrativo</span>
+            <div className="flex items-center space-x-2">
+              <Shield className="w-4 h-4 text-[#C9A55B]" />
+              <span className="font-bold text-xs text-[#C9A55B] tracking-wider uppercase">Menú Administrativo</span>
+            </div>
             <button 
               type="button"
               onClick={() => setIsMobileMenuOpen(false)} 
+              aria-label="Cerrar menú"
               className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
             >
               <X className="w-4 h-4" />
@@ -81,7 +81,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         </div>
 
         {/* Desktop Sidebar */}
-        <aside className="hidden md:flex flex-col w-64 bg-[var(--bg-card)] border-r border-[var(--border-color)] shrink-0 min-h-[calc(100vh-140px)]">
+        <aside className="hidden md:flex flex-col w-64 bg-[var(--bg-card)] border-r border-[var(--border-color)] shrink-0 min-h-[calc(100vh-120px)]">
           <AdminSidebar 
             currentRoute={currentRoute}
             onNavigate={handleNavigate}
@@ -89,7 +89,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         </aside>
 
         {/* Contenido Principal de Administrador */}
-        <main className="flex-1 p-3 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto overflow-y-auto min-w-0">
+        <main className="flex-1 p-3 sm:p-5 lg:p-8 max-w-7xl w-full mx-auto overflow-y-auto min-w-0">
           <ErrorBoundary fallbackTitle="Error al cargar el módulo administrativo">
             {children}
           </ErrorBoundary>

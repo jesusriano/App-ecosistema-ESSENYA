@@ -51,6 +51,13 @@
   width: 6px;
   height: 6px;
 }
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
 .light ::-webkit-scrollbar-track {
   background: #FAF8F5;
 }

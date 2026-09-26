@@ -296,9 +296,9 @@ export const ServiciosPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <LuxuryButton id="btn-nuevo-servicio" variant="gold" size="sm" onClick={handleOpenAdd}>
-            <Plus className="w-4 h-4 mr-1.5" />
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+          <LuxuryButton id="btn-nuevo-servicio" variant="gold" size="sm" onClick={handleOpenAdd} className="w-full sm:w-auto justify-center">
+            <Plus className="w-4 h-4 mr-1.5 shrink-0" />
             <span>Nuevo Servicio</span>
           </LuxuryButton>
         </div>
@@ -356,13 +356,13 @@ export const ServiciosPage: React.FC = () => {
           </div>
 
           {/* Filter Dropdowns */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
             {/* Category Select */}
             <select
               id="select-filtro-categoria"
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-[#C9A55B] cursor-pointer"
+              className="flex-1 sm:flex-initial bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-[#C9A55B] cursor-pointer"
             >
               <option value="Todos">Todas las Categorías</option>
               <option value="Holístico">Holístico</option>
@@ -376,7 +376,7 @@ export const ServiciosPage: React.FC = () => {
               id="select-filtro-estado"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-[#C9A55B] cursor-pointer"
+              className="flex-1 sm:flex-initial bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-[#C9A55B] cursor-pointer"
             >
               <option value="Todos">Todos los Estados</option>
               <option value="Activos">Solo Activos</option>
@@ -385,7 +385,7 @@ export const ServiciosPage: React.FC = () => {
             </select>
 
             {/* View Mode Toggle */}
-            <div className="flex items-center border border-[var(--border-color)] bg-[var(--bg-subcard)] rounded-xl p-0.5">
+            <div className="flex items-center border border-[var(--border-color)] bg-[var(--bg-subcard)] rounded-xl p-0.5 shrink-0">
               <button
                 id="btn-vista-cuadricula"
                 onClick={() => setViewMode('cards')}

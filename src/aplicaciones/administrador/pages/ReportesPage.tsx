@@ -50,13 +50,13 @@ export const ReportesPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <LuxuryButton variant="outline" size="sm" onClick={() => setShowPrintPreview(true)}>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <LuxuryButton variant="outline" size="sm" onClick={() => setShowPrintPreview(true)} className="flex-1 sm:flex-initial justify-center">
             <Printer className="w-4 h-4 mr-1.5 text-[#C9A55B]" />
             <span>Vista Imprimible PDF</span>
           </LuxuryButton>
 
-          <LuxuryButton variant="gold" size="sm" onClick={handleExportCSV}>
+          <LuxuryButton variant="gold" size="sm" onClick={handleExportCSV} className="flex-1 sm:flex-initial justify-center">
             <Download className="w-4 h-4 mr-1.5" />
             <span>Exportar CSV</span>
           </LuxuryButton>

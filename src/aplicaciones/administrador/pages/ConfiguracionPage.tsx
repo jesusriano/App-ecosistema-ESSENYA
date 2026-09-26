@@ -132,8 +132,8 @@ export const ConfiguracionPage: React.FC = () => {
           </p>
         </div>
 
-        <LuxuryButton variant="gold" size="sm" onClick={handleOpenAdd}>
-          <Plus className="w-4 h-4 mr-1.5" />
+        <LuxuryButton variant="gold" size="sm" onClick={handleOpenAdd} className="w-full sm:w-auto justify-center">
+          <Plus className="w-4 h-4 mr-1.5 shrink-0" />
           <span>Nueva Zona</span>
         </LuxuryButton>
       </div>
