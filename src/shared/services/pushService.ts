@@ -62,6 +62,10 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!isPushSupported()) return null;
   try {
+    const existing = await navigator.serviceWorker.getRegistration('/');
+    if (existing) {
+      return existing;
+    }
     const registration = await navigator.serviceWorker.register('/service-worker.js', {
       scope: '/'
     });
@@ -133,12 +137,15 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
       });
     }
 
-    // Obtain and register Firebase Cloud Messaging token using vapidKey
+    // Obtain and register Firebase Cloud Messaging token using vapidKey and active ServiceWorkerRegistration
     let fcmToken: string | undefined = undefined;
     try {
       const msg = await getMessagingService();
       if (msg) {
-        const token = await getToken(msg, { vapidKey });
+        const token = await getToken(msg, {
+          vapidKey,
+          serviceWorkerRegistration: registration
+        });
         if (token) {
           fcmToken = token;
           console.log('[FCM] Token obtenido correctamente para asociación');
@@ -192,9 +199,19 @@ export async function unsubscribeFromPushNotifications(): Promise<{ success: boo
       const endpoint = subscription.endpoint;
       await subscription.unsubscribe();
 
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+      } catch (authErr) {
+        console.warn('[WebPush] No se pudo obtener el token de autenticación para push unsubscribe:', authErr);
+      }
+
       await fetch('/api/push/unsubscribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ endpoint })
       }).catch(() => {});
     }

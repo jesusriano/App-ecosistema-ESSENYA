@@ -607,12 +607,145 @@ async function runTests() {
     passed = false;
   }
 
+  // Test 17: Push Subscribe & Unsubscribe Security Suite
+  try {
+    const db = getAdminFirestore();
+
+    // 17a: Subscribe without token must return 401
+    const subNoAuth = await fetch("http://localhost:3001/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fcmToken: "fake-fcm-token",
+        subscription: { endpoint: "https://push.example.com/test-1" }
+      })
+    });
+    if (subNoAuth.status === 401) {
+      console.log("✅ Test 17a: /api/push/subscribe without token correctly rejected with 401.");
+    } else {
+      console.error(`❌ Test 17a failed, got status ${subNoAuth.status}`);
+      passed = false;
+    }
+
+    // 17b: Subscribe with valid user token saves subscription for that user
+    const userA_endpoint = "https://push.example.com/user-a-" + Date.now();
+    const userA_subId = Buffer.from(userA_endpoint).toString('base64').slice(0, 64);
+    const subAuthA = await fetch("http://localhost:3001/api/push/subscribe", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer test-token-user-push-a"
+      },
+      body: JSON.stringify({
+        fcmToken: "fcm-token-user-a",
+        subscription: {
+          endpoint: userA_endpoint,
+          keys: { p256dh: "key-a", auth: "auth-a" }
+        }
+      })
+    });
+    const subAuthDocA = (await db.collection("push_subscriptions").doc(userA_subId).get()).data();
+    if (subAuthA.status === 200 && subAuthDocA?.userId === "user-push-a") {
+      console.log("✅ Test 17b: /api/push/subscribe authenticated saves subscription linked exclusively to user-push-a.");
+    } else {
+      console.error(`❌ Test 17b failed`, subAuthA.status, subAuthDocA);
+      passed = false;
+    }
+
+    // 17c: Inconsistency test - client sends body.userId pointing to another victim
+    const userA_endpoint2 = "https://push.example.com/user-a-spoof-" + Date.now();
+    const userA_subId2 = Buffer.from(userA_endpoint2).toString('base64').slice(0, 64);
+    await db.collection("terapeutas").doc("victim-therapist").set({ name: "Victim", fcmToken: "legit-victim-token" });
+
+    const subSpoof = await fetch("http://localhost:3001/api/push/subscribe", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer test-token-attacker-user"
+      },
+      body: JSON.stringify({
+        userId: "victim-therapist", // spoof attempt
+        fcmToken: "attacker-fcm-token",
+        subscription: { endpoint: userA_endpoint2 }
+      })
+    });
+    const subSpoofDoc = (await db.collection("push_subscriptions").doc(userA_subId2).get()).data();
+    const victimDoc = (await db.collection("terapeutas").doc("victim-therapist").get()).data();
+    if (
+      subSpoof.status === 200 &&
+      subSpoofDoc?.userId === "attacker-user" &&
+      victimDoc?.fcmToken === "legit-victim-token"
+    ) {
+      console.log("✅ Test 17c: /api/push/subscribe body.userId mismatch ignored; victim document protected.");
+    } else {
+      console.error(`❌ Test 17c failed`, subSpoof.status, subSpoofDoc, victimDoc);
+      passed = false;
+    }
+
+    // 17d: Unsubscribe without auth must return 401
+    const unsubNoAuth = await fetch("http://localhost:3001/api/push/unsubscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: userA_endpoint })
+    });
+    if (unsubNoAuth.status === 401) {
+      console.log("✅ Test 17d: /api/push/unsubscribe without token rejected with 401.");
+    } else {
+      console.error(`❌ Test 17d failed, got status ${unsubNoAuth.status}`);
+      passed = false;
+    }
+
+    // 17e: Unsubscribe user B attempting to delete user A's subscription must return 403 and NOT delete
+    const unsubSpoof = await fetch("http://localhost:3001/api/push/unsubscribe", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer test-token-attacker-user"
+      },
+      body: JSON.stringify({ endpoint: userA_endpoint })
+    });
+    const userAdocStillExists = (await db.collection("push_subscriptions").doc(userA_subId).get()).exists;
+    if (unsubSpoof.status === 403 && userAdocStillExists) {
+      console.log("✅ Test 17e: /api/push/unsubscribe cross-user deletion rejected with 403; target subscription preserved.");
+    } else {
+      console.error(`❌ Test 17e failed`, unsubSpoof.status, userAdocStillExists);
+      passed = false;
+    }
+
+    // 17f: Unsubscribe owner deleting their own subscription succeeds with 200 and deletes doc
+    const unsubOwner = await fetch("http://localhost:3001/api/push/unsubscribe", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer test-token-user-push-a"
+      },
+      body: JSON.stringify({ endpoint: userA_endpoint })
+    });
+    const userAdocDeleted = !(await db.collection("push_subscriptions").doc(userA_subId).get()).exists;
+    if (unsubOwner.status === 200 && userAdocDeleted) {
+      console.log("✅ Test 17f: /api/push/unsubscribe owner successfully deletes their own subscription.");
+    } else {
+      console.error(`❌ Test 17f failed`, unsubOwner.status, userAdocDeleted);
+      passed = false;
+    }
+
+    // Clean up test documents
+    await Promise.all([
+      db.collection("push_subscriptions").doc(userA_subId2).delete(),
+      db.collection("terapeutas").doc("victim-therapist").delete()
+    ]);
+  } catch (e) {
+    console.error("Test 17 push security error:", e);
+    passed = false;
+  }
+
   server.close();
   
   if (!passed) {
     process.exit(1);
   }
   console.log("All API negative tests passed!");
+  process.exit(0);
 }
 
 runTests();

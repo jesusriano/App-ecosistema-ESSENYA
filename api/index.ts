@@ -3549,8 +3549,13 @@ app.post("/api/push/subscribe", requireAuth, async (req: Request, res: Response)
   }
 });
 
-app.post("/api/push/unsubscribe", async (req: Request, res: Response) => {
+app.post("/api/push/unsubscribe", requireAuth, async (req: Request, res: Response) => {
   try {
+    const authenticatedUid = (req as any).user?.uid;
+    if (!authenticatedUid) {
+      return res.status(401).json({ success: false, error: "Usuario no autenticado." });
+    }
+
     const { endpoint } = req.body || {};
     if (!endpoint) {
       return res.status(400).json({ success: false, error: "Falta el endpoint." });
@@ -3558,7 +3563,45 @@ app.post("/api/push/unsubscribe", async (req: Request, res: Response) => {
 
     const db = getAdminFirestore();
     const subId = Buffer.from(endpoint).toString('base64').slice(0, 64);
-    await db.collection("push_subscriptions").doc(subId).delete();
+    const subRef = db.collection("push_subscriptions").doc(subId);
+    const subSnap = await subRef.get();
+
+    if (!subSnap.exists) {
+      return res.json({ success: true, message: "Suscripción eliminada correctamente." });
+    }
+
+    const subData = subSnap.data();
+    const ownerUid = subData?.userId;
+
+    // Regla de seguridad: Un usuario solo puede eliminar su propia suscripción, a menos que sea administrador
+    if (ownerUid && ownerUid !== authenticatedUid) {
+      const callerEmail = (req as any).user?.email || "";
+      const { isAdmin } = await verifyAdminStatus(authenticatedUid, callerEmail);
+      if (!isAdmin) {
+        console.warn(`[Push-Security] Intento de desuscripción no autorizado: UID ${authenticatedUid} intentó eliminar suscripción de UID ${ownerUid}`);
+        return res.status(403).json({ success: false, error: "No autorizado para eliminar esta suscripción." });
+      }
+    }
+
+    await subRef.delete();
+
+    // Limpieza de token FCM asociado al usuario si coincide con esta suscripción
+    if (subData?.fcmToken) {
+      try {
+        const therapistRef = db.collection("terapeutas").doc(authenticatedUid);
+        const therapistSnap = await therapistRef.get();
+        if (therapistSnap.exists && therapistSnap.data()?.fcmToken === subData.fcmToken) {
+          await therapistRef.set({ fcmToken: null, fcmUpdatedAt: new Date().toISOString() }, { merge: true });
+        }
+      } catch {}
+      try {
+        const userRef = db.collection("users").doc(authenticatedUid);
+        const userSnap = await userRef.get();
+        if (userSnap.exists && userSnap.data()?.fcmToken === subData.fcmToken) {
+          await userRef.set({ fcmToken: null, fcmUpdatedAt: new Date().toISOString() }, { merge: true });
+        }
+      } catch {}
+    }
 
     res.json({ success: true, message: "Suscripción eliminada correctamente." });
   } catch (err: any) {
