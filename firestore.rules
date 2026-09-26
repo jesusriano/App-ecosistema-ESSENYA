@@ -275,6 +275,28 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /grabaciones_servicio/{recordingId} {
+      allow get, list: if isSignedIn() && (
+        isAdmin() ||
+        resource.data.therapistId == request.auth.uid ||
+        (exists(/databases/$(database)/documents/reservas/$(resource.data.serviceId)) && (
+          get(/databases/$(database)/documents/reservas/$(resource.data.serviceId)).data.therapistId == request.auth.uid ||
+          (get(/databases/$(database)/documents/reservas/$(resource.data.serviceId)).data.keys().hasAny(['therapistIds']) &&
+           request.auth.uid in get(/databases/$(database)/documents/reservas/$(resource.data.serviceId)).data.therapistIds)
+        ))
+      );
+      allow create, update: if isSignedIn() && (
+        isAdmin() ||
+        incoming().therapistId == request.auth.uid ||
+        (exists(/databases/$(database)/documents/reservas/$(incoming().serviceId)) && (
+          get(/databases/$(database)/documents/reservas/$(incoming().serviceId)).data.therapistId == request.auth.uid ||
+          (get(/databases/$(database)/documents/reservas/$(incoming().serviceId)).data.keys().hasAny(['therapistIds']) &&
+           request.auth.uid in get(/databases/$(database)/documents/reservas/$(incoming().serviceId)).data.therapistIds)
+        ))
+      );
+      allow delete: if isAdmin();
+    }
+
     match /conversaciones/{bookingId} {
       allow get, list: if isSignedIn() && (
         isAdmin() || 

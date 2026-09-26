@@ -1,4 +1,6 @@
 // Advanced Web Push Notifications Client Service for ESSENYA
+import { vapidKey, getMessagingService } from '../../lib/firebase';
+import { getToken } from 'firebase/messaging';
 
 export type SoundPreset = 'classic' | 'bell' | 'alert' | 'soft' | 'urgent';
 
@@ -87,13 +89,18 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
       return { success: false, error: 'No se pudo inicializar el Service Worker.' };
     }
 
-    const resKey = await fetch('/api/push/vapid-public-key');
-    const keyData = await resKey.json();
-    if (!keyData.success || !keyData.publicKey) {
-      return { success: false, error: 'No se pudo obtener la clave VAPID pública del servidor.' };
+    let activePublicKey = vapidKey;
+    try {
+      const resKey = await fetch('/api/push/vapid-public-key');
+      const keyData = await resKey.json();
+      if (keyData.success && keyData.publicKey) {
+        activePublicKey = keyData.publicKey;
+      }
+    } catch {
+      console.info('[WebPush] Utilizando vapidKey configurada de Firebase:', vapidKey);
     }
 
-    const convertedVapidKey = urlBase64ToUint8Array(keyData.publicKey);
+    const convertedVapidKey = urlBase64ToUint8Array(activePublicKey);
 
     let subscription = await registration.pushManager.getSubscription();
     if (subscription) {
@@ -138,6 +145,28 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
     const subResult = await subRes.json();
     if (!subResult.success) {
       return { success: false, error: subResult.error || 'Error al guardar la suscripción en el servidor.' };
+    }
+
+    // Also obtain and register Firebase Cloud Messaging token using vapidKey
+    try {
+      const msg = await getMessagingService();
+      if (msg) {
+        const token = await getToken(msg, { vapidKey });
+        if (token) {
+          console.log('[FCM] Token web push obtenido exitosamente con vapidKey');
+          await fetch('/api/push/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId,
+              fcmToken: token,
+              subscription: subscription.toJSON()
+            })
+          }).catch(() => {});
+        }
+      }
+    } catch (fcmErr) {
+      console.info('[FCM] Registro FCM opcional:', fcmErr);
     }
 
     return { success: true };

@@ -2,17 +2,21 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { initializeFirestore, getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { getMessaging, isSupported, Messaging } from 'firebase/messaging';
 import appletConfig from '../../firebase-applet-config.json';
+import { vapidKey as configVapidKey, firebaseConfig as fullConfig } from '../firebase-config.js';
+
+export const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY || configVapidKey || "BHEx7m8uEh5G66_S_vknnlbzdyDQ93X4xuNbqcr-KuS5p_r0ycVGo_7bt6HAYCkABoQTFNvspi4pSOb2Nm4gNl8";
 
 // Single source of truth for Firebase Production Configuration
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || appletConfig.apiKey,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || appletConfig.authDomain,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || appletConfig.projectId,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || appletConfig.storageBucket,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || appletConfig.messagingSenderId,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || appletConfig.appId,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || appletConfig.measurementId || ""
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || fullConfig.apiKey || appletConfig.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || fullConfig.authDomain || appletConfig.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || fullConfig.projectId || appletConfig.projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || fullConfig.storageBucket || appletConfig.storageBucket,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || fullConfig.messagingSenderId || appletConfig.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || fullConfig.appId || appletConfig.appId,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || fullConfig.measurementId || appletConfig.measurementId || ""
 };
 
 // Initialize Firebase App safely
@@ -35,6 +39,23 @@ try {
 
 export const db = firestoreInstance;
 export const storage = getStorage(app);
+
+// Firebase Cloud Messaging instance
+let messagingInstance: Messaging | null = null;
+export async function getMessagingService(): Promise<Messaging | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const supported = await isSupported();
+    if (!supported) return null;
+    if (!messagingInstance) {
+      messagingInstance = getMessaging(app);
+    }
+    return messagingInstance;
+  } catch (err) {
+    console.warn('[FCM] Messaging is not supported or failed to initialize:', err);
+    return null;
+  }
+}
 
 export default app;
 

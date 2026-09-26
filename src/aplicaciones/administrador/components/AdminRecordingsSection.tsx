@@ -1,10 +1,11 @@
 /**
  * AdminRecordingsSection
- * Displays service voice recordings in the admin panel with metadata and working audio player.
+ * Displays service voice recordings in the admin panel with real-time streaming,
+ * metadata and working audio player.
  */
 
 import React, { useState, useEffect } from 'react';
-import { Mic, Play, Pause, Clock, CheckCircle2, AlertCircle, Shield } from 'lucide-react';
+import { Mic, Play, Pause, Clock, CheckCircle2, AlertCircle, Shield, RefreshCw } from 'lucide-react';
 import { VoiceRecorderService, ServiceRecording } from '../../../shared/services/VoiceRecorderService';
 
 interface AdminRecordingsSectionProps {
@@ -14,24 +15,38 @@ interface AdminRecordingsSectionProps {
 export const AdminRecordingsSection: React.FC<AdminRecordingsSectionProps> = ({ serviceId }) => {
   const [recordings, setRecordings] = useState<ServiceRecording[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    VoiceRecorderService.fetchServiceRecordings(serviceId).then((recs) => {
+    setLoading(true);
+
+    // Initial fetch + real-time subscription
+    const unsubscribe = VoiceRecorderService.subscribeToServiceRecordings(serviceId, (recs) => {
       if (isMounted) {
         setRecordings(recs);
         setLoading(false);
+        setIsRefreshing(false);
       }
     });
+
     return () => {
       isMounted = false;
+      unsubscribe();
       if (audioElement) {
         audioElement.pause();
       }
     };
   }, [serviceId]);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    const recs = await VoiceRecorderService.fetchServiceRecordings(serviceId);
+    setRecordings(recs);
+    setIsRefreshing(false);
+  };
 
   const handlePlay = (rec: ServiceRecording) => {
     if (playingId === rec.id && audioElement) {
@@ -45,7 +60,7 @@ export const AdminRecordingsSection: React.FC<AdminRecordingsSectionProps> = ({ 
     }
 
     if (!rec.audioDataUrl) {
-      alert('El archivo de audio de esta grabación no se encuentra disponible localmente.');
+      alert('El archivo de audio de esta grabación no se encuentra disponible.');
       return;
     }
 
@@ -67,16 +82,27 @@ export const AdminRecordingsSection: React.FC<AdminRecordingsSectionProps> = ({ 
     return (
       <div className="py-3 text-xs text-[var(--text-muted)] flex items-center gap-2">
         <div className="w-3.5 h-3.5 rounded-full border-2 border-[#C9A55B] border-t-transparent animate-spin" />
-        <span>Cargando grabaciones de voz del servicio...</span>
+        <span>Cargando grabaciones de voz del servicio en tiempo real...</span>
       </div>
     );
   }
 
   if (recordings.length === 0) {
     return (
-      <div className="p-4 bg-[var(--bg-subcard)] rounded-xl border border-[var(--border-color)] text-xs text-[var(--text-muted)] flex items-center gap-2.5">
-        <Mic className="w-4 h-4 text-[#C9A55B] opacity-60" />
-        <span>No se registraron grabaciones de voz en vivo durante este servicio.</span>
+      <div className="p-4 bg-[var(--bg-subcard)] rounded-xl border border-[var(--border-color)] text-xs text-[var(--text-muted)] flex items-center justify-between gap-2.5">
+        <div className="flex items-center gap-2.5">
+          <Mic className="w-4 h-4 text-[#C9A55B] opacity-60" />
+          <span>No se registraron grabaciones de voz en vivo durante este servicio.</span>
+        </div>
+        <button
+          type="button"
+          onClick={handleManualRefresh}
+          disabled={isRefreshing}
+          className="p-1.5 rounded-lg text-[#888888] hover:text-[#C9A55B] transition-colors cursor-pointer"
+          title="Actualizar grabaciones"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+        </button>
       </div>
     );
   }
@@ -88,9 +114,21 @@ export const AdminRecordingsSection: React.FC<AdminRecordingsSectionProps> = ({ 
           <Mic className="w-4 h-4 text-[#C9A55B]" />
           <span>🎙️ Grabaciones de Voz en Vivo ({recordings.length})</span>
         </h4>
-        <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
-          <Shield className="w-3 h-3" /> Acceso Protegido / Auditoría
-        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className="p-1 text-[10px] text-[#888888] hover:text-[#C9A55B] transition-colors flex items-center gap-1 cursor-pointer"
+            title="Refrescar en tiempo real"
+          >
+            <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>Sincronizar</span>
+          </button>
+          <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+            <Shield className="w-3 h-3" /> Acceso Protegido / Auditoría
+          </span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -113,22 +151,23 @@ export const AdminRecordingsSection: React.FC<AdminRecordingsSectionProps> = ({ 
                   ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' 
                   : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
               }`}>
-                {rec.syncStatus === 'sincronizada' ? '✓ Sincronizada' : 'Pendiente de Sincronización'}
+                {rec.syncStatus === 'sincronizada' ? '✓ Transmitida' : 'Pendiente'}
               </span>
             </div>
 
             <div className="flex items-center justify-between pt-1 border-t border-[var(--border-color)] text-xs">
-              <span className="text-[var(--text-muted)] flex items-center gap-1 font-mono">
+              <div className="flex items-center gap-1.5 text-[var(--text-muted)] font-mono text-[11px]">
                 <Clock className="w-3 h-3 text-[#C9A55B]" />
-                {rec.durationFormatted} ({rec.mimeType.split(';')[0]})
-              </span>
+                <span>{rec.durationFormatted}</span>
+              </div>
 
               <button
+                type="button"
                 onClick={() => handlePlay(rec)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
                   playingId === rec.id
-                    ? 'bg-amber-500 text-black shadow'
-                    : 'bg-[#C9A55B] text-black hover:opacity-90'
+                    ? 'bg-red-500 hover:bg-red-600 text-white shadow-xs animate-pulse'
+                    : 'bg-[#C9A55B] hover:bg-[#E6CA65] text-black shadow-xs'
                 }`}
               >
                 {playingId === rec.id ? (
@@ -138,7 +177,7 @@ export const AdminRecordingsSection: React.FC<AdminRecordingsSectionProps> = ({ 
                   </>
                 ) : (
                   <>
-                    <Play className="w-3.5 h-3.5 fill-black" />
+                    <Play className="w-3.5 h-3.5" />
                     <span>Reproducir</span>
                   </>
                 )}
@@ -150,3 +189,5 @@ export const AdminRecordingsSection: React.FC<AdminRecordingsSectionProps> = ({ 
     </div>
   );
 };
+
+export default AdminRecordingsSection;

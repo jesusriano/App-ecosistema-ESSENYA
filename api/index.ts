@@ -12,20 +12,23 @@ import * as adminFirestore from "firebase-admin/firestore";
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder_key');
 
 // Initialize VAPID Keys for Web Push with persistent file storage
-let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY;
+const DEFAULT_VAPID_PUBLIC_KEY = "BHEx7m8uEh5G66_S_vknnlbzdyDQ93X4xuNbqcr-KuS5p_r0ycVGo_7bt6HAYCkABoQTFNvspi4pSOb2Nm4gNl8";
+let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC_KEY;
 let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
 
 const vapidFilePath = path.join(process.cwd(), 'vapid-keys.json');
 
-if (!vapidPublicKey || !vapidPrivateKey) {
+if (!vapidPrivateKey) {
   if (fs.existsSync(vapidFilePath)) {
     try {
       const savedKeys = JSON.parse(fs.readFileSync(vapidFilePath, 'utf-8'));
-      if (savedKeys.publicKey && savedKeys.privateKey) {
+      if (savedKeys.publicKey) {
         vapidPublicKey = savedKeys.publicKey;
-        vapidPrivateKey = savedKeys.privateKey;
-        console.log('[WebPush] Loaded VAPID keys from persistent file.');
       }
+      if (savedKeys.privateKey) {
+        vapidPrivateKey = savedKeys.privateKey;
+      }
+      console.log('[WebPush] Loaded VAPID keys from persistent file.');
     } catch (e) {
       console.warn('[WebPush] Failed to read vapid-keys.json:', e);
     }
@@ -86,13 +89,14 @@ async function getGeminiClient() {
 
 
 app.use(express.json({
-  limit: "2mb",
+  limit: "50mb",
   verify: (req: any, res, buf) => {
     if (req.originalUrl && req.originalUrl.includes('/api/stripe')) {
       req.rawBody = buf;
     }
   }
 }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Initialize Firebase Admin globally
 const configPath = path.join(process.cwd(), "firebase-applet-config.json");
@@ -2995,6 +2999,113 @@ app.post(["/api/admin/bookings/assign", "/api/admin/bookings/approve", "/api/boo
   } catch (err: any) {
     console.error("Error en /api/admin/bookings/assign:", err);
     return res.status(500).json({ success: false, error: err.message || "Error al asignar terapeuta." });
+  }
+});
+
+// ========================================================
+// LIVE VOICE RECORDINGS ENDPOINTS (Therapist <-> Administration Sync)
+// ========================================================
+app.post("/api/recordings/upload", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const uid = user?.uid;
+    if (!uid) return res.status(401).json({ success: false, error: "No autorizado" });
+
+    const {
+      id,
+      serviceId,
+      therapistId,
+      date,
+      startTime,
+      endTime,
+      durationSeconds,
+      durationFormatted,
+      mimeType,
+      audioDataUrl,
+      createdAt
+    } = req.body || {};
+
+    if (!id || !serviceId) {
+      return res.status(400).json({ success: false, error: "Faltan campos obligatorios: id y serviceId." });
+    }
+
+    const db = getAdminFirestore();
+    const nowIso = new Date().toISOString();
+
+    const recordData: Record<string, any> = {
+      id,
+      serviceId,
+      therapistId: therapistId || uid,
+      date: date || new Date().toLocaleDateString(),
+      startTime: startTime || '',
+      endTime: endTime || '',
+      durationSeconds: Number(durationSeconds || 0),
+      durationFormatted: durationFormatted || '00:00',
+      mimeType: mimeType || 'audio/webm',
+      audioDataUrl: audioDataUrl || '',
+      syncStatus: 'sincronizada',
+      createdAt: createdAt || nowIso,
+      updatedAt: nowIso
+    };
+
+    // Store in grabaciones_servicio collection via Admin SDK
+    await db.collection('grabaciones_servicio').doc(id).set(recordData, { merge: true });
+
+    // Also link reference to the booking document for redundancy
+    try {
+      const bRef = db.collection('reservas').doc(serviceId);
+      const bSnap = await bRef.get();
+      if (bSnap.exists) {
+        const existingRecordings = bSnap.data()?.recordingIds || [];
+        if (!existingRecordings.includes(id)) {
+          await bRef.update({
+            hasRecordings: true,
+            recordingsCount: (existingRecordings.length + 1),
+            recordingIds: [...existingRecordings, id],
+            lastRecordingAt: nowIso
+          });
+        }
+      }
+    } catch (bErr) {
+      console.warn('[Recordings] Failed to update booking metadata:', bErr);
+    }
+
+    // Add audit log
+    try {
+      await db.collection('logs').add({
+        timestamp: nowIso,
+        actor: 'Terapeuta',
+        role: 'Terapeuta en Servicio',
+        action: 'Grabación de Voz en Vivo',
+        details: `Grabación de audio (${durationFormatted || 'en vivo'}) recibida y respaldada para el servicio ${serviceId}.`
+      });
+    } catch {}
+
+    console.log(`[Recordings] Voice recording ${id} saved for service ${serviceId}.`);
+    return res.json({ success: true, id, message: "Grabación de voz guardada exitosamente y transmitida a administración." });
+  } catch (err: any) {
+    console.error("Error en /api/recordings/upload:", err);
+    return res.status(500).json({ success: false, error: err.message || "Error al subir grabación." });
+  }
+});
+
+app.get("/api/recordings/:serviceId", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { serviceId } = req.params;
+    if (!serviceId) return res.status(400).json({ success: false, error: "serviceId es requerido" });
+
+    const db = getAdminFirestore();
+    const snap = await db.collection('grabaciones_servicio')
+      .where('serviceId', '==', serviceId)
+      .get();
+
+    const recordings = snap.docs.map(doc => doc.data());
+    recordings.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+    return res.json({ success: true, recordings });
+  } catch (err: any) {
+    console.error("Error en /api/recordings/:serviceId:", err);
+    return res.status(500).json({ success: false, error: err.message || "Error al obtener grabaciones." });
   }
 });
 

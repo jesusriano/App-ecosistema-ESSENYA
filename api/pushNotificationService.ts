@@ -5,15 +5,18 @@ import type { Firestore } from 'firebase-admin/firestore';
 
 // Initialize and persist VAPID Keys
 const vapidFilePath = path.join(process.cwd(), 'vapid-keys.json');
-let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY;
+const DEFAULT_VAPID_PUBLIC_KEY = "BHEx7m8uEh5G66_S_vknnlbzdyDQ93X4xuNbqcr-KuS5p_r0ycVGo_7bt6HAYCkABoQTFNvspi4pSOb2Nm4gNl8";
+let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC_KEY;
 let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
 
-if (!vapidPublicKey || !vapidPrivateKey) {
+if (!vapidPrivateKey) {
   if (fs.existsSync(vapidFilePath)) {
     try {
       const savedKeys = JSON.parse(fs.readFileSync(vapidFilePath, 'utf-8'));
-      if (savedKeys.publicKey && savedKeys.privateKey) {
+      if (savedKeys.publicKey) {
         vapidPublicKey = savedKeys.publicKey;
+      }
+      if (savedKeys.privateKey) {
         vapidPrivateKey = savedKeys.privateKey;
         console.log('[WebPush] Loaded VAPID keys from persistent file:', vapidFilePath);
       }

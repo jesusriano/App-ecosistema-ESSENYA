@@ -7,6 +7,7 @@ import { useToast } from '../../../shared/context/ToastContext';
 import { getServiceImage, getStaticServiceImageFallback } from '../../../shared/utils/serviceImage';
 import { ServiceCompletionModal } from '../components/ServiceCompletionModal';
 import { Booking } from '../../../shared/types';
+import { LiveVoiceRecorderWidget } from '../../../shared/components/LiveVoiceRecorderWidget';
 
 export const ServiciosPage: React.FC = () => {
   const { therapist, bookings, services, handleUpdateBookingState, handleAcceptBooking, handleRejectBooking } = useTerapeuta();
@@ -349,6 +350,17 @@ export const ServiciosPage: React.FC = () => {
                           </p>
                         )}
                       </div>
+
+                      {/* Live Voice Recording Widget during active service */}
+                      {booking.state !== 'servicio_finalizado' && (
+                        <div className="pt-2">
+                          <LiveVoiceRecorderWidget
+                            serviceId={booking.id}
+                            therapistId={therapist.id}
+                            therapistName={therapist.name}
+                          />
+                        </div>
+                      )}
 
                       <div className="pt-3 border-t border-[#E5DFD3] dark:border-[#262626] flex justify-between items-center">
                         <span className="text-sm font-bold text-[#806020] dark:text-[#C9A55B]">${(booking.total ?? booking.price ?? 0).toLocaleString()} MXN</span>
