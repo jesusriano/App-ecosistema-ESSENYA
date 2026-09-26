@@ -11,11 +11,16 @@ import {
   SoundPreset
 } from '../services/pushService';
 import { InAppNotificationItem, NotificationEventType } from '../types/notifications';
+import { getFirebaseRegistrationToken } from '../utils/getFirebaseRegistrationToken';
+import { getMessagingService } from '../../lib/firebase';
+import { onMessage } from 'firebase/messaging';
 
 interface PushContextType {
   supported: boolean;
   permission: NotificationPermission;
   subscribed: boolean;
+  fcmToken: string | null;
+  getRegistrationToken: (uid?: string) => Promise<string | undefined>;
   soundEnabled: boolean;
   soundPreset: SoundPreset;
   volume: number;
@@ -40,6 +45,7 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
   const [supported, setSupported] = useState<boolean>(false);
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [subscribed, setSubscribed] = useState<boolean>(false);
+  const [fcmToken, setFcmToken] = useState<string | null>(null);
   
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     return localStorage.getItem('essenya_push_sound') !== 'false';
@@ -91,7 +97,7 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
         }
       });
 
-      // Listen for push messages broadcasted by service worker
+      // Listen for push messages broadcasted by service worker (Background WebPush fallback)
       const handleSwMessage = (event: MessageEvent) => {
         if (event.data && event.data.type === 'PUSH_NOTIFICATION_RECEIVED') {
           const { payload, sound } = event.data;
@@ -112,8 +118,45 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
       };
 
       navigator.serviceWorker.addEventListener('message', handleSwMessage);
+
+      // Listen for Firebase Cloud Messaging Foreground Messages
+      let unsubscribeFcm: (() => void) | null = null;
+      getMessagingService().then((messaging) => {
+        if (messaging) {
+          unsubscribeFcm = onMessage(messaging, (payload) => {
+            console.log('[FCM-Foreground] Mensaje recibido en primer plano:', payload);
+            const title = payload.notification?.title || payload.data?.title || '🔔 Masaje solicitado';
+            const body = payload.notification?.body || payload.data?.body || 'Tienes una nueva solicitud de masaje.';
+            const eventType = (payload.data?.type as any) || 'NEW_BOOKING';
+
+            // Reproducir sonido de alerta si está habilitado
+            if (soundEnabled) {
+              playNotificationSound('bell', volume);
+            }
+
+            // Registrar en el centro de notificaciones in-app
+            addInAppNotification({
+              userId: userId || 'therapist',
+              title,
+              description: body,
+              eventType,
+              category: 'reservas',
+              url: payload.data?.bookingId ? '/terapeuta/servicios' : '/terapeuta'
+            });
+
+            // Disparar evento para actualizar inmediatamente la interfaz sin recargar
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('fcm-new-booking', { detail: payload.data }));
+            }
+          });
+        }
+      }).catch(err => console.warn('[FCM-Foreground] Listener init error:', err));
+
       return () => {
         navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+        if (unsubscribeFcm) {
+          unsubscribeFcm();
+        }
       };
     }
   }, [soundEnabled, soundPreset, volume, userId]);
@@ -133,15 +176,29 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
     playNotificationSound(preset || soundPreset, volume);
   }, [soundPreset, volume]);
 
+  const getRegistrationToken = useCallback(async (targetUserId?: string): Promise<string | undefined> => {
+    try {
+      const res = await getFirebaseRegistrationToken(targetUserId || userId);
+      if (res.token) {
+        setFcmToken(res.token);
+        return res.token;
+      }
+    } catch (err) {
+      console.warn('[PushContext] Error al obtener token de registro:', err);
+    }
+    return undefined;
+  }, [userId]);
+
   const enablePush = useCallback(async (targetUserId?: string) => {
     const res = await subscribeToPushNotifications(targetUserId || userId || 'anonymous');
     setPermission(getNotificationPermission());
     if (res.success) {
       setSubscribed(true);
       if (soundEnabled) playNotificationSound(soundPreset, volume);
+      getRegistrationToken(targetUserId || userId).catch(() => {});
     }
     return res;
-  }, [userId, soundEnabled, soundPreset, volume]);
+  }, [userId, soundEnabled, soundPreset, volume, getRegistrationToken]);
 
   const disablePush = useCallback(async () => {
     const res = await unsubscribeFromPushNotifications();
@@ -199,6 +256,8 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
         supported,
         permission,
         subscribed,
+        fcmToken,
+        getRegistrationToken,
         soundEnabled,
         soundPreset,
         volume,

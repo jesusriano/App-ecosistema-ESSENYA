@@ -1,5 +1,5 @@
 import type { Firestore, Transaction } from 'firebase-admin/firestore';
-import { sendPushNotificationToUser } from './pushNotificationService.js';
+import { sendPushNotificationToUser, sendFcmNotificationToUser } from './pushNotificationService.js';
 
 export interface DispatchLevelConfig {
   maxEtaMinutes: number;
@@ -551,7 +551,14 @@ export async function stepDispatchEngine(
   const newOffers: any[] = [];
   const newOfferedIds: string[] = [];
 
+  const notifiedTherapistIds = new Set<string>();
+
   for (const cand of candidates) {
+    if (notifiedTherapistIds.has(cand.therapistId)) {
+      continue;
+    }
+    notifiedTherapistIds.add(cand.therapistId);
+
     newOfferedIds.push(cand.therapistId);
     newOffers.push({
       therapistId: cand.therapistId,
@@ -583,20 +590,37 @@ export async function stepDispatchEngine(
       details: `Solicitud despachada a ${cand.therapistName} (ETA estimado: ${cand.etaMinutes} min)`
     });
 
-    // Send native Web Push Notification with sound to candidate therapist
+    // 1. Envío directo mediante Firebase Cloud Messaging (FCM) al terapeuta
+    sendFcmNotificationToUser(db, cand.therapistId, {
+      title: '🔔 Masaje solicitado',
+      body: 'Tienes una nueva solicitud de masaje.',
+      data: {
+        type: 'NEW_BOOKING',
+        bookingId,
+        role: 'therapist',
+        bookingCode: String(booking.code || ''),
+        serviceName: String(booking.serviceName || ''),
+        cityZone: String(booking.cityZone || ''),
+        time: String(booking.time || ''),
+        etaMinutes: String(cand.etaMinutes || 0)
+      }
+    }).catch(e => console.warn('[Dispatch] Error enviando push FCM al terapeuta:', e));
+
+    // 2. Envío complementario WebPush para navegadores con suscripción VAPID
     sendPushNotificationToUser(db, cand.therapistId, {
-      title: '🔔 Nueva Solicitud de Reserva',
+      title: '🔔 Masaje solicitado',
       body: `${booking.serviceName || 'Masaje a Domicilio'} en ${booking.cityZone || 'tu zona'} (${booking.time || 'Ahora'} - ETA ${cand.etaMinutes} min)`,
       url: '/terapeuta/servicios',
       tag: `booking-offer-${bookingId}`,
       soundPreset: 'bell',
       sound: '/sounds/notification_reservation.mp3',
       data: {
-        type: 'new_booking_offer',
+        type: 'NEW_BOOKING',
         bookingId,
+        role: 'therapist',
         bookingCode: booking.code
       }
-    }).catch(e => console.warn('[Dispatch] Error sending push to therapist:', e));
+    }).catch(e => console.warn('[Dispatch] Error enviando WebPush al terapeuta:', e));
   }
 
   const updatePayload: Record<string, any> = {

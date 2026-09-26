@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { usePush } from '../context/PushContext';
 import { SoundPreset } from '../services/pushService';
-import { Bell, BellOff, Volume2, VolumeX, CheckCircle2, AlertTriangle, Send, RefreshCw, Play, Sparkles } from 'lucide-react';
+import { Bell, BellOff, Volume2, VolumeX, CheckCircle2, AlertTriangle, Send, RefreshCw, Play, Sparkles, Key, Copy, Check } from 'lucide-react';
 
 interface PushSettingsCardProps {
   userId?: string;
@@ -14,6 +14,8 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
     supported,
     permission,
     subscribed,
+    fcmToken: contextFcmToken,
+    getRegistrationToken,
     soundEnabled,
     soundPreset,
     volume,
@@ -29,6 +31,26 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [selectedTestEvent, setSelectedTestEvent] = useState<string>('reservation.created');
+  const [fcmToken, setFcmToken] = useState<string | null>(contextFcmToken);
+  const [loadingFcm, setLoadingFcm] = useState<boolean>(false);
+  const [copiedFcm, setCopiedFcm] = useState<boolean>(false);
+
+  const handleFetchFcmToken = async () => {
+    setLoadingFcm(true);
+    const token = await getRegistrationToken(userId);
+    if (token) {
+      setFcmToken(token);
+    }
+    setLoadingFcm(false);
+  };
+
+  const handleCopyFcmToken = async () => {
+    if (fcmToken && navigator.clipboard) {
+      await navigator.clipboard.writeText(fcmToken);
+      setCopiedFcm(true);
+      setTimeout(() => setCopiedFcm(false), 2500);
+    }
+  };
 
   if (!supported) {
     return (
@@ -289,6 +311,56 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
             </div>
           </div>
         )}
+
+        {/* Firebase Registration Token (FCM) Diagnostic Box */}
+        <div className="p-4 rounded-2xl bg-[#0F172A] border border-cyan-500/30 text-white space-y-3 shadow-md">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-cyan-400">
+              <Key className="w-4 h-4" />
+              <h4 className="text-xs font-bold uppercase tracking-wider">Token de Registro de Firebase (FCM)</h4>
+            </div>
+            {fcmToken && (
+              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                ✓ Listo para copiar
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-300">
+            Obtén el token de registro de este dispositivo/navegador para enviar notificaciones directas desde Firebase Console o inspeccionar en los logs del sistema.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-2 items-center">
+            <button
+              type="button"
+              onClick={handleFetchFcmToken}
+              disabled={loadingFcm}
+              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md disabled:opacity-50"
+            >
+              <Key className="w-3.5 h-3.5" />
+              <span>{loadingFcm ? 'Obteniendo Token...' : 'Obtener Token FCM'}</span>
+            </button>
+
+            {fcmToken && (
+              <button
+                type="button"
+                onClick={handleCopyFcmToken}
+                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-[#C9A55B] hover:bg-[#E6CA65] text-black font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md"
+              >
+                {copiedFcm ? <Check className="w-3.5 h-3.5 text-black" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedFcm ? '¡Copiado al Portapapeles!' : 'Copiar Token'}</span>
+              </button>
+            )}
+          </div>
+
+          {fcmToken && (
+            <div className="mt-2 space-y-1">
+              <span className="text-[10px] text-slate-400 font-mono">Token activo (también registrado en consola):</span>
+              <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl font-mono text-[11px] text-cyan-300 break-all select-all">
+                {fcmToken}
+              </div>
+            </div>
+          )}
+        </div>
 
         {permission === 'denied' && (
           <p className="text-xs text-rose-600 text-center">

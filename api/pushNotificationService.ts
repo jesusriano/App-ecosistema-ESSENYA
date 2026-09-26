@@ -2,6 +2,8 @@ import path from 'path';
 import fs from 'fs';
 import webPush from 'web-push';
 import type { Firestore } from 'firebase-admin/firestore';
+import { getMessaging, type Message } from 'firebase-admin/messaging';
+import { getApps } from 'firebase-admin/app';
 
 // Initialize and persist VAPID Keys
 const vapidFilePath = path.join(process.cwd(), 'vapid-keys.json');
@@ -51,6 +53,146 @@ export function getVapidPublicKey(): string | undefined {
   return vapidPublicKey;
 }
 
+export interface FcmNotificationPayload {
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+  icon?: string;
+  badge?: string;
+}
+
+/**
+ * Sends a real Firebase Cloud Messaging (FCM) push notification to a user/therapist
+ * using the existing Firebase Admin Messaging SDK instance.
+ */
+export async function sendFcmNotificationToUser(
+  db: Firestore,
+  userId: string,
+  payload: FcmNotificationPayload
+): Promise<{ success: boolean; sentCount: number; error?: string }> {
+  if (!db || !userId) {
+    return { success: false, sentCount: 0, error: 'Parámetros inválidos' };
+  }
+
+  try {
+    console.log(`[FCM] Intentando notificar terapeuta: ${userId}`);
+
+    // 1. Obtener FCM token desde terapeutas/{userId}
+    let fcmToken: string | null = null;
+    try {
+      const therapistDoc = await db.collection('terapeutas').doc(userId).get();
+      if (therapistDoc.exists) {
+        fcmToken = therapistDoc.data()?.fcmToken || null;
+      }
+    } catch (e) {
+      console.warn(`[FCM] Error leyendo documento terapeuta ${userId}:`, e);
+    }
+
+    // 2. Si no se encontró en terapeutas, buscar en users/{userId}
+    if (!fcmToken) {
+      try {
+        const userDoc = await db.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          fcmToken = userDoc.data()?.fcmToken || null;
+        }
+      } catch {}
+    }
+
+    // 3. Si aún no se encontró, buscar en push_subscriptions
+    if (!fcmToken) {
+      try {
+        const snap = await db.collection('push_subscriptions').where('userId', '==', userId).get();
+        for (const doc of snap.docs) {
+          if (doc.data()?.fcmToken) {
+            fcmToken = doc.data().fcmToken;
+            break;
+          }
+        }
+      } catch {}
+    }
+
+    if (!fcmToken) {
+      console.log(`[FCM] Terapeuta ${userId} no tiene FCM token registrado.`);
+      return { success: false, sentCount: 0, error: 'No FCM token' };
+    }
+
+    const maskedToken = fcmToken.length > 10
+      ? `${fcmToken.substring(0, 6)}...${fcmToken.substring(fcmToken.length - 4)}`
+      : '***';
+    console.log(`[FCM] Token encontrado: SÍ (${maskedToken})`);
+
+    // 4. Validar que exista la app de Firebase Admin inicializada
+    if (getApps().length === 0) {
+      console.warn('[FCM] Firebase Admin App no está inicializada.');
+      return { success: false, sentCount: 0, error: 'Firebase Admin not initialized' };
+    }
+
+    const messaging = getMessaging();
+
+    // Sanitizar datos como strings requeridos por FCM
+    const sanitizedData: Record<string, string> = {};
+    if (payload.data) {
+      for (const [key, val] of Object.entries(payload.data)) {
+        sanitizedData[key] = String(val ?? '');
+      }
+    }
+
+    const fcmMessage: Message = {
+      token: fcmToken,
+      notification: {
+        title: payload.title || '🔔 Masaje solicitado',
+        body: payload.body || 'Tienes una nueva solicitud de masaje.'
+      },
+      data: sanitizedData,
+      webpush: {
+        headers: {
+          Urgency: 'high'
+        },
+        notification: {
+          title: payload.title || '🔔 Masaje solicitado',
+          body: payload.body || 'Tienes una nueva solicitud de masaje.',
+          icon: payload.icon || '/icons/icon-192.png',
+          badge: payload.badge || '/icons/badge-72.png',
+          tag: sanitizedData.bookingId ? `booking-${sanitizedData.bookingId}` : undefined,
+          requireInteraction: true
+        },
+        fcmOptions: {
+          link: sanitizedData.bookingId ? '/terapeuta/servicios' : '/terapeuta'
+        }
+      }
+    };
+
+    const response = await messaging.send(fcmMessage);
+    console.log(`[FCM] Envío FCM: OK`);
+    console.log(`[FCM] bookingId: ${sanitizedData.bookingId || 'N/A'}`);
+    return { success: true, sentCount: 1 };
+  } catch (err: any) {
+    console.error(`[FCM] Error enviando notificación al terapeuta ${userId}:`, err?.code || err?.message);
+
+    // FASE 7: Manejo de tokens inválidos o no registrados
+    if (
+      err?.code === 'messaging/invalid-registration-token' ||
+      err?.code === 'messaging/registration-token-not-registered'
+    ) {
+      console.warn(`[FCM] Limpiando token obsoleto o inválido para terapeuta ${userId}...`);
+      try {
+        await db.collection('terapeutas').doc(userId).set({
+          fcmToken: null,
+          fcmInvalidatedAt: new Date().toISOString()
+        }, { merge: true });
+        await db.collection('users').doc(userId).set({
+          fcmToken: null,
+          fcmInvalidatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (cleanErr) {
+        console.warn(`[FCM] Error al limpiar token inválido:`, cleanErr);
+      }
+    }
+
+    return { success: false, sentCount: 0, error: err?.message };
+  }
+}
+
 export interface PushNotificationPayload {
   title: string;
   body: string;
@@ -65,6 +207,7 @@ export interface PushNotificationPayload {
 
 /**
  * Sends a native Web Push notification to a specific user (therapist, client, or admin)
+ * and also dispatches via FCM if available.
  */
 export async function sendPushNotificationToUser(
   db: Firestore,
@@ -74,6 +217,15 @@ export async function sendPushNotificationToUser(
   if (!db || !userId) {
     return { success: false, sentCount: 0 };
   }
+
+  // Enviar también vía Firebase Cloud Messaging para máxima cobertura
+  sendFcmNotificationToUser(db, userId, {
+    title: payload.title,
+    body: payload.body,
+    icon: payload.icon,
+    badge: payload.badge,
+    data: payload.data as any
+  }).catch(() => {});
 
   try {
     const snapshot = await db.collection('push_subscriptions').where('userId', '==', userId).get();
@@ -119,7 +271,6 @@ export async function sendPushNotificationToUser(
       } catch (err: any) {
         console.warn(`[WebPush] Failed delivering to ${doc.id} (user: ${userId}):`, err?.statusCode, err?.message);
         if (err?.statusCode === 410 || err?.statusCode === 404) {
-          // Subscription has expired or is invalid
           await doc.ref.delete().catch(() => {});
         } else {
           errors.push({ docId: doc.id, error: err?.message });

@@ -3466,26 +3466,73 @@ app.get("/api/push/vapid-public-key", (req: Request, res: Response) => {
   res.json({ success: true, publicKey: vapidPublicKey });
 });
 
+app.post("/api/push/log-token", (req: Request, res: Response) => {
+  const { token, userId } = req.body || {};
+  const masked = token && token.length > 10 ? `${token.substring(0, 6)}...${token.substring(token.length - 4)}` : '(sin token)';
+  console.log("\n========================================================");
+  console.log(`[FCM-Diagnostic] Token recibido para diagnóstico (Usuario: ${userId || 'Anónimo'}): ${masked}`);
+  console.log("========================================================\n");
+  res.json({ success: true, token, message: "Token de registro recibido para diagnóstico." });
+});
+
 app.post("/api/push/subscribe", async (req: Request, res: Response) => {
   try {
-    const { userId, subscription } = req.body || {};
-    if (!subscription || !subscription.endpoint) {
-      return res.status(400).json({ success: false, error: "Suscripción push inválida." });
+    const { userId, subscription, fcmToken } = req.body || {};
+    if (!subscription?.endpoint && !fcmToken) {
+      return res.status(400).json({ success: false, error: "Se requiere subscription válida o fcmToken." });
     }
 
     const db = getAdminFirestore();
-    const subId = Buffer.from(subscription.endpoint).toString('base64').slice(0, 64);
-    
-    await db.collection("push_subscriptions").doc(subId).set({
-      userId: userId || 'anonymous',
-      endpoint: subscription.endpoint,
-      p256dh: subscription.keys?.p256dh || '',
-      auth: subscription.keys?.auth || '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
+    const nowIso = new Date().toISOString();
 
-    res.json({ success: true, message: "Suscripción push guardada correctamente." });
+    // 1. Guardar suscripción WebPush estándar si está presente
+    if (subscription?.endpoint) {
+      const subId = Buffer.from(subscription.endpoint).toString('base64').slice(0, 64);
+      await db.collection("push_subscriptions").doc(subId).set({
+        userId: userId || 'anonymous',
+        endpoint: subscription.endpoint,
+        p256dh: subscription.keys?.p256dh || '',
+        auth: subscription.keys?.auth || '',
+        fcmToken: fcmToken || null,
+        createdAt: nowIso,
+        updatedAt: nowIso
+      }, { merge: true });
+    }
+
+    // 2. Persistir token FCM directamente al terapeuta y usuario
+    if (userId && fcmToken) {
+      const maskedToken = fcmToken.length > 10
+        ? `${fcmToken.substring(0, 6)}...${fcmToken.substring(fcmToken.length - 4)}`
+        : '***';
+
+      // Actualizar en colección terapeutas si corresponde
+      try {
+        const therapistRef = db.collection("terapeutas").doc(userId);
+        const therapistSnap = await therapistRef.get();
+        if (therapistSnap.exists) {
+          await therapistRef.set({
+            fcmToken: fcmToken,
+            fcmUpdatedAt: nowIso
+          }, { merge: true });
+          console.log(`[FCM] Token asociado exitosamente al terapeuta ${userId} (${maskedToken})`);
+        }
+      } catch (tErr) {
+        console.warn(`[FCM] No se pudo actualizar fcmToken en terapeuta ${userId}:`, tErr);
+      }
+
+      // Actualizar en colección users
+      try {
+        await db.collection("users").doc(userId).set({
+          fcmToken: fcmToken,
+          fcmUpdatedAt: nowIso
+        }, { merge: true });
+      } catch {}
+    }
+
+    res.json({
+      success: true,
+      message: "Suscripción push y token FCM registrados correctamente."
+    });
   } catch (err: any) {
     console.error("Error en /api/push/subscribe:", err);
     res.status(500).json({ success: false, error: err.message });

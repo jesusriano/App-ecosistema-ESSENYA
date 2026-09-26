@@ -133,40 +133,34 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
       });
     }
 
+    // Obtain and register Firebase Cloud Messaging token using vapidKey
+    let fcmToken: string | undefined = undefined;
+    try {
+      const msg = await getMessagingService();
+      if (msg) {
+        const token = await getToken(msg, { vapidKey });
+        if (token) {
+          fcmToken = token;
+          console.log('[FCM] Token obtenido correctamente para asociación');
+        }
+      }
+    } catch (fcmErr) {
+      console.info('[FCM] Nota de obtención FCM:', fcmErr);
+    }
+
     const subRes = await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         userId,
-        subscription: subscription.toJSON()
+        fcmToken,
+        subscription: subscription ? subscription.toJSON() : undefined
       })
     });
 
     const subResult = await subRes.json();
     if (!subResult.success) {
       return { success: false, error: subResult.error || 'Error al guardar la suscripción en el servidor.' };
-    }
-
-    // Also obtain and register Firebase Cloud Messaging token using vapidKey
-    try {
-      const msg = await getMessagingService();
-      if (msg) {
-        const token = await getToken(msg, { vapidKey });
-        if (token) {
-          console.log('[FCM] Token web push obtenido exitosamente con vapidKey');
-          await fetch('/api/push/subscribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId,
-              fcmToken: token,
-              subscription: subscription.toJSON()
-            })
-          }).catch(() => {});
-        }
-      }
-    } catch (fcmErr) {
-      console.info('[FCM] Registro FCM opcional:', fcmErr);
     }
 
     return { success: true };
