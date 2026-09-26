@@ -21,6 +21,8 @@ import { ConfigValidator } from './shared/components/ConfigValidator';
 import { ErrorBoundary } from './shared/components/ErrorBoundary';
 import { OfflineNotice } from './shared/components/OfflineNotice';
 import { initGA, trackPageView } from './shared/utils/analytics';
+import { StripeProductCheckout } from './shared/components/StripeProductCheckout';
+import { PaymentSuccessOrder } from './shared/components/PaymentSuccessOrder';
 
 // Code-splitting via React.lazy for instant portal load performance
 const ClienteAppModule = React.lazy(() => import('./aplicaciones/cliente/App'));
@@ -201,6 +203,29 @@ function MainAppContent() {
           <Route path="/administrador/*" element={<Navigate to="/admin" replace />} />
           <Route path="/administracion/*" element={<Navigate to="/admin" replace />} />
           <Route path="/panel-admin/*" element={<Navigate to="/admin" replace />} />
+
+          {/* 4. Demo Stripe Product Checkout (/checkout-demo, /producto) */}
+          <Route 
+            path="/checkout-demo" 
+            element={
+              <div className="min-h-[85vh] flex items-center justify-center p-4">
+                <StripeProductCheckout />
+              </div>
+            } 
+          />
+          <Route 
+            path="/producto" 
+            element={
+              <div className="min-h-[85vh] flex items-center justify-center p-4">
+                <StripeProductCheckout />
+              </div>
+            } 
+          />
+
+          {/* 5. Confirmation and Thanks for your order page (/success, /order/success) */}
+          <Route path="/success" element={<PaymentSuccessOrder />} />
+          <Route path="/order/success" element={<PaymentSuccessOrder />} />
+          <Route path="/pago-exitoso" element={<PaymentSuccessOrder />} />
 
           {/* Entrada principal por defecto -> /cliente */}
           <Route path="/" element={<Navigate to="/cliente" replace />} />

@@ -5,6 +5,7 @@ import { ClientRoutes } from '../routes/index';
 import { ClientRoutePath } from '../components/ClientNavigation';
 import { useCliente } from '../hooks/useCliente';
 import { ImmediateRatingModal } from '../components/ImmediateRatingModal';
+import { ClientPoliciesGate } from '../../../shared/components/ClientPoliciesGate';
 
 export const ClienteAppModule: React.FC = () => {
   const location = useLocation();
@@ -48,27 +49,32 @@ export const ClienteAppModule: React.FC = () => {
   };
 
   return (
-    <ClientLayout
-      client={client}
-      currentRoute={currentRoute}
-      onNavigate={handleNavigate}
-      hasActiveBooking={Boolean(activeBooking)}
+    <ClientPoliciesGate
+      clientId={client?.id}
+      clientEmail={client?.email}
     >
-      <ClientRoutes
+      <ClientLayout
+        client={client}
         currentRoute={currentRoute}
         onNavigate={handleNavigate}
-      />
+        hasActiveBooking={Boolean(activeBooking)}
+      >
+        <ClientRoutes
+          currentRoute={currentRoute}
+          onNavigate={handleNavigate}
+        />
 
-      {/* Immediate Rating Prompt Modal when masseuse finishes massage */}
-      <ImmediateRatingModal
-        booking={targetBookingToRate}
-        isOpen={Boolean(targetBookingToRate && !targetBookingToRate.rating)}
-        onClose={handleCloseModal}
-        onRate={(id, rating, comment) => {
-          handleRateBooking(id, rating, comment);
-        }}
-      />
-    </ClientLayout>
+        {/* Immediate Rating Prompt Modal when masseuse finishes massage */}
+        <ImmediateRatingModal
+          booking={targetBookingToRate}
+          isOpen={Boolean(targetBookingToRate && !targetBookingToRate.rating)}
+          onClose={handleCloseModal}
+          onRate={(id, rating, comment) => {
+            handleRateBooking(id, rating, comment);
+          }}
+        />
+      </ClientLayout>
+    </ClientPoliciesGate>
   );
 };
 

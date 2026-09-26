@@ -2879,6 +2879,126 @@ app.post("/api/bookings/accept", requireAuth, async (req, res) => {
 });
 
 // ========================================================
+// POST /api/admin/bookings/assign - Admin approval and real-time therapist assignment
+// ========================================================
+app.post(["/api/admin/bookings/assign", "/api/admin/bookings/approve", "/api/bookings/assign"], requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { bookingId, therapistId, state = 'aceptada' } = req.body;
+    const user = (req as any).user;
+    const uid = user?.uid;
+    const email = user?.email || '';
+
+    if (!uid) return res.status(401).json({ success: false, error: "No autorizado." });
+    if (!bookingId || !therapistId) {
+      return res.status(400).json({ success: false, error: "Faltan parámetros obligatorios: bookingId y therapistId." });
+    }
+
+    const adminCheck = await verifyAdminStatus(uid, email);
+    if (!adminCheck.isAdmin) {
+      return res.status(403).json({ success: false, error: "Solo administradores pueden asignar o aprobar terapeutas para este servicio." });
+    }
+
+    const db = getAdminFirestore();
+    const bookingRef = db.collection('reservas').doc(bookingId);
+    const bookingSnap = await bookingRef.get();
+
+    if (!bookingSnap.exists) {
+      return res.status(404).json({ success: false, error: "Reserva no encontrada." });
+    }
+    const bookingData = bookingSnap.data()!;
+
+    // Lookup therapist details in terapeutas, terapeutas_publicos or users
+    const [tSnap, tpSnap, uSnap] = await Promise.all([
+      db.collection('terapeutas').doc(therapistId).get(),
+      db.collection('terapeutas_publicos').doc(therapistId).get(),
+      db.collection('users').doc(therapistId).get()
+    ]);
+
+    const tData = tSnap.exists ? tSnap.data() : (tpSnap.exists ? tpSnap.data() : (uSnap.exists ? uSnap.data() : {}));
+    const therapistName = tData?.name || tData?.nombre || [tData?.nombre, tData?.apellidos].filter(Boolean).join(' ') || 'Terapeuta Certificada';
+    const therapistPhoto = tData?.photo || tData?.fotografia || '';
+    const therapistPhone = tData?.phone || tData?.telefono || '';
+
+    const nowIso = new Date().toISOString();
+
+    const dispatchHistory = Array.isArray(bookingData.dispatchHistory) ? [...bookingData.dispatchHistory] : [];
+    dispatchHistory.push({
+      action: 'admin_assigned_and_approved',
+      therapistId,
+      therapistName,
+      adminUid: uid,
+      timestamp: nowIso
+    });
+
+    const updatePayload: Record<string, any> = {
+      state: state || 'aceptada',
+      dispatchState: 'asignada',
+      therapistId,
+      therapistName,
+      therapistPhoto,
+      therapistPhone,
+      therapistIds: [therapistId],
+      assignedTherapistsCount: 1,
+      activeOfferTherapistIds: [],
+      activeOffers: [],
+      adminApproved: true,
+      adminApprovedAt: nowIso,
+      assignedByAdminUid: uid,
+      acceptedAt: nowIso,
+      updatedAt: nowIso,
+      dispatchHistory
+    };
+
+    await bookingRef.update(updatePayload);
+
+    // Push notification to assigned therapist
+    sendPushNotificationToUser(db, therapistId, {
+      title: '✨ Cita Asignada por Administración',
+      body: `Te ha sido asignado el servicio ${bookingData.code || ''} para el ${bookingData.date} a las ${bookingData.time} hrs (${bookingData.serviceName || 'Masaje VIP'}).`,
+      url: '/terapeuta/servicios',
+      tag: `booking-assigned-${bookingId}`,
+      soundPreset: 'chime',
+      data: { type: 'booking_assigned', bookingId }
+    }).catch(err => console.warn('[Assign] Push error to therapist:', err));
+
+    // Push notification to client
+    if (bookingData.clientId) {
+      sendPushNotificationToUser(db, bookingData.clientId, {
+        title: '✨ Terapeuta Asignada a tu Cita',
+        body: `Tu servicio ${bookingData.code || ''} ha sido confirmado y asignado a ${therapistName}.`,
+        url: '/cliente',
+        tag: `booking-assigned-${bookingId}`,
+        soundPreset: 'chime',
+        data: { type: 'booking_assigned', bookingId }
+      }).catch(err => console.warn('[Assign] Push error to client:', err));
+    }
+
+    // Record audit log
+    const logRef = db.collection('logs').doc();
+    await logRef.set({
+      timestamp: nowIso,
+      actor: 'Administrador',
+      role: 'Director Operativo',
+      action: 'Asignación de Terapeuta',
+      details: `Reserva ${bookingData.code || bookingId} asignada manualmente a ${therapistName} (${therapistId}).`
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `Terapeuta ${therapistName} asignada y notificada exitosamente en tiempo real.`,
+      bookingId,
+      therapistId,
+      therapistName,
+      state: updatePayload.state,
+      dispatchState: updatePayload.dispatchState
+    });
+  } catch (err: any) {
+    console.error("Error en /api/admin/bookings/assign:", err);
+    return res.status(500).json({ success: false, error: err.message || "Error al asignar terapeuta." });
+  }
+});
+
+// ========================================================
 // POST /api/bookings/confirm-stripe-payment - Confirm Stripe Payment and activate dispatch
 // ========================================================
 app.post("/api/bookings/confirm-stripe-payment", requireAuth, async (req: Request, res: Response) => {
@@ -3118,6 +3238,116 @@ function initDispatchTicker() {
 }
 
 // ========================================================
+// Automatic Database Trigger for Bookings & Cancellations
+// ========================================================
+let bookingsTriggerStarted = false;
+function initFirestoreBookingsTrigger() {
+  if (bookingsTriggerStarted) return;
+  bookingsTriggerStarted = true;
+
+  try {
+    const db = getAdminFirestore();
+    db.collection('reservas').onSnapshot((snapshot) => {
+      snapshot.docChanges().forEach(async (change) => {
+        const docId = change.doc.id;
+        const data = change.doc.data();
+        const nowIso = new Date().toISOString();
+
+        // 1. TRIGGER EN CASO DE CANCELACIÓN AUTOMÁTICA
+        if (data.state === 'cancelado' || data.cancellationRequested === true) {
+          // If document hasn't finalized cancellation state, update automatically
+          if (data.dispatchState !== 'cancelada' || (Array.isArray(data.activeOfferTherapistIds) && data.activeOfferTherapistIds.length > 0)) {
+            console.log(`[Database Trigger] Auto-processing cancellation for booking ${docId}`);
+            
+            const updates: Record<string, any> = {
+              state: 'cancelado',
+              dispatchState: 'cancelada',
+              activeOfferTherapistIds: [],
+              activeOffers: [],
+              canceledAt: data.canceledAt || nowIso,
+              updatedAt: nowIso
+            };
+
+            // Automatic refund to client wallet if not yet refunded
+            if (data.walletDeduction && data.walletDeduction > 0 && !data.refundedAmount && data.clientId) {
+              const deduction = data.walletDeduction;
+              const refundCardRef = db.collection('clientes').doc(data.clientId).collection('billetera').doc();
+              await refundCardRef.set({
+                code: `REFUND-${data.code || docId.substring(0, 6)}`,
+                title: `Reembolso Reserva ${data.code || ''}`,
+                initialAmount: deduction,
+                currentBalance: deduction,
+                status: 'activa',
+                expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                createdAt: nowIso,
+                isGiftForSomeoneElse: false,
+                history: []
+              });
+
+              const ledgerRef = db.collection('clientes').doc(data.clientId).collection('wallet_ledger').doc();
+              await ledgerRef.set({
+                type: 'CREDIT',
+                amount: deduction,
+                source: 'BOOKING_REFUND',
+                referenceId: docId,
+                timestamp: nowIso,
+                description: `Reembolso automático por cancelación de reserva ${data.code || ''}`
+              });
+
+              updates.refundedAmount = deduction;
+            }
+
+            await change.doc.ref.update(updates);
+
+            // Send automatic push notification to assigned therapists
+            const targetTherapistIds = [
+              data.therapistId,
+              data.therapistId2,
+              ...(Array.isArray(data.therapistIds) ? data.therapistIds : [])
+            ].filter(Boolean);
+
+            for (const tId of new Set(targetTherapistIds)) {
+              sendPushNotificationToUser(db, tId, {
+                title: '⚠️ Cita Cancelada',
+                body: `El servicio ${data.code || ''} para el ${data.date} ha sido cancelado automáticamente. Motivo: ${data.cancellationReason || 'Cancelación de servicio'}.`,
+                url: '/terapeuta/servicios',
+                tag: `booking-cancelled-${docId}`,
+                soundPreset: 'gentle',
+                data: { type: 'booking_cancelled', bookingId: docId }
+              }).catch(e => console.warn('[Trigger] Push error to therapist:', e));
+            }
+
+            // Send automatic push notification to client
+            if (data.clientId) {
+              sendPushNotificationToUser(db, data.clientId, {
+                title: '⚠️ Cita Cancelada',
+                body: `Tu reserva ${data.code || ''} ha sido cancelada exitosamente. Tu agenda ha sido actualizada.`,
+                url: '/cliente',
+                tag: `booking-cancelled-${docId}`,
+                soundPreset: 'gentle',
+                data: { type: 'booking_cancelled', bookingId: docId }
+              }).catch(e => console.warn('[Trigger] Push error to client:', e));
+            }
+          }
+        }
+
+        // 2. TRIGGER EN CASO DE RESERVA NUEVA (Sin confirmación manual de administración)
+        if (data.state === 'pendiente' && data.dispatchState === 'buscando' && (!data.dispatchStartedAt || (Array.isArray(data.activeOfferTherapistIds) && data.activeOfferTherapistIds.length === 0 && !data.dispatchExpiresAt))) {
+          const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
+          stepDispatchEngine(db, docId, apiKey).catch(e => {
+            console.warn(`[Database Trigger] Auto-dispatch error for booking ${docId}:`, e);
+          });
+        }
+      });
+    }, (err) => {
+      console.warn("[Database Trigger] Bookings listener error:", err);
+    });
+  } catch (err) {
+    console.error("[Database Trigger] Error initializing bookings trigger:", err);
+  }
+}
+
+// ========================================================
 // Web Push Notifications Endpoints
 // ========================================================
 
@@ -3231,21 +3461,93 @@ app.post("/api/push/send", async (req: Request, res: Response) => {
 // Stripe Checkout Integration Endpoint
 app.post("/api/create-stripe-checkout", async (req: Request, res: Response) => {
   try {
-    const { bookingId, serviceName, total, customerEmail, successUrl, cancelUrl } = req.body;
+    const { bookingId, serviceName, total, priceId, price, customerEmail, successUrl, cancelUrl, redirect } = req.body;
     
     const result = await stripeService.createCheckoutSession({
       bookingId,
       serviceName,
       total,
+      priceId: priceId || price,
       customerEmail,
       successUrl: successUrl || `${req.protocol}://${req.get('host')}/cliente?payment=success&bookingId=${bookingId || ''}`,
-      cancelUrl: cancelUrl || `${req.protocol}://${req.get('host')}/cliente?payment=cancelled`
+      cancelUrl: cancelUrl || `${req.protocol}://${req.get('host')}/cliente?payment=cancelled&bookingId=${bookingId || ''}`
     });
+
+    // Support HTTP 303 redirect if requested by client or form
+    if (redirect === true || req.query.redirect === 'true') {
+      return res.redirect(303, result.url);
+    }
 
     res.json(result);
   } catch (err: any) {
     console.error("Error creating Stripe Checkout session:", err);
     res.status(500).json({ success: false, error: err.message || "Error al crear la sesión de pago con Stripe." });
+  }
+});
+
+// Standard Stripe Checkout Session Endpoint (Supports HTML form action="/create-checkout-session")
+app.all(["/create-checkout-session", "/api/create-checkout-session"], async (req: Request, res: Response) => {
+  try {
+    const bookingId = (req.body?.bookingId || req.query.bookingId || `PROD-${Date.now()}`) as string;
+    const serviceName = (req.body?.serviceName || req.query.serviceName || 'Stubborn Attachments') as string;
+    const total = Number(req.body?.total || req.query.total || 20.00);
+    const priceId = (req.body?.priceId || req.body?.price || req.query.priceId || undefined) as string | undefined;
+    const customerEmail = (req.body?.customerEmail || req.query.customerEmail || undefined) as string | undefined;
+
+    const successUrl = req.body?.successUrl || `${req.protocol}://${req.get('host')}/success?session_id={CHECKOUT_SESSION_ID}&bookingId=${bookingId}`;
+    const cancelUrl = req.body?.cancelUrl || `${req.protocol}://${req.get('host')}/checkout-demo`;
+
+    const result = await stripeService.createCheckoutSession({
+      bookingId,
+      serviceName,
+      total,
+      priceId,
+      customerEmail,
+      successUrl,
+      cancelUrl
+    });
+
+    // If submitted from standard HTML form or browser redirect requested, redirect 303
+    const acceptsHtml = req.headers.accept?.includes('text/html');
+    const isFormSubmit = req.headers['content-type']?.includes('application/x-www-form-urlencoded') || req.headers['content-type']?.includes('multipart/form-data');
+
+    if (acceptsHtml || isFormSubmit || req.query.redirect === 'true' || req.body?.redirect === true) {
+      return res.redirect(303, result.url);
+    }
+
+    return res.json(result);
+  } catch (err: any) {
+    console.error("Error en /create-checkout-session:", err);
+    if (req.headers.accept?.includes('text/html')) {
+      return res.status(500).send(`Error al iniciar Checkout de Stripe: ${err.message}`);
+    }
+    return res.status(500).json({ success: false, error: err.message || "Error al crear sesión de checkout." });
+  }
+});
+
+// Dedicated 303 Redirect Endpoint for Hosted Checkout Page
+app.all("/api/stripe/checkout-redirect", async (req: Request, res: Response) => {
+  try {
+    const bookingId = (req.body?.bookingId || req.query.bookingId || '') as string;
+    const serviceName = (req.body?.serviceName || req.query.serviceName || 'Servicio de Masaje VIP') as string;
+    const total = Number(req.body?.total || req.query.total || 0);
+    const priceId = (req.body?.priceId || req.query.priceId || '') as string;
+    const customerEmail = (req.body?.customerEmail || req.query.customerEmail || undefined) as string | undefined;
+
+    const result = await stripeService.createCheckoutSession({
+      bookingId,
+      serviceName,
+      total,
+      priceId: priceId || undefined,
+      customerEmail,
+      successUrl: `${req.protocol}://${req.get('host')}/cliente?payment=success&bookingId=${bookingId}`,
+      cancelUrl: `${req.protocol}://${req.get('host')}/cliente?payment=cancelled&bookingId=${bookingId}`
+    });
+
+    res.redirect(303, result.url);
+  } catch (err: any) {
+    console.error("Error in checkout-redirect:", err);
+    res.status(500).send(`Error al iniciar Stripe Checkout: ${err.message}`);
   }
 });
 
@@ -3374,7 +3676,8 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
 app.post("/api/stripe/webhook", express.raw({ type: 'application/json' }), handleStripeWebhook);
 app.post("/api/stripe-webhook", express.raw({ type: 'application/json' }), handleStripeWebhook);
 
-// Start ticker
+// Start ticker and triggers
 initDispatchTicker();
+initFirestoreBookingsTrigger();
 
 export default app;

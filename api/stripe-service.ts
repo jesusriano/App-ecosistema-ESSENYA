@@ -35,40 +35,58 @@ export class StripeService {
     bookingId: string;
     serviceName: string;
     total: number;
+    priceId?: string;
     customerEmail?: string;
     successUrl: string;
     cancelUrl: string;
   }): Promise<{ success: boolean; url: string; sessionId: string }> {
-    const { bookingId, serviceName, total, customerEmail, successUrl, cancelUrl } = params;
+    const { bookingId, serviceName, total, priceId, customerEmail, successUrl, cancelUrl } = params;
 
-    if (!total || !serviceName) {
-      throw new Error("Faltan datos requeridos de la reserva (total o serviceName).");
+    if (!total && !priceId) {
+      throw new Error("Faltan datos requeridos de la reserva (total o priceId).");
     }
 
     const stripe = this.getStripeInstance();
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price_data: {
-            currency: 'mxn',
-            product_data: {
-              name: `ESSENYA — ${serviceName}`,
-              description: `Reserva y Servicio de Masaje a Domicilio (${bookingId || 'VIP'})`
-            },
-            unit_amount: Math.round(Number(total) * 100),
-          },
-          quantity: 1,
-        },
-      ],
+    const sessionParams: any = {
       mode: 'payment',
+      ui_mode: 'hosted_page',
       success_url: successUrl,
       cancel_url: cancelUrl,
+      line_items: priceId
+        ? [
+            {
+              price: priceId,
+              quantity: 1,
+            },
+          ]
+        : [
+            {
+              price_data: {
+                currency: 'mxn',
+                product_data: {
+                  name: `ESSENYA — ${serviceName || 'Servicio de Masaje VIP'}`,
+                  description: `Reserva y Servicio de Masaje a Domicilio (${bookingId || 'VIP'})`
+                },
+                unit_amount: Math.round(Number(total) * 100),
+              },
+              quantity: 1,
+            },
+          ],
+      billing_address_collection: 'auto',
+      phone_number_collection: {
+        enabled: true,
+      },
+      allow_promotion_codes: false,
+      submit_type: 'auto',
       customer_email: customerEmail || undefined,
       metadata: {
-        bookingId: bookingId || ''
+        bookingId: bookingId || '',
+        integration_identifier: 'hosted_mobile_app_0001',
+        origin_context: 'mobile_app'
       }
-    });
+    };
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
 
     if (!session.url) {
       throw new Error("Stripe no retornó una URL válida para la sesión de Checkout.");

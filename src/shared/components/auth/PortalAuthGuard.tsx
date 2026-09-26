@@ -15,6 +15,8 @@ import { PasswordStrengthMeter } from './PasswordStrengthMeter';
 import { TherapistRegistrationForm } from './TherapistRegistrationForm';
 import { getLockoutInfo } from '../../utils/authValidations';
 import { checkIsAdminInFirestore } from '../../services/adminAuthService';
+import { ClientPoliciesGate } from '../ClientPoliciesGate';
+import { ClientPoliciesModal } from '../ClientPoliciesModal';
 
 interface PortalAuthGuardProps {
   role: UserRole;
@@ -43,6 +45,8 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
   const [isCaptchaVerified, setIsCaptchaVerified] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [forceShowLogin, setForceShowLogin] = useState(false);
+  const [isPoliciesModalOpen, setIsPoliciesModalOpen] = useState(false);
+  const [clientRegisterAcceptedPolicies, setClientRegisterAcceptedPolicies] = useState(false);
 
   // Explicit client-side Claim Verification State
   const [claimStatus, setClaimStatus] = useState<'idle' | 'verifying' | 'authorized' | 'denied'>('idle');
@@ -640,6 +644,17 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
     }
 
     // All verifications passed - grant access to this portal
+    if (role === 'cliente') {
+      return (
+        <ClientPoliciesGate 
+          clientId={currentUser?.uid || currentUser?.id} 
+          clientEmail={currentUser?.correo}
+        >
+          {children}
+        </ClientPoliciesGate>
+      );
+    }
+
     return <>{children}</>;
   }
 
@@ -720,6 +735,12 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
         setErrorMessage(res.error || 'Error al iniciar sesión.');
       }
     } else if (mode === 'register') {
+      if (role === 'cliente' && !clientRegisterAcceptedPolicies) {
+        setIsSubmitting(false);
+        setErrorMessage('Debes aceptar las Políticas de Privacidad y Términos de Cancelación antes de continuar.');
+        return;
+      }
+
       if (password !== confirmPassword) {
         setIsSubmitting(false);
         setErrorMessage('Las contraseñas no coinciden. Por favor verifica ambos campos.');
@@ -737,6 +758,9 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
       if (!res.success) {
         setErrorMessage(res.error || 'Error al crear la cuenta.');
       } else {
+        if (role === 'cliente') {
+          localStorage.setItem('essenya_client_policies_accepted_guest', 'true');
+        }
         setSuccessMessage('Cuenta creada exitosamente. Bienvenido a ESSENYA.');
       }
     } else if (mode === 'forgot_password') {
@@ -1050,10 +1074,54 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
             isVerified={isCaptchaVerified}
           />
 
+          {/* Client Registration Policies Acceptance Checkbox */}
+          {role === 'cliente' && mode === 'register' && (
+            <div className="p-3 rounded-2xl bg-[#F5F1EA]/70 dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#333333] space-y-1 text-left">
+              <label className="flex items-start space-x-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  required
+                  checked={clientRegisterAcceptedPolicies}
+                  onChange={(e) => setClientRegisterAcceptedPolicies(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 rounded border-[#C9A55B] text-[#C9A55B] focus:ring-[#C9A55B] accent-[#C9A55B] cursor-pointer"
+                />
+                <span className="text-[11px] text-[#1C1917] dark:text-white leading-tight">
+                  He leído y acepto las{' '}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsPoliciesModalOpen(true);
+                    }}
+                    className="text-[#806020] dark:text-[#C9A55B] font-bold underline hover:text-[#C9A55B] cursor-pointer"
+                  >
+                    Políticas de Privacidad y Cancelación
+                  </button>{' '}
+                  (en cancelaciones no hay devoluciones en efectivo: se reembolsa a la Billetera Virtual o se reagenda la cita).
+                </span>
+              </label>
+            </div>
+          )}
+
+          {/* Client Login Policies Link */}
+          {role === 'cliente' && mode === 'login' && (
+            <p className="text-[11px] text-center text-[#888888] pt-1">
+              Al ingresar aceptas nuestras{' '}
+              <button
+                type="button"
+                onClick={() => setIsPoliciesModalOpen(true)}
+                className="text-[#806020] dark:text-[#C9A55B] font-semibold underline hover:text-[#C9A55B] cursor-pointer"
+              >
+                Políticas de Privacidad y Cancelación
+              </button>
+            </p>
+          )}
+
           {/* Submit Button */}
           <LuxuryButton
             type="submit"
-            disabled={isSubmitting || lockoutTimer > 0}
+            disabled={isSubmitting || lockoutTimer > 0 || (role === 'cliente' && mode === 'register' && !clientRegisterAcceptedPolicies)}
             variant="gold"
             className="w-full py-3 text-xs tracking-wider font-bold shadow-lg flex items-center justify-center space-x-2"
           >
@@ -1094,6 +1162,12 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
         </form>
         )}
       </motion.div>
+
+      {/* Policies & Cancellation Modal for review */}
+      <ClientPoliciesModal 
+        isOpen={isPoliciesModalOpen}
+        onClose={() => setIsPoliciesModalOpen(false)}
+      />
     </div>
   );
 };

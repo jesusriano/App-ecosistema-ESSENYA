@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { 
   User, ShieldCheck, MapPin, Phone, Mail, Award, CreditCard, Heart, 
-  Camera, Upload, CheckCircle2, Crown, Gem, Sparkles, Shield, Lock, ArrowUpRight 
+  Camera, Upload, CheckCircle2, Crown, Gem, Sparkles, Shield, Lock, ArrowUpRight,
+  FileText, Scale
 } from 'lucide-react';
 import { useCliente } from '../hooks/useCliente';
 import { useAuth } from '../../../shared/context/AuthContext';
@@ -9,12 +10,15 @@ import { useToast } from '../../../context/ToastContext';
 import { calculateMembershipTier, getCompletedAndPaidBookings } from '../services/membershipService';
 import { NotificationSoundSettings } from '../../../shared/components/NotificationSoundSettings';
 import { COMPREHENSIVE_ZONES } from '../../../shared/constants/zones';
+import { ClientPoliciesModal } from '../../../shared/components/ClientPoliciesModal';
+import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 
 export const PerfilPage: React.FC = () => {
   const { client, bookings } = useCliente();
   const { getUser, firebaseUser } = useAuth();
   const authUser = getUser('cliente');
   const { showToast } = useToast();
+  const [isPoliciesModalOpen, setIsPoliciesModalOpen] = useState(false);
 
   // Cálculo estricto del nivel según masajes pagados y concluidos
   const completedAndPaidBookings = useMemo(() => {
@@ -565,8 +569,42 @@ export const PerfilPage: React.FC = () => {
           </p>
         </div>
 
+        {/* Políticas de Privacidad y Cancelación */}
+        <div className="border-t border-[#E5DFD3] dark:border-[#262626] pt-4">
+          <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#2A2A2A] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B] flex items-center justify-center shrink-0">
+                <Scale className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="font-bold text-xs text-[#1C1917] dark:text-white">
+                  Políticas de Privacidad y Cancelación
+                </h4>
+                <p className="text-[11px] text-[#6B655F] dark:text-[#AAAAAA]">
+                  Abono en Billetera Virtual o reagendación sin devoluciones en efectivo.
+                </p>
+              </div>
+            </div>
+            <LuxuryButton
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsPoliciesModalOpen(true)}
+              className="shrink-0"
+            >
+              Consultar Políticas
+            </LuxuryButton>
+          </div>
+        </div>
+
         <NotificationSoundSettings role="client" />
       </div>
+
+      {/* Modal de Políticas para consulta */}
+      <ClientPoliciesModal
+        isOpen={isPoliciesModalOpen}
+        onClose={() => setIsPoliciesModalOpen(false)}
+      />
     </div>
   );
 };

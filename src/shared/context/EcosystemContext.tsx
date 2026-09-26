@@ -452,6 +452,8 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     let unsubReservas = () => {};
     let unsubReservas2 = () => {};
+    let unsubReservas3 = () => {};
+    let unsubReservasCustom = () => {};
     let unsubPending = () => {};
     let unsubClientes = () => {};
     let unsubInvoices = () => {};
@@ -589,7 +591,11 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Therapist role: bookings assigned to therapist + open pending bookings queue
       let assignedBookings1: Booking[] = [];
       let assignedBookings2: Booking[] = [];
+      let assignedBookings3: Booking[] = [];
+      let assignedBookingsCustom: Booking[] = [];
       let pendingBookings: Booking[] = [];
+
+      const targetTherapistId = authTherapist?.id;
 
       const syncTherapistBookings = () => {
         // Therapist coverage zones (never default to Polanco)
@@ -605,7 +611,10 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
           if (b.therapistId === uid || b.therapistId2 === uid || (Array.isArray(b.therapistIds) && b.therapistIds.includes(uid))) {
             return true;
           }
-          if (Array.isArray(b.activeOfferTherapistIds) && b.activeOfferTherapistIds.includes(uid)) {
+          if (targetTherapistId && (b.therapistId === targetTherapistId || b.therapistId2 === targetTherapistId || (Array.isArray(b.therapistIds) && b.therapistIds.includes(targetTherapistId)))) {
+            return true;
+          }
+          if (Array.isArray(b.activeOfferTherapistIds) && (b.activeOfferTherapistIds.includes(uid) || (targetTherapistId && b.activeOfferTherapistIds.includes(targetTherapistId)))) {
             return true;
           }
           if (tZones.length === 0) {
@@ -620,7 +629,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         });
 
         const mergedMap = new Map<string, Booking>();
-        [...assignedBookings1, ...assignedBookings2, ...filteredPending].forEach(b => mergedMap.set(b.id, b));
+        [...assignedBookings1, ...assignedBookings2, ...assignedBookings3, ...assignedBookingsCustom, ...filteredPending].forEach(b => mergedMap.set(b.id, b));
         const list = Array.from(mergedMap.values()).sort(
           (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
         );
@@ -640,6 +649,24 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
           syncTherapistBookings();
         }, () => {});
       } catch {}
+
+      try {
+        const qTherapistBookings3 = query(collection(db, 'reservas'), where('therapistIds', 'array-contains', uid));
+        unsubReservas3 = onSnapshot(qTherapistBookings3, (snap) => {
+          assignedBookings3 = snap.docs.map(doc => parseBookingDoc(doc));
+          syncTherapistBookings();
+        }, () => {});
+      } catch {}
+
+      if (targetTherapistId && targetTherapistId !== uid) {
+        try {
+          const qTherapistCustom = query(collection(db, 'reservas'), where('therapistId', '==', targetTherapistId));
+          unsubReservasCustom = onSnapshot(qTherapistCustom, (snap) => {
+            assignedBookingsCustom = snap.docs.map(doc => parseBookingDoc(doc));
+            syncTherapistBookings();
+          }, () => {});
+        } catch {}
+      }
 
       try {
         const qPendingBookings = query(collection(db, 'reservas'), where('state', '==', 'pendiente'));
@@ -708,6 +735,8 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       unsubZonas();
       unsubReservas();
       unsubReservas2();
+      unsubReservas3();
+      unsubReservasCustom();
       unsubPending();
       unsubClientes();
       unsubInvoices();
@@ -1055,13 +1084,37 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       throw new Error(`La reserva no se puede aceptar porque su estado actual es "${targetBooking.state}".`);
     }
 
-    const updatePayload = {
+    const nowIso = new Date().toISOString();
+    const updatePayload: any = {
       state: 'aceptada' as BookingState,
-      acceptedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      dispatchState: 'asignada',
+      adminApproved: true,
+      adminApprovedAt: nowIso,
+      acceptedAt: nowIso,
+      updatedAt: nowIso
     };
 
+    if (targetBooking.therapistId) {
+      updatePayload.therapistIds = [targetBooking.therapistId];
+      updatePayload.assignedTherapistsCount = 1;
+      updatePayload.activeOfferTherapistIds = [];
+      updatePayload.activeOffers = [];
+    }
+
     try {
+      if (targetBooking.therapistId) {
+        const auth = getAuth();
+        const token = await auth.currentUser?.getIdToken();
+        await fetch('/api/admin/bookings/assign', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ bookingId, therapistId: targetBooking.therapistId, state: 'aceptada' })
+        }).catch(e => console.warn('[AdminAccept] API assign error:', e));
+      }
+
       await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
@@ -1241,41 +1294,74 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
     if (!newTher) return;
 
-    const updatePayload = {
-      therapistId: newTher.id,
-      therapistName: newTher.name,
-      therapistPhoto: newTher.photo,
-      therapistPhone: newTher.phone,
-      updatedAt: new Date().toISOString()
-    };
+    const nowIso = new Date().toISOString();
 
+    // 1. Optimistic local update so administration and UI see the assignment immediately
+    setBookings(prev => prev.map(b => {
+      if (b.id === bookingId) {
+        return {
+          ...b,
+          state: 'aceptada',
+          dispatchState: 'asignada',
+          therapistId: newTher!.id,
+          therapistName: newTher!.name,
+          therapistPhoto: newTher!.photo,
+          therapistPhone: newTher!.phone,
+          therapistIds: [newTher!.id],
+          assignedTherapistsCount: 1,
+          adminApproved: true,
+          adminApprovedAt: nowIso,
+          updatedAt: nowIso
+        };
+      }
+      return b;
+    }));
+
+    // 2. Call backend assignment endpoint to synchronize with push notifications & database
     try {
-      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
-      
-      setBookings(prev => prev.map(b => {
-        if (b.id === bookingId) {
-          return {
-            ...b,
-            therapistId: newTher!.id,
-            therapistName: newTher!.name,
-            therapistPhoto: newTher!.photo,
-            therapistPhone: newTher!.phone
-          };
-        }
-        return b;
-      }));
+      const auth = getAuth();
+      const token = await auth.currentUser?.getIdToken();
 
-      addLog(
-        'Administrador',
-        'Director Operativo',
-        'Reasignación de Terapeuta',
-        `Reserva ${bookingId} reasignada manualmente a ${newTher.name}.`
-      );
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
-      console.error("Error al reasignar terapeuta en Firestore:", err);
-      throw err; 
+      const response = await fetch('/api/admin/bookings/assign', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ bookingId, therapistId: newTher.id, state: 'aceptada' })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Error ${response.status} al asignar terapeuta`);
+      }
+    } catch (apiErr) {
+      console.warn('[Ecosystem] API assignment fallback to direct Firestore:', apiErr);
+      // Fallback: direct update to Firestore
+      const updatePayload = {
+        state: 'aceptada',
+        dispatchState: 'asignada',
+        therapistId: newTher.id,
+        therapistName: newTher.name,
+        therapistPhoto: newTher.photo,
+        therapistPhone: newTher.phone,
+        therapistIds: [newTher.id],
+        assignedTherapistsCount: 1,
+        activeOfferTherapistIds: [],
+        activeOffers: [],
+        adminApproved: true,
+        adminApprovedAt: nowIso,
+        updatedAt: nowIso
+      };
+      await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
     }
+
+    addLog(
+      'Administrador',
+      'Director Operativo',
+      'Asignación y Aprobación de Terapeuta',
+      `Reserva ${bookingId} aprobada y asignada en tiempo real a ${newTher.name}.`
+    );
   };
 
   const handleToggleZoneSurge = async (zoneId: string, multiplier: number) => {
