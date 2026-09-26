@@ -1,4 +1,7 @@
-// ESSENYA Advanced Service Worker with Firebase Cloud Messaging (FCM) & Web Push Support
+// ESSENYA Unified Service Worker with Firebase Cloud Messaging (FCM), Workbox PWA & Web Push Support
+// Precache manifest injection point for Workbox / VitePWA
+// eslint-disable-next-line no-unused-expressions
+self.__WB_MANIFEST;
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -109,19 +112,27 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const targetUrl = event.notification.data?.url || '/terapeuta/servicios';
+  const data = event.notification.data || {};
+  const bookingId = data.bookingId;
+  const baseUrl = data.url || '/terapeuta/servicios';
+  const targetUrl = bookingId && !baseUrl.includes('bookingId=')
+    ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}bookingId=${bookingId}`
+    : baseUrl;
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (windowClients) => {
       for (const client of windowClients) {
-        if (client.url) {
-          if ('focus' in client) {
-            client.focus();
-            if ('navigate' in client && client.url !== new URL(targetUrl, self.location.origin).href) {
-              return client.navigate(targetUrl);
-            }
-            return;
+        if ('focus' in client) {
+          await client.focus();
+          if ('navigate' in client && client.url !== new URL(targetUrl, self.location.origin).href) {
+            await client.navigate(targetUrl);
           }
+          client.postMessage({
+            type: 'NOTIFICATION_CLICKED_BOOKING',
+            bookingId: bookingId,
+            url: targetUrl
+          });
+          return;
         }
       }
       if (clients.openWindow) {

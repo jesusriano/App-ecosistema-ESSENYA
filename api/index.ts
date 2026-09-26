@@ -3475,21 +3475,31 @@ app.post("/api/push/log-token", (req: Request, res: Response) => {
   res.json({ success: true, token, message: "Token de registro recibido para diagnóstico." });
 });
 
-app.post("/api/push/subscribe", async (req: Request, res: Response) => {
+app.post("/api/push/subscribe", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { userId, subscription, fcmToken } = req.body || {};
+    const authenticatedUid = (req as any).user?.uid;
+    if (!authenticatedUid) {
+      return res.status(401).json({ success: false, error: "Usuario no autenticado." });
+    }
+
+    const { userId: bodyUserId, subscription, fcmToken } = req.body || {};
     if (!subscription?.endpoint && !fcmToken) {
       return res.status(400).json({ success: false, error: "Se requiere subscription válida o fcmToken." });
+    }
+
+    // Regla de seguridad: Si body.userId difiere del UID autenticado, se descarta y se registra inconsistencia
+    if (bodyUserId && bodyUserId !== authenticatedUid) {
+      console.warn(`[FCM-Security] Inconsistencia detectada: body.userId (${bodyUserId}) no coincide con UID autenticado (${authenticatedUid}). Se descarta el ID del body y se protege la cuenta.`);
     }
 
     const db = getAdminFirestore();
     const nowIso = new Date().toISOString();
 
-    // 1. Guardar suscripción WebPush estándar si está presente
+    // 1. Guardar suscripción WebPush estándar asociada estrictamente al UID autenticado
     if (subscription?.endpoint) {
       const subId = Buffer.from(subscription.endpoint).toString('base64').slice(0, 64);
       await db.collection("push_subscriptions").doc(subId).set({
-        userId: userId || 'anonymous',
+        userId: authenticatedUid,
         endpoint: subscription.endpoint,
         p256dh: subscription.keys?.p256dh || '',
         auth: subscription.keys?.auth || '',
@@ -3499,30 +3509,30 @@ app.post("/api/push/subscribe", async (req: Request, res: Response) => {
       }, { merge: true });
     }
 
-    // 2. Persistir token FCM directamente al terapeuta y usuario
-    if (userId && fcmToken) {
+    // 2. Persistir token FCM directamente al terapeuta y usuario utilizando el UID autenticado
+    if (fcmToken) {
       const maskedToken = fcmToken.length > 10
         ? `${fcmToken.substring(0, 6)}...${fcmToken.substring(fcmToken.length - 4)}`
         : '***';
 
-      // Actualizar en colección terapeutas si corresponde
+      // Actualizar en colección terapeutas si corresponde al UID autenticado
       try {
-        const therapistRef = db.collection("terapeutas").doc(userId);
+        const therapistRef = db.collection("terapeutas").doc(authenticatedUid);
         const therapistSnap = await therapistRef.get();
         if (therapistSnap.exists) {
           await therapistRef.set({
             fcmToken: fcmToken,
             fcmUpdatedAt: nowIso
           }, { merge: true });
-          console.log(`[FCM] Token asociado exitosamente al terapeuta ${userId} (${maskedToken})`);
+          console.log(`[FCM] Token asociado exitosamente al terapeuta autenticado ${authenticatedUid} (${maskedToken})`);
         }
       } catch (tErr) {
-        console.warn(`[FCM] No se pudo actualizar fcmToken en terapeuta ${userId}:`, tErr);
+        console.warn(`[FCM] No se pudo actualizar fcmToken en terapeuta ${authenticatedUid}:`, tErr);
       }
 
-      // Actualizar en colección users
+      // Actualizar en colección users con el UID autenticado
       try {
-        await db.collection("users").doc(userId).set({
+        await db.collection("users").doc(authenticatedUid).set({
           fcmToken: fcmToken,
           fcmUpdatedAt: nowIso
         }, { merge: true });
@@ -3531,7 +3541,7 @@ app.post("/api/push/subscribe", async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      message: "Suscripción push y token FCM registrados correctamente."
+      message: "Suscripción push y token FCM registrados correctamente para el usuario autenticado."
     });
   } catch (err: any) {
     console.error("Error en /api/push/subscribe:", err);
@@ -3557,28 +3567,78 @@ app.post("/api/push/unsubscribe", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/push/send", async (req: Request, res: Response) => {
+app.post("/api/push/send", requireAuth, async (req: Request, res: Response) => {
   try {
+    const callerUid = (req as any).user?.uid;
+    const callerEmail = (req as any).user?.email;
+    const { isAdmin } = await verifyAdminStatus(callerUid, callerEmail);
+
     const { userId, title, body, url, tag, soundPreset, data } = req.body || {};
     const db = getAdminFirestore();
 
-    let query: any = db.collection("push_subscriptions");
-    if (userId) {
-      query = query.where("userId", "==", userId);
+    // Reglas de Autorización estrictas:
+    // 1. Administrador: puede enviar a cualquier usuario o globalmente
+    // 2. Usuario autenticado: puede enviar prueba únicamente a su propio UID
+    // 3. Participantes de una reserva válida (ej. chat en vivo entre cliente y terapeuta):
+    if (!isAdmin) {
+      if (!userId) {
+        return res.status(403).json({ success: false, error: "Solo los administradores pueden enviar notificaciones globales." });
+      }
+
+      if (userId !== callerUid) {
+        let isAuthorizedParticipant = false;
+        if (data?.type === 'chat_message' && data?.bookingId) {
+          try {
+            const bSnap = await db.collection("reservas").doc(String(data.bookingId)).get();
+            if (bSnap.exists) {
+              const bData = bSnap.data()!;
+              const isClient = bData.clientId === callerUid;
+              const isTherapist = bData.therapistId === callerUid || bData.therapistId2 === callerUid || (Array.isArray(bData.therapistIds) && bData.therapistIds.includes(callerUid));
+              if (isClient || isTherapist) {
+                isAuthorizedParticipant = true;
+              }
+            }
+          } catch (e) {
+            console.warn("[Push/Send] Error verificando participante de reserva:", e);
+          }
+        }
+
+        if (!isAuthorizedParticipant) {
+          return res.status(403).json({ success: false, error: "No tienes autorización para enviar notificaciones a este usuario." });
+        }
+      }
     }
 
+    // Envío unificado y deduplicado por usuario individual
+    if (userId) {
+      const result = await sendPushNotificationToUser(db, userId, {
+        title: title || "ESSENYA — Notificación",
+        body: body || "Tienes una nueva actualización en tu ecosistema.",
+        icon: "/icons/icon-192.png",
+        badge: "/icons/badge-72.png",
+        url: url || "/",
+        tag: tag || "essenya-notification",
+        soundPreset: soundPreset || "classic",
+        data: data || { type: "general" }
+      });
+
+      return res.json({ success: result.success, sentCount: result.sentCount, channel: result.channel, errors: result.errors });
+    }
+
+    // Difusión global administrativa (solo Admin)
+    let query: any = db.collection("push_subscriptions");
     const snapshot = await query.get();
     if (snapshot.empty) {
       return res.json({ success: true, sentCount: 0, message: "No se encontraron suscripciones push activas." });
     }
 
     const payload = JSON.stringify({
-      title: title || "ESSENYA — Notificación",
+      title: title || "ESSENYA — Notificación Global",
       body: body || "Tienes una nueva actualización en tu ecosistema.",
       icon: "/icons/icon-192.png",
       badge: "/icons/badge-72.png",
       url: url || "/",
-      tag: tag || "essenya-notification",
+      tag: tag || "essenya-broadcast",
       soundPreset: soundPreset || "classic",
       data: data || { type: "general" }
     });
@@ -3588,6 +3648,10 @@ app.post("/api/push/send", async (req: Request, res: Response) => {
 
     for (const doc of snapshot.docs) {
       const subData = doc.data();
+      if (!subData.endpoint || !subData.p256dh || !subData.auth) {
+        continue;
+      }
+
       const pushSubscription = {
         endpoint: subData.endpoint,
         keys: {
@@ -3600,7 +3664,7 @@ app.post("/api/push/send", async (req: Request, res: Response) => {
         await webPush.sendNotification(pushSubscription, payload);
         sentCount++;
       } catch (err: any) {
-        console.warn(`[WebPush] Error sending to subscription ${doc.id}:`, err?.statusCode, err?.message);
+        console.warn(`[WebPush] Error sending broadcast to ${doc.id}:`, err?.statusCode, err?.message);
         if (err?.statusCode === 410 || err?.statusCode === 404) {
           await doc.ref.delete().catch(() => {});
         } else {

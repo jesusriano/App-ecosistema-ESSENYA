@@ -58,14 +58,23 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
     return saved !== null ? parseFloat(saved) : 0.8;
   });
 
-  const [inAppNotifications, setInAppNotifications] = useState<InAppNotificationItem[]>(() => {
+  // Storage key isolated per authenticated UID to prevent data leakage across users
+  const getStorageKey = useCallback((uid?: string) => {
+    return uid ? `essenya_in_app_notifications_${uid}` : 'essenya_in_app_notifications_guest';
+  }, []);
+
+  const [inAppNotifications, setInAppNotifications] = useState<InAppNotificationItem[]>([]);
+
+  // Load notifications for the active user on mount or when user changes
+  useEffect(() => {
     try {
-      const saved = localStorage.getItem('essenya_in_app_notifications');
-      return saved ? JSON.parse(saved) : [];
+      const key = getStorageKey(userId);
+      const saved = localStorage.getItem(key);
+      setInAppNotifications(saved ? JSON.parse(saved) : []);
     } catch {
-      return [];
+      setInAppNotifications([]);
     }
-  });
+  }, [userId, getStorageKey]);
 
   useEffect(() => {
     localStorage.setItem('essenya_push_sound', String(soundEnabled));
@@ -79,11 +88,13 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
     localStorage.setItem('essenya_sound_volume', String(volume));
   }, [volume]);
 
+  // Persist notifications specifically under the active user's key
   useEffect(() => {
     try {
-      localStorage.setItem('essenya_in_app_notifications', JSON.stringify(inAppNotifications));
+      const key = getStorageKey(userId);
+      localStorage.setItem(key, JSON.stringify(inAppNotifications));
     } catch {}
-  }, [inAppNotifications]);
+  }, [inAppNotifications, userId, getStorageKey]);
 
   useEffect(() => {
     const isSupp = isPushSupported();

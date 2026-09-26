@@ -206,27 +206,13 @@ export interface PushNotificationPayload {
 }
 
 /**
- * Sends a native Web Push notification to a specific user (therapist, client, or admin)
- * and also dispatches via FCM if available.
+ * Sends a native Web Push notification to a specific user using VAPID
  */
-export async function sendPushNotificationToUser(
+export async function sendStandardWebPushToUser(
   db: Firestore,
   userId: string,
   payload: PushNotificationPayload
 ): Promise<{ success: boolean; sentCount: number; errors?: any[] }> {
-  if (!db || !userId) {
-    return { success: false, sentCount: 0 };
-  }
-
-  // Enviar también vía Firebase Cloud Messaging para máxima cobertura
-  sendFcmNotificationToUser(db, userId, {
-    title: payload.title,
-    body: payload.body,
-    icon: payload.icon,
-    badge: payload.badge,
-    data: payload.data as any
-  }).catch(() => {});
-
   try {
     const snapshot = await db.collection('push_subscriptions').where('userId', '==', userId).get();
     if (snapshot.empty) {
@@ -241,7 +227,7 @@ export async function sendPushNotificationToUser(
       body: payload.body || 'Tienes una nueva actualización en tu ecosistema.',
       icon: payload.icon || '/icons/icon-192.png',
       badge: payload.badge || '/icons/badge-72.png',
-      url: payload.url || '/',
+      url: payload.url || (payload.data?.bookingId ? `/terapeuta/servicios?bookingId=${payload.data.bookingId}` : '/'),
       tag: payload.tag || `notif-${Date.now()}`,
       soundPreset: payload.soundPreset || 'classic',
       sound: soundFile,
@@ -281,7 +267,54 @@ export async function sendPushNotificationToUser(
     console.log(`[WebPush] Sent ${sentCount} notifications to user ${userId} (${payload.title})`);
     return { success: true, sentCount, errors: errors.length > 0 ? errors : undefined };
   } catch (err: any) {
-    console.error(`[WebPush] Error in sendPushNotificationToUser:`, err);
+    console.error(`[WebPush] Error in sendStandardWebPushToUser:`, err);
     return { success: false, sentCount: 0, errors: [err?.message] };
   }
+}
+
+/**
+ * Unified notification dispatcher for ESSENYA:
+ * - Prioritizes native Firebase Cloud Messaging (FCM) via Firebase Admin SDK
+ * - If FCM succeeds, stops immediately (GUARANTEES NO DUPLICATES)
+ * - If FCM token is not registered, safely falls back to standard WebPush (VAPID)
+ * - Guarantees EXACTLY ONE delivery attempt per logical notification
+ */
+export async function sendPushNotificationToUser(
+  db: Firestore,
+  userId: string,
+  payload: PushNotificationPayload
+): Promise<{ success: boolean; sentCount: number; channel?: 'fcm' | 'webpush' | 'none'; errors?: any[] }> {
+  if (!db || !userId) {
+    return { success: false, sentCount: 0, channel: 'none' };
+  }
+
+  // 1. Intentar entrega nativa primaria con Firebase Cloud Messaging (FCM)
+  try {
+    const fcmRes = await sendFcmNotificationToUser(db, userId, {
+      title: payload.title,
+      body: payload.body,
+      icon: payload.icon || '/icons/icon-192.png',
+      badge: payload.badge || '/icons/badge-72.png',
+      data: {
+        ...(payload.data || {}),
+        url: payload.url || (payload.data?.bookingId ? `/terapeuta/servicios?bookingId=${payload.data.bookingId}` : '/terapeuta/servicios'),
+        bookingId: payload.data?.bookingId ? String(payload.data.bookingId) : ''
+      }
+    });
+
+    if (fcmRes.success && fcmRes.sentCount > 0) {
+      console.log(`[PushNotification] Notificación entregada con éxito a ${userId} vía FCM (sin duplicados)`);
+      return { success: true, sentCount: 1, channel: 'fcm' };
+    }
+  } catch (fcmErr) {
+    console.warn(`[PushNotification] Error en intento FCM para ${userId}, evaluando fallback a WebPush...`, fcmErr);
+  }
+
+  // 2. Fallback complementario a WebPush VAPID si FCM no estaba disponible
+  const webPushRes = await sendStandardWebPushToUser(db, userId, payload);
+  if (webPushRes.sentCount > 0) {
+    return { success: true, sentCount: webPushRes.sentCount, channel: 'webpush', errors: webPushRes.errors };
+  }
+
+  return { success: false, sentCount: 0, channel: 'none', errors: webPushRes.errors };
 }

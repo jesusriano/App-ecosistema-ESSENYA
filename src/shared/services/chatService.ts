@@ -11,7 +11,7 @@ import {
   limit, 
   serverTimestamp 
 } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { db, auth } from '../../lib/firebase';
 
 export interface ChatMessage {
   id: string;
@@ -159,9 +159,17 @@ export async function sendChatMessage(params: {
     const recipientTitle = `💬 Mensaje de ${params.senderName}`;
     const truncatedBody = cleanText.length > 90 ? cleanText.substring(0, 87) + '...' : cleanText;
 
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    } catch {}
+
     fetch('/api/push/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         userId: targetUserId,
         role: targetRole,

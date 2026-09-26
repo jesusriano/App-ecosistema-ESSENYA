@@ -1,5 +1,5 @@
 // Advanced Web Push Notifications Client Service for ESSENYA
-import { vapidKey, getMessagingService } from '../../lib/firebase';
+import { vapidKey, getMessagingService, auth } from '../../lib/firebase';
 import { getToken } from 'firebase/messaging';
 
 export type SoundPreset = 'classic' | 'bell' | 'alert' | 'soft' | 'urgent';
@@ -148,9 +148,19 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
       console.info('[FCM] Nota de obtención FCM:', fcmErr);
     }
 
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    } catch (authErr) {
+      console.warn('[WebPush] No se pudo obtener el token de autenticación para push subscribe:', authErr);
+    }
+
     const subRes = await fetch('/api/push/subscribe', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         userId,
         fcmToken,
@@ -198,11 +208,17 @@ export async function unsubscribeFromPushNotifications(): Promise<{ success: boo
 
 export async function sendTestPushNotification(userId?: string, title?: string, body?: string, soundPreset?: SoundPreset): Promise<{ success: boolean; error?: string }> {
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const token = await auth.currentUser?.getIdToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const res = await fetch('/api/push/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
-        userId,
+        userId: userId || auth.currentUser?.uid,
         title: title || 'Prueba de Notificación ESSENYA',
         body: body || 'Notificación push nativa operando en tiempo real con sonido.',
         url: '/',

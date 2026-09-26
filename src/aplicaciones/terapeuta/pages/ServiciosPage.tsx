@@ -16,6 +16,59 @@ export const ServiciosPage: React.FC = () => {
   const [completedCelebrationBooking, setCompletedCelebrationBooking] = useState<Booking | null>(null);
   const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
 
+  // Auto-expand and scroll to booking when clicked from Push Notification or Foreground alert
+  React.useEffect(() => {
+    const handleCheckUrlParam = () => {
+      if (typeof window === 'undefined') return;
+      const params = new URLSearchParams(window.location.search);
+      const targetId = params.get('bookingId');
+      if (targetId) {
+        setExpandedBookingId(targetId);
+        setActiveTab('citas');
+        setTimeout(() => {
+          const el = document.getElementById(`booking-card-${targetId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 300);
+      }
+    };
+
+    handleCheckUrlParam();
+
+    const handleSwMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'NOTIFICATION_CLICKED_BOOKING' && e.data?.bookingId) {
+        setExpandedBookingId(e.data.bookingId);
+        setActiveTab('citas');
+        setTimeout(() => {
+          const el = document.getElementById(`booking-card-${e.data.bookingId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 300);
+      }
+    };
+
+    const handleFcmForeground = (e: any) => {
+      if (e.detail?.bookingId) {
+        setExpandedBookingId(e.detail.bookingId);
+        setActiveTab('citas');
+      }
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+    }
+    window.addEventListener('fcm-new-booking', handleFcmForeground);
+
+    return () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      }
+      window.removeEventListener('fcm-new-booking', handleFcmForeground);
+    };
+  }, []);
+
   const pendingBookings = bookings.filter(b => b.state === 'pendiente');
   const activeAndCompletedBookings = bookings.filter(b => b.state !== 'pendiente' && b.state !== 'servicio_finalizado' && b.state !== 'cancelado');
 

@@ -56,6 +56,7 @@
     "esbuild": "^0.25.0",
     "eslint": "^10.10.0",
     "firebase-tools": "^15.30.0",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",

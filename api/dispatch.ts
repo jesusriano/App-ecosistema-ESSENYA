@@ -590,10 +590,14 @@ export async function stepDispatchEngine(
       details: `Solicitud despachada a ${cand.therapistName} (ETA estimado: ${cand.etaMinutes} min)`
     });
 
-    // 1. Envío directo mediante Firebase Cloud Messaging (FCM) al terapeuta
-    sendFcmNotificationToUser(db, cand.therapistId, {
+    // Envío unificado al terapeuta (Prioriza FCM; si no tiene token, usa WebPush como fallback; exactamente 1 notificación lógica)
+    sendPushNotificationToUser(db, cand.therapistId, {
       title: '🔔 Masaje solicitado',
-      body: 'Tienes una nueva solicitud de masaje.',
+      body: `${booking.serviceName || 'Masaje a Domicilio'} en ${booking.cityZone || 'tu zona'} (${booking.time || 'Ahora'} - ETA ${cand.etaMinutes} min)`,
+      url: `/terapeuta/servicios?bookingId=${bookingId}`,
+      tag: `booking-offer-${bookingId}`,
+      soundPreset: 'bell',
+      sound: '/sounds/notification_reservation.mp3',
       data: {
         type: 'NEW_BOOKING',
         bookingId,
@@ -604,23 +608,7 @@ export async function stepDispatchEngine(
         time: String(booking.time || ''),
         etaMinutes: String(cand.etaMinutes || 0)
       }
-    }).catch(e => console.warn('[Dispatch] Error enviando push FCM al terapeuta:', e));
-
-    // 2. Envío complementario WebPush para navegadores con suscripción VAPID
-    sendPushNotificationToUser(db, cand.therapistId, {
-      title: '🔔 Masaje solicitado',
-      body: `${booking.serviceName || 'Masaje a Domicilio'} en ${booking.cityZone || 'tu zona'} (${booking.time || 'Ahora'} - ETA ${cand.etaMinutes} min)`,
-      url: '/terapeuta/servicios',
-      tag: `booking-offer-${bookingId}`,
-      soundPreset: 'bell',
-      sound: '/sounds/notification_reservation.mp3',
-      data: {
-        type: 'NEW_BOOKING',
-        bookingId,
-        role: 'therapist',
-        bookingCode: booking.code
-      }
-    }).catch(e => console.warn('[Dispatch] Error enviando WebPush al terapeuta:', e));
+    }).catch(e => console.warn('[Dispatch] Error enviando notificación unificada al terapeuta:', e));
   }
 
   const updatePayload: Record<string, any> = {
