@@ -30,7 +30,7 @@ const dbId = appletConfig.firestoreDatabaseId || undefined;
 let firestoreInstance;
 try {
   firestoreInstance = initializeFirestore(app, {
-    experimentalAutoDetectLongPolling: true,
+    experimentalForceLongPolling: true,
     ignoreUndefinedProperties: true,
   }, dbId);
 } catch {
