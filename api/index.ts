@@ -4,54 +4,15 @@ import fs from "fs";
 import webPush from "web-push";
 import Stripe from "stripe";
 import { stripeService } from "./stripe-service.js";
-import { sendPushNotificationToUser } from "./pushNotificationService.js";
+import { sendPushNotificationToUser, ensureVapidConfig, getVapidPublicKey } from "./pushNotificationService.js";
 import * as adminApp from "firebase-admin/app";
 import * as adminAuth from "firebase-admin/auth";
 import * as adminFirestore from "firebase-admin/firestore";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder_key');
 
-function sanitizeVapidKey(key: string): string {
-  return String(key || '')
-    .trim()
-    .replace(/^['"]|['"]$/g, '') // Strip quotes
-    .replace(/\+/g, '-')        // Replace + with -
-    .replace(/\//g, '_')        // Replace / with _
-    .replace(/=/g, '');         // Strip padding =
-}
-
-function isValidVapidKey(key: string | undefined, minLength: number): boolean {
-  if (!key) return false;
-  const clean = key.trim().replace(/^['"]|['"]$/g, '');
-  if (clean === 'undefined' || clean === 'null' || clean === '' || clean.startsWith('placeholder') || clean.includes('YOUR_')) {
-    return false;
-  }
-  return clean.length >= minLength;
-}
-
-// Initialize VAPID Keys for Web Push purely from environment variables for production security
-let rawPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY;
-let rawPrivateKey = process.env.VAPID_PRIVATE_KEY;
-
-let vapidPublicKey = isValidVapidKey(rawPublicKey, 80) ? sanitizeVapidKey(rawPublicKey!) : undefined;
-let vapidPrivateKey = isValidVapidKey(rawPrivateKey, 40) ? sanitizeVapidKey(rawPrivateKey!) : undefined;
-
-if (!vapidPrivateKey) {
-  console.error('[WebPush-Audit] ALERTA: VAPID_PRIVATE_KEY no está configurada o es inválida en api/index.ts.');
-} else if (!vapidPublicKey) {
-  console.error('[WebPush-Audit] ALERTA: VAPID_PUBLIC_KEY no está configurada o es inválida en api/index.ts.');
-} else {
-  try {
-    webPush.setVapidDetails(
-      process.env.VAPID_SUBJECT || process.env.VAPID_EMAIL || 'mailto:seguridad@essenyamexico.com',
-      vapidPublicKey,
-      vapidPrivateKey
-    );
-    console.log('[WebPush-Audit] VAPID configurado exitosamente en api/index.ts.');
-  } catch (e: any) {
-    console.warn('[WebPush-Audit] Falló al configurar detalles de VAPID:', e?.message);
-  }
-}
+// VAPID keys and configuration are now handled centrally in pushNotificationService.ts
+// which provides automatic generation and Firestore persistence if environment variables are missing.
 import { getServiceById } from "./services/service-catalog.js";
 import {
   stepDispatchEngine,
@@ -533,7 +494,7 @@ app.get("/api/health", (req, res) => {
   res.json({ 
     status: "ok", 
     environment: process.env.NODE_ENV || "development", 
-    vapidConfigured: Boolean(vapidPublicKey && vapidPrivateKey),
+    vapidConfigured: Boolean(getVapidPublicKey()),
     projectId: projectId,
     timestamp: new Date().toISOString() 
   });
@@ -3477,8 +3438,10 @@ function initFirestoreBookingsTrigger() {
 // Web Push Notifications Endpoints
 // ========================================================
 
-app.get("/api/push/vapid-public-key", (req: Request, res: Response) => {
-  res.json({ success: true, publicKey: vapidPublicKey });
+app.get("/api/push/vapid-public-key", async (req: Request, res: Response) => {
+  const db = getAdminFirestore();
+  await ensureVapidConfig(db);
+  res.json({ success: true, publicKey: getVapidPublicKey() });
 });
 
 app.post("/api/push/log-token", requireAuth, (req: Request, res: Response) => {

@@ -32,22 +32,58 @@ let vapidPrivateKey = isValidVapidKey(rawPrivateKey, 40) ? sanitizeVapidKey(rawP
 
 const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:seguridad@essenyamexico.com';
 
-if (!vapidPrivateKey) {
-  console.error('[WebPush-Audit] ALERTA CRÍTICA: La variable de entorno VAPID_PRIVATE_KEY no está definida o es inválida (demasiado corta o placeholder).');
-  console.error('[WebPush-Audit] Las notificaciones Web Push (VAPID) quedarán deshabilitadas. El sistema utilizará únicamente Firebase Cloud Messaging (FCM).');
-} else if (!vapidPublicKey) {
-  console.error('[WebPush-Audit] ALERTA CRÍTICA: La variable de entorno VAPID_PUBLIC_KEY / VITE_VAPID_PUBLIC_KEY no está definida o es inválida.');
-} else {
+/**
+ * Ensures VAPID keys are configured. If missing from env, attempts to retrieve from Firestore.
+ * If still missing, generates a new pair and saves them to Firestore for persistence.
+ */
+export async function ensureVapidConfig(db: Firestore): Promise<boolean> {
+  if (vapidPublicKey && vapidPrivateKey) return true;
+
   try {
-    webPush.setVapidDetails(
-      vapidSubject,
-      vapidPublicKey,
-      vapidPrivateKey
-    );
-    console.log('[WebPush-Audit] Web Push (VAPID) configurado exitosamente mediante variables de entorno.');
+    // 1. Try Firestore retrieval
+    const configRef = db.collection('config').doc('vapid');
+    const configSnap = await configRef.get();
+    
+    if (configSnap.exists) {
+      const data = configSnap.data();
+      if (isValidVapidKey(data?.publicKey, 80) && isValidVapidKey(data?.privateKey, 40)) {
+        vapidPublicKey = sanitizeVapidKey(data?.publicKey);
+        vapidPrivateKey = sanitizeVapidKey(data?.privateKey);
+        console.log('[WebPush-Audit] VAPID keys retrieved from Firestore.');
+        webPush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+        return true;
+      }
+    }
+
+    // 2. Generate and persist if nothing found
+    console.warn('[WebPush-Audit] VAPID keys missing in env and Firestore. Generating new pair...');
+    const keys = webPush.generateVAPIDKeys();
+    vapidPublicKey = keys.publicKey;
+    vapidPrivateKey = keys.privateKey;
+
+    await configRef.set({
+      publicKey: vapidPublicKey,
+      privateKey: vapidPrivateKey,
+      generatedAt: new Date().toISOString(),
+      subject: vapidSubject
+    });
+
+    webPush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+    console.log('[WebPush-Audit] New VAPID keys generated and persisted to Firestore.');
+    return true;
   } catch (err: any) {
-    console.error('[WebPush-Audit] Error al inicializar los detalles de VAPID con web-push:', err?.message);
-    vapidPrivateKey = undefined; // Force disable webpush fallback
+    console.error('[WebPush-Audit] Critical error in ensureVapidConfig:', err?.message);
+    return false;
+  }
+}
+
+// Initial sync check (non-blocking)
+if (vapidPublicKey && vapidPrivateKey) {
+  try {
+    webPush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+    console.log('[WebPush-Audit] Web Push (VAPID) configured via environment variables.');
+  } catch (err: any) {
+    console.error('[WebPush-Audit] Error configuring VAPID from env:', err?.message);
   }
 }
 
@@ -215,9 +251,12 @@ export async function sendStandardWebPushToUser(
   userId: string,
   payload: PushNotificationPayload
 ): Promise<{ success: boolean; sentCount: number; errors?: any[] }> {
-  if (!vapidPrivateKey || !vapidPublicKey) {
-    console.warn('[WebPush-Audit] Cancelando Web Push fallback: Las claves VAPID no están configuradas en las variables de entorno.');
-    return { success: false, sentCount: 0, errors: ['VAPID keys not configured in server environment'] };
+  // Ensure keys are ready (env -> firestore -> auto-gen)
+  const isReady = await ensureVapidConfig(db);
+  
+  if (!isReady || !vapidPrivateKey || !vapidPublicKey) {
+    console.warn('[WebPush-Audit] Cancelando Web Push fallback: No se pudieron configurar las claves VAPID.');
+    return { success: false, sentCount: 0, errors: ['VAPID keys not configured in server environment and auto-generation failed'] };
   }
 
   try {
@@ -339,9 +378,14 @@ export async function sendPushNotificationToUser(
   }
 
   // If we reached here, no notification was sent via any channel
+  const firstErrorObj = webPushRes.errors?.[0];
+  const firstErrorMessage = typeof firstErrorObj === 'string' 
+    ? firstErrorObj 
+    : (firstErrorObj?.error || firstErrorObj?.message || JSON.stringify(firstErrorObj));
+
   const finalError = webPushRes.sentCount === 0 && !webPushRes.errors 
     ? 'No se encontraron suscripciones activas (FCM ni WebPush) para este usuario en el servidor.'
-    : (webPushRes.errors?.[0] || 'Error desconocido en el canal de notificaciones.');
+    : (firstErrorMessage || 'Error desconocido en el canal de notificaciones.');
 
   return { 
     success: false, 

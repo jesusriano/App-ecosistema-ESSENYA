@@ -207,9 +207,13 @@ export const PushSettingsPanel: React.FC<PushSettingsPanelProps> = ({
           setMessage({ type: 'success', text: 'Notificación de prueba enviada con éxito a este dispositivo.' });
         }
       } else {
+        const anyError = res.error as any;
+        const errorText = typeof res.error === 'string' 
+          ? res.error 
+          : (anyError?.message || anyError?.error || JSON.stringify(res.error));
         setMessage({ 
           type: 'error', 
-          text: res.error || 'Error al procesar el envío en el servidor.' 
+          text: errorText || 'Error al procesar el envío en el servidor.' 
         });
       }
     } catch (err: any) {

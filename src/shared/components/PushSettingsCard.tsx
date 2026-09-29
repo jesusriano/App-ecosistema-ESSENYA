@@ -84,9 +84,13 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
           setMessage({ type: 'success', text: `Notificación "${selectedTestEvent}" enviada y probada con éxito.` });
         }
       } else {
+        const anyError = res.error as any;
+        const errorText = typeof res.error === 'string' 
+          ? res.error 
+          : (anyError?.message || anyError?.error || JSON.stringify(res.error));
         setMessage({ 
           type: 'error', 
-          text: res.error || 'Fallo en el servidor al intentar enviar la notificación push.' 
+          text: errorText || 'Fallo en el servidor al intentar enviar la notificación push.' 
         });
       }
     } catch (err: any) {
