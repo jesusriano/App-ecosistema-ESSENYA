@@ -9,6 +9,7 @@ import { useAuth } from '../../../shared/context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 import { calculateMembershipTier, getCompletedAndPaidBookings } from '../services/membershipService';
 import { NotificationSoundSettings } from '../../../shared/components/NotificationSoundSettings';
+import { PushSettingsCard } from '../../../shared/components/PushSettingsCard';
 import { COMPREHENSIVE_ZONES } from '../../../shared/constants/zones';
 import { ClientPoliciesModal } from '../../../shared/components/ClientPoliciesModal';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
@@ -597,6 +598,7 @@ export const PerfilPage: React.FC = () => {
           </div>
         </div>
 
+        <PushSettingsCard role="client" userId={firebaseUser?.uid || authUser?.uid || client?.id} />
         <NotificationSoundSettings role="client" />
       </div>
 

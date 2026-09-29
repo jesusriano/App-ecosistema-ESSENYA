@@ -9,6 +9,7 @@ import { useToast } from '../../../shared/context/ToastContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { CoverageZone } from '../../../shared/types';
 import { NotificationSoundSettings } from '../../../shared/components/NotificationSoundSettings';
+import { PushSettingsCard } from '../../../shared/components/PushSettingsCard';
 
 export const ConfiguracionPage: React.FC = () => {
   const { 
@@ -232,6 +233,7 @@ export const ConfiguracionPage: React.FC = () => {
         </div>
       </div>
 
+      <PushSettingsCard role="admin" userId="admin" />
       <NotificationSoundSettings role="admin" />
 
       {/* Wipe Test Data Section */}

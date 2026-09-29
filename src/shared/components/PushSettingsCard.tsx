@@ -97,7 +97,11 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
               Configuración de Notificaciones Push
             </h3>
             <p className="text-xs text-[#78716C] dark:text-[#A8A29E]">
-              {role === 'therapist' ? 'Portal de Masajista — Alertas de servicio y nuevos clientes' : 'Portal de Cliente — Ciclo de vida de reservas y masajista en vivo'}
+              {role === 'therapist' 
+                ? 'Portal de Masajista — Alertas inmediatas de nuevos servicios y asignaciones' 
+                : role === 'admin'
+                ? 'Panel de Administración — Alertas críticas de sistema, despachos y monitor de plataforma'
+                : 'Portal de Cliente — Ciclo de vida de reservas y seguimiento de masajista en vivo'}
             </p>
           </div>
         </div>

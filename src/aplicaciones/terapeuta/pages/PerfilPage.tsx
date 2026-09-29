@@ -659,7 +659,7 @@ export const PerfilPage: React.FC = () => {
             )}
             <div className="pt-4 space-y-4">
               <NotificationSoundSettings role="therapist" />
-              <PushSettingsCard userId={activeTherapist.id} />
+              <PushSettingsCard role="therapist" userId={activeTherapist.id} />
             </div>
           </form>
         )}
