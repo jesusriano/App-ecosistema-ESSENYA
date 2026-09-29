@@ -343,7 +343,7 @@ export const PushSettingsPanel: React.FC<PushSettingsPanelProps> = ({
           ) : (
             <XCircle className="w-4 h-4 flex-shrink-0" />
           )}
-          <span className="font-medium flex-1">{message.text}</span>
+          <span className="font-medium flex-1">{typeof message.text === 'string' ? message.text : JSON.stringify(message.text)}</span>
         </div>
       )}
 

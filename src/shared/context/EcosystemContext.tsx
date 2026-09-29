@@ -316,16 +316,13 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       return isClient && isFinished && isPaid;
     }).length;
 
-    // Source of truth: the higher value between memory filter and persistent counter
-    const effectiveCount = Math.max(finishedAndPaid, Number(client.totalBookings || 0), Number((client as any).completedMassages || 0));
-
-    setCompletedServicesCount(effectiveCount);
+    setCompletedServicesCount(finishedAndPaid);
 
     let computedTier: MembershipTier = 'Platino';
-    if (effectiveCount >= 16) computedTier = 'Imperial VIP';
-    else if (effectiveCount >= 11) computedTier = 'Black Diamond';
-    else if (effectiveCount >= 5) computedTier = 'Diamond';
-    else if (effectiveCount >= 1) computedTier = 'Gold';
+    if (finishedAndPaid >= 16) computedTier = 'Imperial VIP';
+    else if (finishedAndPaid >= 11) computedTier = 'Black Diamond';
+    else if (finishedAndPaid >= 9) computedTier = 'Diamond';
+    else if (finishedAndPaid >= 5) computedTier = 'Gold';
     else computedTier = 'Platino';
 
     if (client.membershipTier !== computedTier) {
@@ -863,169 +860,94 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Therapist Booking Acceptance & Rejection Handlers
   const handleAcceptBooking = async (bookingId: string, acceptingTherapist: Partial<Therapist>) => {
-    const updatedTherapistId = acceptingTherapist?.id || authTherapist?.id || authTherapist?.uid || firebaseUser?.uid;
-    if (!updatedTherapistId) throw new Error("No se pudo identificar la terapeuta autenticada.");
+    // 1. Identify the authenticated therapist UID from sessions or context
+    const therapistId = acceptingTherapist?.id || authTherapist?.id || authTherapist?.uid || firebaseUser?.uid;
+    if (!therapistId) {
+      throw new Error("No se pudo identificar la terapeuta autenticada.");
+    }
     
-    const updatedTherapistName = acceptingTherapist?.name || (authTherapist ? `${authTherapist.nombre} ${authTherapist.apellidos || ''}`.trim() : 'Terapeuta');
-    const updatedTherapistPhoto = acceptingTherapist?.photo || authTherapist?.fotografia || '';
-    const updatedTherapistPhone = acceptingTherapist?.phone || authTherapist?.telefono || '';
+    const therapistName = acceptingTherapist?.name || (authTherapist ? `${authTherapist.nombre} ${authTherapist.apellidos || ''}`.trim() : 'Terapeuta');
     const nowIso = new Date().toISOString();
 
-    const bookingRef = doc(db, 'reservas', bookingId);
-    
     try {
-      let isDualService = false;
-      let slotNumber = 1;
+      // 2. Obtain ID Token for secure backend call
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        throw new Error("Sesión no válida o expirada. Por favor, vuelve a iniciar sesión.");
+      }
 
-      await runTransaction(db, async (transaction) => {
-        const bookingDoc = await transaction.get(bookingRef);
-        if (!bookingDoc.exists()) {
-          throw new Error("La reserva no existe.");
-        }
-        
-        const bookingData = bookingDoc.data();
-        if (bookingData.state !== 'pendiente') {
-          throw new Error("Esta reserva ya fue aceptada por otra terapeuta o ya no está disponible.");
-        }
-
-        const isDual = bookingData.requiresDualTherapist === true || bookingData.serviceId === 'srv-pareja';
-        isDualService = isDual;
-
-        const existingTherapistIds: string[] = Array.isArray(bookingData.therapistIds) 
-          ? bookingData.therapistIds 
-          : (bookingData.therapistId ? [bookingData.therapistId] : []);
-        
-        const assignedCount = typeof bookingData.assignedTherapistsCount === 'number'
-          ? bookingData.assignedTherapistsCount
-          : existingTherapistIds.length;
-
-        let updatePayload: Record<string, any> = {};
-
-        if (!isDual) {
-          // Normal single therapist booking
-          updatePayload = {
-            state: 'aceptada',
-            dispatchState: 'asignada',
-            therapistId: updatedTherapistId,
-            therapistName: updatedTherapistName,
-            therapistPhoto: updatedTherapistPhoto,
-            therapistPhone: updatedTherapistPhone,
-            therapistIds: [updatedTherapistId],
-            assignedTherapistsCount: 1,
-            activeOfferTherapistIds: [],
-            activeOffers: [],
-            acceptedAt: nowIso,
-            updatedAt: nowIso,
-          };
-          slotNumber = 1;
-        } else {
-          // Dual therapist booking: needs 2 therapists
-          if (assignedCount >= 2 || existingTherapistIds.length >= 2) {
-            throw new Error("Esta reserva de masaje en pareja ya tiene sus dos terapeutas asignadas.");
-          }
-
-          if (existingTherapistIds.includes(updatedTherapistId) || bookingData.therapistId === updatedTherapistId) {
-            throw new Error("Ya has aceptado un cupo en esta reserva de masaje en pareja. No puedes ocupar ambos cupos.");
-          }
-
-          if (assignedCount === 0 || existingTherapistIds.length === 0) {
-            // First therapist accepting: assign slot 1, stay 'pendiente'
-            updatePayload = {
-              therapistId: updatedTherapistId,
-              therapistName: updatedTherapistName,
-              therapistPhoto: updatedTherapistPhoto,
-              therapistPhone: updatedTherapistPhone,
-              therapistIds: [updatedTherapistId],
-              assignedTherapistsCount: 1,
-              requiresDualTherapist: true,
-              acceptedAt: nowIso,
-              updatedAt: nowIso,
-            };
-            slotNumber = 1;
-          } else {
-            // Second therapist accepting: assign slot 2, mark 'aceptada'
-            const newTherapistIds = [...existingTherapistIds, updatedTherapistId];
-            updatePayload = {
-              therapistId2: updatedTherapistId,
-              therapistName2: updatedTherapistName,
-              therapistPhoto2: updatedTherapistPhoto,
-              therapistPhone2: updatedTherapistPhone,
-              therapistIds: newTherapistIds,
-              assignedTherapistsCount: 2,
-              requiresDualTherapist: true,
-              state: 'aceptada',
-              acceptedAt: nowIso,
-              updatedAt: nowIso,
-            };
-            slotNumber = 2;
-          }
-        }
-
-        transaction.update(bookingRef, cleanForFirestore(updatePayload));
+      // 3. Call the Atomic Acceptance API on the backend
+      // This ensures dispatch engine sync, client notifications and server-side atomic transaction
+      const response = await fetch('/api/bookings/accept', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ bookingId })
       });
-      
-      // Update local state ONLY on success
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Error al procesar la aceptación en el servidor.");
+      }
+
+      // 4. Update local state to reflect the server-side change immediately
       setBookings(prev => prev.map(b => {
         if (b.id === bookingId) {
-          if (!isDualService) {
+          const isDual = b.requiresDualTherapist === true || b.serviceId === 'srv-pareja';
+          
+          if (!isDual) {
             return {
               ...b,
               state: 'aceptada',
-              therapistId: updatedTherapistId,
-              therapistName: updatedTherapistName,
-              therapistPhoto: updatedTherapistPhoto,
-              therapistPhone: updatedTherapistPhone,
-              therapistIds: [updatedTherapistId],
-              assignedTherapistsCount: 1,
+              dispatchState: 'asignada',
+              therapistId: result.therapistId || therapistId,
+              therapistName: result.therapistName || therapistName,
               acceptedAt: nowIso,
-              updatedAt: nowIso,
-            };
-          } else if (slotNumber === 1) {
-            return {
-              ...b,
-              therapistId: updatedTherapistId,
-              therapistName: updatedTherapistName,
-              therapistPhoto: updatedTherapistPhoto,
-              therapistPhone: updatedTherapistPhone,
-              therapistIds: [updatedTherapistId],
-              assignedTherapistsCount: 1,
-              requiresDualTherapist: true,
-              acceptedAt: nowIso,
-              updatedAt: nowIso,
+              updatedAt: nowIso
             };
           } else {
-            const existingIds = b.therapistIds || (b.therapistId ? [b.therapistId] : []);
-            return {
-              ...b,
-              state: 'aceptada',
-              therapistId2: updatedTherapistId,
-              therapistName2: updatedTherapistName,
-              therapistPhoto2: updatedTherapistPhoto,
-              therapistPhone2: updatedTherapistPhone,
-              therapistIds: [...existingIds, updatedTherapistId],
-              assignedTherapistsCount: 2,
-              requiresDualTherapist: true,
-              acceptedAt: nowIso,
-              updatedAt: nowIso,
-            };
+            // Dual booking: the server returns which slot was assigned
+            if (result.slotAssigned === 1) {
+              return {
+                ...b,
+                therapistId: result.therapistId || therapistId,
+                therapistName: result.therapistName || therapistName,
+                assignedTherapistsCount: 1,
+                acceptedAt: nowIso,
+                updatedAt: nowIso
+              };
+            } else {
+              return {
+                ...b,
+                state: 'aceptada',
+                dispatchState: 'asignada',
+                therapistId2: result.therapistId || therapistId,
+                therapistName2: result.therapistName || therapistName,
+                assignedTherapistsCount: 2,
+                acceptedAt: nowIso,
+                updatedAt: nowIso
+              };
+            }
           }
         }
         return b;
       }));
 
-      const bk = bookings.find(b => b.id === bookingId);
-      const logMsg = isDualService 
-        ? `Terapeuta ${updatedTherapistName} aceptó el cupo ${slotNumber}/2 del masaje en pareja ${bk?.code || bookingId}.`
-        : `Terapeuta ${updatedTherapistName} aceptó la reserva ${bk?.code || bookingId}.`;
+      // 5. Success Audit Log
       addLog(
         'Terapeuta',
-        updatedTherapistName,
+        therapistName,
         'Aceptación de Reserva',
-        logMsg
+        `Terapeuta aceptó la reserva ${bookingId} vía API Central.`
       );
     } catch (err: any) {
       console.error("Error accepting booking:", err);
-      throw err; // Propagate error so UI can show it, NO optimistic fallback
+      // Ensure error is a string for UI display
+      const friendlyError = typeof err === 'string' ? err : (err.message || "Error desconocido");
+      throw new Error(friendlyError);
     }
   };
 
@@ -1033,28 +955,25 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     const therapistId = authTherapist?.id || authTherapist?.uid || firebaseUser?.uid;
     if (!therapistId) return;
 
-    const bookingRef = doc(db, 'reservas', bookingId);
-    
     try {
       if (firebaseUser) {
-        try {
-          const token = await firebaseUser.getIdToken();
-          fetch('/api/dispatch/reject', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ bookingId, reason: reason || 'Declinada por terapeuta' })
-          }).catch(e => console.warn('[Dispatch] Server reject error:', e));
-        } catch (e) {
-          // Non-blocking
+        const token = await firebaseUser.getIdToken();
+        const response = await fetch('/api/dispatch/reject', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json', 
+            'Authorization': `Bearer ${token}` 
+          },
+          body: JSON.stringify({ bookingId, reason: reason || 'Declinada por terapeuta' })
+        });
+        
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || "Error al rechazar en el servidor");
         }
       }
 
-      await updateDoc(bookingRef, {
-        rejectedBy: arrayUnion(therapistId),
-        updatedAt: new Date().toISOString()
-      });
-      
-      // Local state update: we don't change the booking state, just add to local rejectedBy if we track it
+      // Local state update: remove from local bookings if it's no longer pending or relevant
       setBookings(prev => prev.map(b => {
         if (b.id === bookingId) {
           const rejectedBy = b.rejectedBy ? [...b.rejectedBy] : [];
@@ -1070,11 +989,11 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         'Terapeuta',
         authTherapist?.nombre || 'Terapeuta',
         'Reserva Declinada',
-        `Terapeuta declinó la reserva ${bookingId}.`
+        `Terapeuta declinó la reserva ${bookingId} vía API Central.`
       );
     } catch (err) {
       console.error("Error rejecting booking:", err);
-      throw err;
+      // Non-blocking for UI unless critical
     }
   };
 
@@ -1578,54 +1497,6 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     const bk = bookings.find(b => b.id === bookingId);
-    
-    // Increment persistent massage count for client on feedback
-    if (bk?.clientId && !bk.paidMassageCounted) {
-      const clientRef = doc(db, 'clientes', bk.clientId);
-      try {
-        const clientSnap = await getDoc(clientRef);
-        if (clientSnap.exists()) {
-          const cData = clientSnap.data();
-          const currentTotal = Number(cData.totalBookings || cData.completedMassages || 0) + 1;
-          const currentSpent = Number(cData.spentTotal || 0) + (bk?.total || 0);
-          
-          let newTier: MembershipTier = 'Platino';
-          if (currentTotal >= 21) newTier = 'Imperial VIP';
-          else if (currentTotal >= 16) newTier = 'Black Diamond';
-          else if (currentTotal >= 11) newTier = 'Diamond';
-          else if (currentTotal >= 5) newTier = 'Gold';
-          
-          const updateFields = {
-            totalBookings: currentTotal,
-            completedMassages: currentTotal,
-            spentTotal: currentSpent,
-            membershipTier: newTier,
-            updatedAt: reviewedAt
-          };
-
-          await updateDoc(clientRef, updateFields);
-
-          // Also update the 'users' collection to ensure consistency with AuthContext
-          try {
-            await updateDoc(doc(db, 'users', bk.clientId), updateFields);
-          } catch (userErr) {
-            console.warn("Could not update 'users' collection, but 'clientes' was updated:", userErr);
-          }
-          
-          setClients(prev => prev.map(c => c.id === bk.clientId ? { ...c, ...updateFields } : c));
-          if (client.id === bk.clientId) {
-            setClient(prev => ({ ...prev, ...updateFields }));
-          }
-        }
-      } catch (err) {
-        console.error("Error updating client massage count on feedback:", err);
-      }
-      updatePayload.paidMassageCounted = true;
-      try {
-        await updateDoc(doc(db, 'reservas', bookingId), { paidMassageCounted: true });
-      } catch {}
-    }
-
     if (bk?.therapistId) {
       const currentTherapist = therapists.find(t => t.id === bk.therapistId);
       const prevCount = currentTherapist?.reviewCount || 0;

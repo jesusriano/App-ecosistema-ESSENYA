@@ -135,7 +135,7 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
             : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
         }`}>
           {message.type === 'success' ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
-          <span className="font-medium">{message.text}</span>
+          <span className="font-medium">{typeof message.text === 'string' ? message.text : JSON.stringify(message.text)}</span>
         </div>
       )}
 
