@@ -112,7 +112,7 @@ if (adminApp.getApps().length === 0) {
   const isProd = process.env.NODE_ENV === "production";
   const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
   const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
-  const envProjectId = process.env.FIREBASE_ADMIN_PROJECT_ID || "essenya-ecosistema";
+  const envProjectId = process.env.FIREBASE_ADMIN_PROJECT_ID || projectId || "essenya-ecosistema";
 
   if (privateKey && clientEmail) {
     // Process private key line breaks (Vercel uses \n or literal line breaks)
@@ -125,18 +125,26 @@ if (adminApp.getApps().length === 0) {
           privateKey: formattedPrivateKey,
         })
       });
-      console.log("Firebase Admin initialized successfully with Service Account credentials.");
-    } catch (err) {
-      console.error("Failed to initialize Firebase Admin with Service Account:", err);
-      adminApp.initializeApp({ projectId: envProjectId });
+      console.log(`Firebase Admin initialized successfully with Service Account for project: ${envProjectId}`);
+    } catch (err: any) {
+      console.error("Failed to initialize Firebase Admin with Service Account:", err?.message);
+      try {
+        adminApp.initializeApp({ projectId: envProjectId });
+      } catch (innerErr) {
+        console.error("Critical: Could not even initialize fallback Admin App:", innerErr);
+      }
     }
   } else {
     if (isProd) {
-      console.warn("WARNING: FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL, and FIREBASE_ADMIN_PRIVATE_KEY are not fully configured. Using fallback default credentials.");
+      console.warn(`WARNING: FIREBASE_ADMIN_PROJECT_ID (${envProjectId}), FIREBASE_ADMIN_CLIENT_EMAIL, and FIREBASE_ADMIN_PRIVATE_KEY are not fully configured. Using fallback default credentials.`);
     }
     // Fallback to application default credentials (useful for local development or GCP runtimes)
-    adminApp.initializeApp({ projectId: envProjectId });
-    console.log("Firebase Admin initialized with default project configuration.");
+    try {
+      adminApp.initializeApp({ projectId: envProjectId });
+      console.log(`Firebase Admin initialized with default project configuration for: ${envProjectId}`);
+    } catch (err: any) {
+      console.error("Failed to initialize Firebase Admin fallback:", err?.message);
+    }
   }
 }
 
@@ -522,7 +530,13 @@ async function requireSuperAdmin(req: Request, res: Response, next: NextFunction
 
 // Health check
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", environment: process.env.NODE_ENV || "development", timestamp: new Date().toISOString() });
+  res.json({ 
+    status: "ok", 
+    environment: process.env.NODE_ENV || "development", 
+    vapidConfigured: Boolean(vapidPublicKey && vapidPrivateKey),
+    projectId: projectId,
+    timestamp: new Date().toISOString() 
+  });
 });
 
 // Synchronize and set custom claims on Firebase Auth using Admin SDK
@@ -3661,6 +3675,7 @@ app.post("/api/push/send", requireAuth, async (req: Request, res: Response) => {
 
     // Envío unificado y deduplicado por usuario individual
     if (userId) {
+      console.log(`[Push/Send] Intentando enviar a usuario individual: ${userId}`);
       const result = await sendPushNotificationToUser(db, userId, {
         title: title || "ESSENYA — Notificación",
         body: body || "Tienes una nueva actualización en tu ecosistema.",
@@ -3672,7 +3687,17 @@ app.post("/api/push/send", requireAuth, async (req: Request, res: Response) => {
         data: data || { type: "general" }
       });
 
-      return res.json({ success: result.success, sentCount: result.sentCount, channel: result.channel, errors: result.errors });
+      if (!result.success) {
+        console.warn(`[Push/Send] Falló el envío a ${userId}. Razón: ${result.error || 'Desconocida'}`);
+      }
+
+      return res.json({ 
+        success: result.success, 
+        sentCount: result.sentCount, 
+        channel: result.channel, 
+        error: result.error || (result.success ? undefined : "No se pudo completar el envío de la notificación."),
+        errors: result.errors 
+      });
     }
 
     // Difusión global administrativa (solo Admin)
