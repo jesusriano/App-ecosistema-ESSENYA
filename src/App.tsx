@@ -16,6 +16,7 @@ import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
+import { subscribeToPushNotifications, isPushSupported } from './shared/services/pushService';
 
 import { ConfigValidator } from './shared/components/ConfigValidator';
 import { ErrorBoundary } from './shared/components/ErrorBoundary';
@@ -116,6 +117,39 @@ function MainAppContent() {
     };
 
     initPushNotifications();
+  }, [firebaseUser?.uid]);
+
+  // Web Push Notifications: Inicialización automática de Service Worker, permiso y suscripción con clave VAPID
+  React.useEffect(() => {
+    const initWebPush = async () => {
+      if (typeof window === 'undefined' || !isPushSupported()) return;
+
+      try {
+        const isIframe = window.self !== window.top;
+        const uid = firebaseUser?.uid || 'anonymous';
+
+        // Si el permiso ya está concedido, asegurar Service Worker y suscripción VAPID activa
+        if (Notification.permission === 'granted') {
+          await subscribeToPushNotifications(uid);
+          console.log('[WebPush] Notificaciones push activas y vinculadas para:', uid);
+        } else if (Notification.permission === 'default' && !isIframe) {
+          // Solicitar permiso en la carga inicial cuando se ejecute en pestaña directa
+          try {
+            const perm = await Notification.requestPermission();
+            if (perm === 'granted') {
+              await subscribeToPushNotifications(uid);
+              console.log('[WebPush] Permiso concedido y suscripción push completada para:', uid);
+            }
+          } catch (permErr) {
+            console.info('[WebPush] Solicitud de permiso diferida:', permErr);
+          }
+        }
+      } catch (err) {
+        console.info('[WebPush] Inicialización push diferida:', err);
+      }
+    };
+
+    initWebPush();
   }, [firebaseUser?.uid]);
 
   const currentPortal: PortalType = location.pathname.startsWith('/admin')
