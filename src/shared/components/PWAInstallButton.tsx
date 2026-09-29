@@ -68,7 +68,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
           title="Instalar App ESSENYA"
         >
           <Download className="w-4 h-4 text-[#1C1917]" />
-          <span>Instalar App</span>
+          <span className="hidden sm:inline">Instalar App</span>
         </button>
         {renderDismissButton()}
       </div>
@@ -86,7 +86,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
             title="Instalar en iPhone / iPad (Safari)"
           >
             <Smartphone className="w-4 h-4 text-[#C9A55B]" />
-            <span>Instalar App iOS</span>
+            <span className="hidden sm:inline">Instalar App iOS</span>
           </button>
           {renderDismissButton()}
         </div>
@@ -145,7 +145,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
           title="Instalar App"
         >
           <Download className="w-4 h-4 text-[#C9A55B]" />
-          <span>Instalar App</span>
+          <span className="hidden sm:inline">Instalar App</span>
         </button>
         {renderDismissButton()}
       </div>
