@@ -33,7 +33,7 @@ export function getNotificationPermission(): NotificationPermission {
 
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
   if (!isPushSupported()) {
-    throw new Error('Las notificaciones Push no son compatibles con este navegador o dispositivo.');
+    return 'denied';
   }
   
   if (Notification.permission === 'granted') {
@@ -44,8 +44,13 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
     return 'denied';
   }
 
-  const permission = await Notification.requestPermission();
-  return permission;
+  try {
+    const permission = await Notification.requestPermission();
+    return permission;
+  } catch (err) {
+    console.info('[PushService] Permiso de notificaciones no disponible o restringido en este contexto:', err);
+    return Notification.permission || 'denied';
+  }
 }
 
 export function urlBase64ToUint8Array(base64String: string): Uint8Array {

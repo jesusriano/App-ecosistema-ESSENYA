@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { usePush } from '../context/PushContext';
 import { Bell, Check, CheckCheck, Trash2, X, Calendar, MessageSquare, Shield, Clock } from 'lucide-react';
+import { PushSubscriptionButton } from './PushSubscriptionButton';
 
 interface NotificationCenterModalProps {
   isOpen: boolean;
@@ -42,7 +43,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
-                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-[#C9A55B] border border-[#C9A55B]/30 flex items-center gap-1.5 transition-all"
+                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-[#C9A55B] border border-[#C9A55B]/30 flex items-center gap-1.5 transition-all cursor-pointer"
                 title="Marcar todas como leídas"
               >
                 <CheckCheck className="w-4 h-4" />
@@ -51,11 +52,24 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
             )}
             <button
               onClick={onClose}
-              className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-[#A8A29E] hover:text-white transition-all"
+              className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-[#A8A29E] hover:text-white transition-all cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
+        </div>
+
+        {/* Push Notification Manager Action Bar */}
+        <div className="px-6 py-3.5 bg-[#C9A55B]/5 border-b border-[#C9A55B]/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold text-[#C9A55B] flex items-center gap-1.5">
+              <span>Alertas en Segundo Plano</span>
+            </p>
+            <p className="text-[11px] text-[#A8A29E]">
+              Recibe notificaciones en tu dispositivo aunque la app esté cerrada
+            </p>
+          </div>
+          <PushSubscriptionButton variant="minimal" />
         </div>
 
         {/* Tabs */}

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { usePush } from '../context/PushContext';
 import { SoundPreset } from '../services/pushService';
-import { Bell, BellOff, Volume2, VolumeX, CheckCircle2, AlertTriangle, Send, RefreshCw, Play, Sparkles, Key, Copy, Check } from 'lucide-react';
+import { Bell, Volume2, VolumeX, CheckCircle2, AlertTriangle, Send, Play, Sparkles } from 'lucide-react';
+import { PushSubscriptionButton } from './PushSubscriptionButton';
 
 interface PushSettingsCardProps {
   userId?: string;
@@ -14,16 +15,12 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
     supported,
     permission,
     subscribed,
-    fcmToken: contextFcmToken,
-    getRegistrationToken,
     soundEnabled,
     soundPreset,
     volume,
     setSoundEnabled,
     setSoundPreset,
     setVolume,
-    enablePush,
-    disablePush,
     testPush,
     previewSound
   } = usePush();
@@ -31,26 +28,6 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [selectedTestEvent, setSelectedTestEvent] = useState<string>('reservation.created');
-  const [fcmToken, setFcmToken] = useState<string | null>(contextFcmToken);
-  const [loadingFcm, setLoadingFcm] = useState<boolean>(false);
-  const [copiedFcm, setCopiedFcm] = useState<boolean>(false);
-
-  const handleFetchFcmToken = async () => {
-    setLoadingFcm(true);
-    const token = await getRegistrationToken(userId);
-    if (token) {
-      setFcmToken(token);
-    }
-    setLoadingFcm(false);
-  };
-
-  const handleCopyFcmToken = async () => {
-    if (fcmToken && navigator.clipboard) {
-      await navigator.clipboard.writeText(fcmToken);
-      setCopiedFcm(true);
-      setTimeout(() => setCopiedFcm(false), 2500);
-    }
-  };
 
   if (!supported) {
     return (
@@ -65,32 +42,6 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
       </div>
     );
   }
-
-  const handleTogglePush = async () => {
-    setLoading(true);
-    setMessage(null);
-    try {
-      if (subscribed) {
-        const res = await disablePush();
-        if (res.success) {
-          setMessage({ type: 'success', text: 'Notificaciones push desactivadas correctamente.' });
-        } else {
-          setMessage({ type: 'error', text: res.error || 'Error al desactivar.' });
-        }
-      } else {
-        const res = await enablePush(userId);
-        if (res.success) {
-          setMessage({ type: 'success', text: '¡Notificaciones push activadas y dispositivo registrado!' });
-        } else {
-          setMessage({ type: 'error', text: res.error || 'No se pudieron activar las notificaciones.' });
-        }
-      }
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Error inesperado.' });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleTestEvent = async () => {
     setLoading(true);
@@ -167,33 +118,34 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
         </div>
       )}
 
-      {/* Main Toggles */}
+      {/* Main Push Subscription Control */}
       <div className="space-y-4">
         
-        {/* Push Active Toggle */}
-        <div className="flex items-center justify-between p-4 rounded-2xl bg-[#F9F8F6] dark:bg-white/5 border border-[#E7E5E4] dark:border-white/10">
-          <div className="flex items-center gap-3.5">
-            {subscribed ? <Bell className="w-5 h-5 text-emerald-600" /> : <BellOff className="w-5 h-5 text-[#78716C]" />}
-            <div>
-              <p className="text-sm font-semibold text-[#1C1917] dark:text-white">
-                {subscribed ? 'Notificaciones Push Externas Activas' : 'Activar Notificaciones Push'}
-              </p>
-              <p className="text-xs text-[#78716C] dark:text-[#A8A29E]">
-                Recibe alertas nativas en segundo plano, fuera de la aplicación.
-              </p>
+        {/* Unified Push Subscription Button */}
+        <div className="p-5 rounded-2xl bg-[#F9F8F6] dark:bg-white/5 border border-[#E7E5E4] dark:border-white/10 space-y-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#C9A55B] animate-pulse"></span>
+              <h4 className="text-sm font-bold text-[#1C1917] dark:text-white">
+                Gestión Central de Notificaciones Push
+              </h4>
             </div>
+            <p className="text-xs text-[#78716C] dark:text-[#A8A29E]">
+              Gestiona en un solo clic el registro del Service Worker, la autorización de permisos del navegador y la suscripción Web Push con la clave pública VAPID oficial.
+            </p>
           </div>
-          <button
-            onClick={handleTogglePush}
-            disabled={loading || permission === 'denied'}
-            className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md ${
-              subscribed
-                ? 'bg-rose-600 hover:bg-rose-700 text-white'
-                : 'bg-[#C9A55B] hover:bg-[#B89448] text-[#1C1917]'
-            } disabled:opacity-50`}
-          >
-            {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : subscribed ? 'Desactivar' : 'Activar Push'}
-          </button>
+
+          <PushSubscriptionButton
+            userId={userId}
+            showDetails={true}
+            className="w-full"
+            onSuccess={() => {
+              setMessage({ type: 'success', text: '¡Suscripción Push con clave VAPID completada y vinculada!' });
+            }}
+            onError={(err) => {
+              setMessage({ type: 'error', text: err });
+            }}
+          />
         </div>
 
         {/* Sound Toggle */}
@@ -311,56 +263,6 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
             </div>
           </div>
         )}
-
-        {/* Firebase Registration Token (FCM) Diagnostic Box */}
-        <div className="p-4 rounded-2xl bg-[#0F172A] border border-cyan-500/30 text-white space-y-3 shadow-md">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-cyan-400">
-              <Key className="w-4 h-4" />
-              <h4 className="text-xs font-bold uppercase tracking-wider">Token de Registro de Firebase (FCM)</h4>
-            </div>
-            {fcmToken && (
-              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                ✓ Listo para copiar
-              </span>
-            )}
-          </div>
-          <p className="text-[11px] text-slate-300">
-            Obtén el token de registro de este dispositivo/navegador para enviar notificaciones directas desde Firebase Console o inspeccionar en los logs del sistema.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-2 items-center">
-            <button
-              type="button"
-              onClick={handleFetchFcmToken}
-              disabled={loadingFcm}
-              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md disabled:opacity-50"
-            >
-              <Key className="w-3.5 h-3.5" />
-              <span>{loadingFcm ? 'Obteniendo Token...' : 'Obtener Token FCM'}</span>
-            </button>
-
-            {fcmToken && (
-              <button
-                type="button"
-                onClick={handleCopyFcmToken}
-                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-[#C9A55B] hover:bg-[#E6CA65] text-black font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md"
-              >
-                {copiedFcm ? <Check className="w-3.5 h-3.5 text-black" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedFcm ? '¡Copiado al Portapapeles!' : 'Copiar Token'}</span>
-              </button>
-            )}
-          </div>
-
-          {fcmToken && (
-            <div className="mt-2 space-y-1">
-              <span className="text-[10px] text-slate-400 font-mono">Token activo (también registrado en consola):</span>
-              <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl font-mono text-[11px] text-cyan-300 break-all select-all">
-                {fcmToken}
-              </div>
-            </div>
-          )}
-        </div>
 
         {permission === 'denied' && (
           <p className="text-xs text-rose-600 text-center">

@@ -1,12 +1,13 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { PortalType } from '../types';
-import { User, Shield, Globe, Sparkles, Activity, Award, Sun, Moon, Laptop, ExternalLink, Bell } from 'lucide-react';
+import { User, Shield, Globe, Sparkles, Activity, Award, Sun, Moon, Laptop, ExternalLink } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { EssenyaLogo } from './EssenyaLogo';
 import { TechSupportWhatsAppButton } from './TechSupportWhatsAppButton';
 import { PWAInstallButton } from './PWAInstallButton';
+import { PushSubscriptionButton } from './PushSubscriptionButton';
 
 interface HeaderProps {
   currentPortal: PortalType;
@@ -136,18 +137,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Panel Actions / Website Link & Status */}
         <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
-          <button
-            onClick={onOpenNotificationCenter}
-            className="relative p-2 rounded-xl bg-[#FAF8F5] dark:bg-[#1A1A1A] hover:bg-[#F2ECE1] dark:hover:bg-[#222222] border border-[#E5DFD3] dark:border-[#2A2A2A] text-[#806020] dark:text-[#C9A55B] transition-all cursor-pointer"
-            title="Centro de Notificaciones"
-          >
-            <Bell className="w-4 h-4" />
-            {unreadNotificationCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center animate-pulse">
-                {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
-              </span>
-            )}
-          </button>
+          <PushSubscriptionButton variant="minimal" className="inline-flex" />
 
           <a
             href="https://essenyamexico.com"
