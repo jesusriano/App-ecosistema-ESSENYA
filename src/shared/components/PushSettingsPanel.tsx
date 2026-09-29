@@ -193,14 +193,27 @@ export const PushSettingsPanel: React.FC<PushSettingsPanelProps> = ({
         ? 'Prueba del sistema de alertas para administradores.'
         : 'Tu masajista ha confirmado la cita.';
 
-      const res = await testPush(userId, title, body);
+      // UID logic consistent with Card
+      const targetUid = (userId === 'admin' || !userId || userId === 'anonymous') ? undefined : userId;
+
+      const res = await testPush(targetUid, title, body);
       if (res.success) {
-        setMessage({ type: 'success', text: 'Notificación de prueba enviada con éxito a este dispositivo.' });
+        if (res.sentCount === 0) {
+          setMessage({ 
+            type: 'warning', 
+            text: 'El navegador está suscrito, pero el servidor no encontró tu registro. Por favor haz clic en el icono de renovación (flechas) para resincronizar.' 
+          });
+        } else {
+          setMessage({ type: 'success', text: 'Notificación de prueba enviada con éxito a este dispositivo.' });
+        }
       } else {
-        setMessage({ type: 'warning', text: res.error || 'La prueba no pudo enviarse.' });
+        setMessage({ 
+          type: 'error', 
+          text: res.error || 'Error al procesar el envío en el servidor.' 
+        });
       }
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Error al enviar prueba.' });
+      setMessage({ type: 'error', text: `Error técnico: ${err.message}` });
     } finally {
       setTesting(false);
     }

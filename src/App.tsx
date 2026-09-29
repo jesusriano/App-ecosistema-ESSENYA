@@ -65,21 +65,32 @@ function MainAppContent() {
     trackPageView(location.pathname + location.search);
   }, [location]);
 
+  const { unreadCount, handleIncomingPush } = usePush();
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = React.useState(false);
+
   // Initialize Capacitor Push Notifications and save device push token to Firestore
   React.useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    
+    let isMounted = true;
+    let registrationListener: any = null;
+    let errorListener: any = null;
+    let pushReceivedListener: any = null;
+    let actionListener: any = null;
+
     const initPushNotifications = async () => {
-      if (!Capacitor.isNativePlatform()) return;
       try {
         const permStatus = await PushNotifications.requestPermissions();
         if (permStatus.receive === 'granted') {
           await PushNotifications.register();
         }
 
-        PushNotifications.addListener('registration', async (token) => {
+        if (!isMounted) return;
+
+        registrationListener = await PushNotifications.addListener('registration', async (token) => {
           console.log('[PushNotifications] Registration success, device token:', token.value);
           if (firebaseUser?.uid) {
             try {
-              // Save push token in terapeutas collection and users collection for personalized service request notifications
               const therapistRef = doc(db, 'terapeutas', firebaseUser.uid);
               await setDoc(therapistRef, {
                 pushToken: token.value,
@@ -101,16 +112,22 @@ function MainAppContent() {
           }
         });
 
-        PushNotifications.addListener('registrationError', (error: any) => {
+        errorListener = await PushNotifications.addListener('registrationError', (error: any) => {
           console.error('[PushNotifications] Error on registration: ', error);
         });
 
-        PushNotifications.addListener('pushNotificationReceived', (notification) => {
+        pushReceivedListener = await PushNotifications.addListener('pushNotificationReceived', (notification) => {
           console.log('[PushNotifications] Push notification received (incoming service request): ', notification);
+          // Process notification through unified handler for sound and in-app display
+          handleIncomingPush(notification);
         });
 
-        PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
+        actionListener = await PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
           console.log('[PushNotifications] Push action performed: ', notification);
+          const bookingId = notification.notification.data?.bookingId;
+          if (bookingId) {
+            navigate(`/terapeuta/servicios?bookingId=${bookingId}`);
+          }
         });
       } catch (e) {
         console.warn('[PushNotifications] Push notifications not supported in current browser environment:', e);
@@ -118,7 +135,15 @@ function MainAppContent() {
     };
 
     initPushNotifications();
-  }, [firebaseUser?.uid]);
+
+    return () => {
+      isMounted = false;
+      registrationListener?.remove();
+      errorListener?.remove();
+      pushReceivedListener?.remove();
+      actionListener?.remove();
+    };
+  }, [firebaseUser?.uid, handleIncomingPush, navigate]);
 
   // Web Push Notifications: Inicialización automática de Service Worker, permiso y suscripción con clave VAPID
   React.useEffect(() => {
@@ -172,8 +197,6 @@ function MainAppContent() {
   };
 
   const activeBookingCount = bookings.filter(b => b.state === 'pendiente' || b.state === 'aceptada' || b.state === 'en_camino' || b.state === 'llegue' || b.state === 'servicio_iniciado').length;
-  const { unreadCount } = usePush();
-  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = React.useState(false);
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#0D0D0D] text-[#1C1917] dark:text-white flex flex-col font-sans transition-colors duration-300 selection:bg-[#C9A55B] selection:text-black">

@@ -37,6 +37,7 @@ interface PushContextType {
   markAllAsRead: () => void;
   clearNotification: (id: string) => void;
   addInAppNotification: (item: Omit<InAppNotificationItem, 'id' | 'timestamp' | 'read'>) => void;
+  handleIncomingPush: (data: any) => void;
 }
 
 const PushContext = createContext<PushContextType | undefined>(undefined);
@@ -259,6 +260,38 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
     setInAppNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
 
+  const handleIncomingPush = useCallback((payload: any) => {
+    console.log('[PushContext] Handling incoming unified payload:', payload);
+    
+    // Extract data regardless of source (FCM, WebPush, Capacitor)
+    const title = payload.title || payload.notification?.title || payload.data?.title || '🔔 Notificación ESSENYA';
+    const body = payload.body || payload.notification?.body || payload.data?.body || 'Tienes una nueva actualización.';
+    const eventType = payload.data?.type || payload.type || 'general';
+    const sound = payload.sound || payload.data?.sound || soundPreset;
+    const url = payload.url || payload.data?.url || '/';
+
+    if (soundEnabled) {
+      playNotificationSound(sound, volume);
+    }
+
+    addInAppNotification({
+      userId: userId || 'anonymous',
+      title,
+      description: body,
+      eventType,
+      category: 'reservas',
+      url
+    });
+
+    // Special event for live updates
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('essenya-push-received', { detail: payload }));
+      if (eventType === 'NEW_BOOKING' || eventType === 'reservation.created') {
+        window.dispatchEvent(new CustomEvent('fcm-new-booking', { detail: payload.data || payload }));
+      }
+    }
+  }, [userId, soundEnabled, soundPreset, volume, addInAppNotification]);
+
   const unreadCount = inAppNotifications.filter(n => !n.read).length;
 
   return (
@@ -284,7 +317,8 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
         markAsRead,
         markAllAsRead,
         clearNotification,
-        addInAppNotification
+        addInAppNotification,
+        handleIncomingPush
       }}
     >
       {children}

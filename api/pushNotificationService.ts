@@ -305,7 +305,7 @@ export async function sendPushNotificationToUser(
   db: Firestore,
   userId: string,
   payload: PushNotificationPayload
-): Promise<{ success: boolean; sentCount: number; channel?: 'fcm' | 'webpush' | 'none'; errors?: any[] }> {
+): Promise<{ success: boolean; sentCount: number; channel?: 'fcm' | 'webpush' | 'none'; error?: string; errors?: any[] }> {
   if (!db || !userId) {
     return { success: false, sentCount: 0, channel: 'none' };
   }
@@ -338,5 +338,16 @@ export async function sendPushNotificationToUser(
     return { success: true, sentCount: webPushRes.sentCount, channel: 'webpush', errors: webPushRes.errors };
   }
 
-  return { success: false, sentCount: 0, channel: 'none', errors: webPushRes.errors };
+  // If we reached here, no notification was sent via any channel
+  const finalError = webPushRes.sentCount === 0 && !webPushRes.errors 
+    ? 'No se encontraron suscripciones activas (FCM ni WebPush) para este usuario en el servidor.'
+    : (webPushRes.errors?.[0] || 'Error desconocido en el canal de notificaciones.');
+
+  return { 
+    success: false, 
+    sentCount: 0, 
+    channel: 'none', 
+    error: finalError,
+    errors: webPushRes.errors 
+  };
 }

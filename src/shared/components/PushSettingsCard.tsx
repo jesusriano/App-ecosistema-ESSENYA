@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { usePush } from '../context/PushContext';
 import { SoundPreset } from '../services/pushService';
-import { Bell, Volume2, VolumeX, CheckCircle2, AlertTriangle, Send, Play, Sparkles } from 'lucide-react';
+import { Bell, Volume2, VolumeX, CheckCircle2, AlertTriangle, Send, Play, Sparkles, RefreshCw } from 'lucide-react';
 import { PushSubscriptionButton } from './PushSubscriptionButton';
 
 interface PushSettingsCardProps {
@@ -247,12 +247,16 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
         {/* Real Push Testing Section */}
         {subscribed && (
           <div className="p-4 rounded-2xl bg-[#C9A55B]/5 border border-[#C9A55B]/30 space-y-3">
-            <div className="flex items-center gap-2 text-[#C9A55B]">
-              <Sparkles className="w-4 h-4" />
-              <h4 className="text-xs font-bold uppercase tracking-wider">Prueba de Notificación Push Real en Segundo Plano</h4>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[#C9A55B]">
+                <Sparkles className="w-4 h-4" />
+                <h4 className="text-xs font-bold uppercase tracking-wider">Prueba de Notificación Push Real</h4>
+              </div>
+              <span className="text-[10px] font-mono opacity-50">UID: {userId?.slice(0, 8)}...</span>
             </div>
+            
             <p className="text-xs text-[#78716C] dark:text-[#A8A29E]">
-              Selecciona un evento del ciclo de vida de la reserva para enviar una notificación nativa de prueba:
+              Selecciona un evento para enviar una notificación nativa. Si falla, pulsa "Renovar" arriba.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-2">
@@ -272,9 +276,9 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
               <button
                 onClick={handleTestEvent}
                 disabled={loading}
-                className="px-5 py-2 rounded-xl bg-[#C9A55B] hover:bg-[#B89448] text-[#1C1917] text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-50"
+                className="px-5 py-2 rounded-xl bg-[#C9A55B] hover:bg-[#B89448] text-[#1C1917] font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-50"
               >
-                <Send className="w-4 h-4" />
+                {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 <span>Enviar Push</span>
               </button>
             </div>
@@ -282,9 +286,15 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
         )}
 
         {permission === 'denied' && (
-          <p className="text-xs text-rose-600 text-center">
-            El permiso de notificaciones fue bloqueado en tu navegador. Debes habilitarlo manualmente desde el icono de configuración o candado en la barra de direcciones.
-          </p>
+          <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs space-y-2">
+            <p className="font-bold flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              Permiso Bloqueado
+            </p>
+            <p>
+              El permiso de notificaciones fue bloqueado en tu navegador. Debes habilitarlo manualmente desde el icono de candado en la barra de direcciones para que las pruebas funcionen.
+            </p>
+          </div>
         )}
 
       </div>
