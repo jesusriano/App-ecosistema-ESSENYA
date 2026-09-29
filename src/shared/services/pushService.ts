@@ -63,32 +63,40 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array {
   let cleanString = String(base64String || '').trim();
   
   // Strip quotes if they were accidentally included
-  cleanString = cleanString.replace(/^['"]|['"]$/g, '');
+  cleanString = cleanString.replace(/^['"]|['"]$/g, '').trim();
   
-  // 2. Validate format using a regex to ensure it's a valid Base64url string of typical public key length
-  const isValidBase64Url = /^[A-Za-z0-9\-_]+$/.test(cleanString) && cleanString.length >= 80;
+  // Strip any whitespace, tabs, or newlines inside the key
+  cleanString = cleanString.replace(/[\s\r\n\t]/g, '');
+
+  // Strip trailing padding '=' so we can calculate the correct padding dynamically
+  cleanString = cleanString.replace(/=+$/, '');
   
-  if (!isValidBase64Url) {
-    // Silent fallback to avoid triggering log monitors with "Error" or "Failed" keywords
-    cleanString = DEFAULT_VALID_KEY;
+  // 2. Validate format using a regex to ensure it's a valid Base64 or Base64url string
+  const isValidBase64 = /^[A-Za-z0-9\-_+/]+$/.test(cleanString) && cleanString.length >= 40;
+  
+  if (!isValidBase64) {
+    cleanString = DEFAULT_VALID_KEY.replace(/=+$/, '');
   }
   
   try {
     const padding = '='.repeat((4 - (cleanString.length % 4)) % 4);
     const base64 = (cleanString + padding).replace(/-/g, '+').replace(/_/g, '/');
     
-    const rawData = window.atob(base64);
+    const globalObj = typeof window !== 'undefined' ? window : self;
+    const rawData = globalObj.atob(base64);
     const outputArray = new Uint8Array(rawData.length);
     for (let i = 0; i < rawData.length; ++i) {
       outputArray[i] = rawData.charCodeAt(i);
     }
     return outputArray;
   } catch (err) {
-    // Extreme fallback - completely silent to avoid triggering automated log scanners
+    console.error('[WebPush] Error al decodificar la clave VAPID Base64:', err);
     try {
-      const paddingDefault = '='.repeat((4 - (DEFAULT_VALID_KEY.length % 4)) % 4);
-      const base64Default = (DEFAULT_VALID_KEY + paddingDefault).replace(/-/g, '+').replace(/_/g, '/');
-      const rawData = window.atob(base64Default);
+      const cleanDefault = DEFAULT_VALID_KEY.replace(/=+$/, '');
+      const paddingDefault = '='.repeat((4 - (cleanDefault.length % 4)) % 4);
+      const base64Default = (cleanDefault + paddingDefault).replace(/-/g, '+').replace(/_/g, '/');
+      const globalObj = typeof window !== 'undefined' ? window : self;
+      const rawData = globalObj.atob(base64Default);
       const outputArray = new Uint8Array(rawData.length);
       for (let i = 0; i < rawData.length; ++i) {
         outputArray[i] = rawData.charCodeAt(i);

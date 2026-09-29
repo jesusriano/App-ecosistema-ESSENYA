@@ -20,17 +20,26 @@ function sanitizeVapidKey(key: string): string {
     .replace(/=/g, '');         // Strip padding =
 }
 
-// Initialize VAPID Keys for Web Push purely from environment variables for production security
-let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY;
-let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+function isValidVapidKey(key: string | undefined, minLength: number): boolean {
+  if (!key) return false;
+  const clean = key.trim().replace(/^['"]|['"]$/g, '');
+  if (clean === 'undefined' || clean === 'null' || clean === '' || clean.startsWith('placeholder') || clean.includes('YOUR_')) {
+    return false;
+  }
+  return clean.length >= minLength;
+}
 
-if (vapidPublicKey) vapidPublicKey = sanitizeVapidKey(vapidPublicKey);
-if (vapidPrivateKey) vapidPrivateKey = sanitizeVapidKey(vapidPrivateKey);
+// Initialize VAPID Keys for Web Push purely from environment variables for production security
+let rawPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY;
+let rawPrivateKey = process.env.VAPID_PRIVATE_KEY;
+
+let vapidPublicKey = isValidVapidKey(rawPublicKey, 80) ? sanitizeVapidKey(rawPublicKey!) : undefined;
+let vapidPrivateKey = isValidVapidKey(rawPrivateKey, 40) ? sanitizeVapidKey(rawPrivateKey!) : undefined;
 
 if (!vapidPrivateKey) {
-  console.error('[WebPush-Audit] ALERTA: VAPID_PRIVATE_KEY no está configurada en api/index.ts.');
+  console.error('[WebPush-Audit] ALERTA: VAPID_PRIVATE_KEY no está configurada o es inválida en api/index.ts.');
 } else if (!vapidPublicKey) {
-  console.error('[WebPush-Audit] ALERTA: VAPID_PUBLIC_KEY no está configurada en api/index.ts.');
+  console.error('[WebPush-Audit] ALERTA: VAPID_PUBLIC_KEY no está configurada o es inválida en api/index.ts.');
 } else {
   try {
     webPush.setVapidDetails(

@@ -14,20 +14,29 @@ function sanitizeVapidKey(key: string): string {
     .replace(/=/g, '');         // Strip padding =
 }
 
-// Initialize VAPID Keys exclusively from environment variables for production security
-let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY;
-let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+function isValidVapidKey(key: string | undefined, minLength: number): boolean {
+  if (!key) return false;
+  const clean = key.trim().replace(/^['"]|['"]$/g, '');
+  if (clean === 'undefined' || clean === 'null' || clean === '' || clean.startsWith('placeholder') || clean.includes('YOUR_')) {
+    return false;
+  }
+  return clean.length >= minLength;
+}
 
-if (vapidPublicKey) vapidPublicKey = sanitizeVapidKey(vapidPublicKey);
-if (vapidPrivateKey) vapidPrivateKey = sanitizeVapidKey(vapidPrivateKey);
+// Initialize VAPID Keys exclusively from environment variables for production security
+let rawPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY;
+let rawPrivateKey = process.env.VAPID_PRIVATE_KEY;
+
+let vapidPublicKey = isValidVapidKey(rawPublicKey, 80) ? sanitizeVapidKey(rawPublicKey!) : undefined;
+let vapidPrivateKey = isValidVapidKey(rawPrivateKey, 40) ? sanitizeVapidKey(rawPrivateKey!) : undefined;
 
 const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:seguridad@essenyamexico.com';
 
 if (!vapidPrivateKey) {
-  console.error('[WebPush-Audit] ALERTA CRÍTICA: La variable de entorno VAPID_PRIVATE_KEY no está definida.');
+  console.error('[WebPush-Audit] ALERTA CRÍTICA: La variable de entorno VAPID_PRIVATE_KEY no está definida o es inválida (demasiado corta o placeholder).');
   console.error('[WebPush-Audit] Las notificaciones Web Push (VAPID) quedarán deshabilitadas. El sistema utilizará únicamente Firebase Cloud Messaging (FCM).');
 } else if (!vapidPublicKey) {
-  console.error('[WebPush-Audit] ALERTA CRÍTICA: La variable de entorno VAPID_PUBLIC_KEY / VITE_VAPID_PUBLIC_KEY no está definida.');
+  console.error('[WebPush-Audit] ALERTA CRÍTICA: La variable de entorno VAPID_PUBLIC_KEY / VITE_VAPID_PUBLIC_KEY no está definida o es inválida.');
 } else {
   try {
     webPush.setVapidDetails(
