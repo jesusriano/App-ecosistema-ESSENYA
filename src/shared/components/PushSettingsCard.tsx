@@ -70,14 +70,27 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
         body = 'Tu sesión ha concluido. Gracias por confiar en ESSENYA.';
       }
 
-      const res = await testPush(userId, title, body, soundPreset);
+      // If userId is missing or placeholder 'admin', try to use context's internal real UID if possible
+      const targetUid = (userId === 'admin' || !userId) ? undefined : userId;
+
+      const res = await testPush(targetUid, title, body, soundPreset);
       if (res.success) {
-        setMessage({ type: 'success', text: `Notificación "${selectedTestEvent}" enviada y probada con éxito.` });
+        if (res.sentCount === 0) {
+          setMessage({ 
+            type: 'error', 
+            text: 'La suscripción está activa en el navegador, pero no se encontró el registro en el servidor. Por favor, haz clic en "Renovar" para resincronizar.' 
+          });
+        } else {
+          setMessage({ type: 'success', text: `Notificación "${selectedTestEvent}" enviada y probada con éxito.` });
+        }
       } else {
-        setMessage({ type: 'error', text: res.error || 'Error al enviar prueba.' });
+        setMessage({ 
+          type: 'error', 
+          text: res.error || 'Fallo en el servidor al intentar enviar la notificación push.' 
+        });
       }
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
+      setMessage({ type: 'error', text: `Error de red o sistema: ${err.message}` });
     } finally {
       setLoading(false);
     }

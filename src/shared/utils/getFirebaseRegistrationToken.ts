@@ -52,9 +52,12 @@ export async function getFirebaseRegistrationToken(userId?: string): Promise<Fir
       swRegistration = await navigator.serviceWorker.ready;
     }
 
-    // 4. Obtener el Token de Registro con el VAPID Key configurado
+    // 4. Obtener el Token de Registro con el VAPID Key configurado (sincronizado con el servidor)
+    const { getVapidPublicKeyFromServer } = await import('../services/pushService');
+    const activeVapidKey = await getVapidPublicKeyFromServer();
+
     const currentToken = await getToken(messaging, {
-      vapidKey,
+      vapidKey: activeVapidKey,
       serviceWorkerRegistration: swRegistration || undefined
     });
 
@@ -63,7 +66,7 @@ export async function getFirebaseRegistrationToken(userId?: string): Promise<Fir
       console.log('%c========================================================', 'color: #C9A55B; font-weight: bold;');
       console.log('%c🔥 TOKEN DE REGISTRO DE FIREBASE (FCM REGISTRATION TOKEN):', 'color: #10B981; font-weight: bold; font-size: 14px;');
       console.log('%c' + currentToken, 'color: #E2E8F0; background: #0F172A; padding: 6px 10px; border-radius: 6px; font-family: monospace; font-size: 13px; font-weight: bold;');
-      console.log('%cClave VAPID utilizada: ' + vapidKey, 'color: #94A3B8; font-size: 11px;');
+      console.log('%cClave VAPID utilizada: ' + activeVapidKey, 'color: #94A3B8; font-size: 11px;');
       console.log('%cPuedes copiar este token directamente arriba ☝️', 'color: #F59E0B; font-weight: bold;');
       console.log('%c========================================================', 'color: #C9A55B; font-weight: bold;');
 

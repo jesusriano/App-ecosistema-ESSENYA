@@ -153,7 +153,7 @@ export const PerfilPage: React.FC = () => {
     {
       level: 1,
       name: 'Socio Platino',
-      range: '1 a 4 masajes concluidos',
+      range: '0 masajes concluidos',
       tag: 'Nivel Inicial',
       icon: Shield,
       color: 'slate',
@@ -163,21 +163,21 @@ export const PerfilPage: React.FC = () => {
     {
       level: 2,
       name: 'Socio Gold',
-      range: '5 a 8 masajes concluidos',
+      range: '1 a 4 masajes concluidos',
       tag: 'Primer Ascenso',
       icon: Sparkles,
       color: 'amber',
-      perkSummary: '10% de descuento automático en tus primeros dos servicios de este nivel (masajes 5 y 6).',
+      perkSummary: '10% de descuento automático en tus primeros servicios de este nivel.',
       promoNote: 'Aromaterapia botánica de cortesía.',
     },
     {
       level: 3,
       name: 'Socio Diamante',
-      range: '9 a 10 masajes concluidos',
+      range: '5 a 10 masajes concluidos',
       tag: 'Categoría Élite',
       icon: Gem,
       color: 'sky',
-      perkSummary: '15% de descuento automático en los dos servicios del nivel (9 y 10).',
+      perkSummary: '15% de descuento automático en servicios seleccionados.',
       promoNote: 'Terapeuta preferido reservado.',
     },
     {
@@ -295,7 +295,7 @@ export const PerfilPage: React.FC = () => {
           {completedCount === 0 ? (
             <div className="p-3 bg-white/5 rounded-xl border border-white/10 text-xs text-[#E5DFD3] leading-relaxed">
               <p>
-                👋 <strong>¡Bienvenido como Socio Nuevo!</strong> Tu categoría inicial es <strong className="text-[#E6CA65]">Socio Platino</strong>. Al solicitar, pagar y concluir tu primer servicio de masaje a domicilio ascenderás inmediatamente a <strong className="text-amber-300">Socio Gold</strong>.
+                👋 <strong>¡Bienvenido como Socio Nuevo!</strong> Tu categoría inicial es <strong className="text-[#E6CA65]">Socio Platino</strong>. Al concluir y calificar tus primeros <strong className="text-amber-300">5 servicios de masaje</strong> ascenderás a <strong className="text-amber-300">Socio Gold</strong>.
               </p>
             </div>
           ) : (

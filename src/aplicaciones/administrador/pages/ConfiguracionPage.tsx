@@ -5,6 +5,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useAdmin } from '../hooks/useAdmin';
+import { useAuth } from '../../../shared/context/AuthContext';
 import { useToast } from '../../../shared/context/ToastContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { CoverageZone } from '../../../shared/types';
@@ -17,6 +18,7 @@ export const ConfiguracionPage: React.FC = () => {
     handleAddZone, handleEditZone, handleDeleteZone,
     handleDataCleanup, systemConfig, handleUpdateSystemConfig
   } = useAdmin();
+  const { firebaseUser } = useAuth();
   const { showToast } = useToast();
 
   const [isCleaning, setIsCleaning] = useState(false);
@@ -233,7 +235,7 @@ export const ConfiguracionPage: React.FC = () => {
         </div>
       </div>
 
-      <PushSettingsCard role="admin" userId="admin" />
+      <PushSettingsCard role="admin" userId={firebaseUser?.uid || 'admin'} />
       <NotificationSoundSettings role="admin" />
 
       {/* Wipe Test Data Section */}

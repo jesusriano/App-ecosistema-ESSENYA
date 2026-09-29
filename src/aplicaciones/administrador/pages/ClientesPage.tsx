@@ -63,12 +63,12 @@ export const ClientesPage: React.FC = () => {
   const [selectedClient, setSelectedClient] = useState<ClientUser | null>(null);
   const [editClientModal, setEditClientModal] = useState<ClientUser | null>(null);
 
-  // Edit Form State - strictly Platino -> Gold -> Diamond hierarchy
+  // Edit Form State - strictly Platino -> Gold -> Diamond -> Black Diamond -> Imperial VIP
   const [formState, setFormState] = useState<{
     name: string;
     email: string;
     phone: string;
-    membershipTier: 'Platino' | 'Gold' | 'Diamond';
+    membershipTier: MembershipTier;
     address: string;
     cityZone: string;
     specialNotes: string;
@@ -84,21 +84,24 @@ export const ClientesPage: React.FC = () => {
     vipPreferences: ''
   });
 
-  const getEffectiveTier = (c: ClientUser): 'Platino' | 'Gold' | 'Diamond' => {
+  const getEffectiveTier = (c: ClientUser): MembershipTier => {
     if (!c) return 'Platino';
-    if (c.membershipTier === 'Diamond' || c.membershipTier === 'Gold' || c.membershipTier === 'Platino') {
-      return c.membershipTier;
-    }
     const clientBookings = (bookings || []).filter(b => b && b.clientId === c.id);
     const finishedAndPaid = clientBookings.filter(b => 
       b && b.state === 'servicio_finalizado' && (b.paymentStatus === 'pagado' || b.paid === true)
     ).length;
-    const computed = calculateMembershipTier(finishedAndPaid || c.totalBookings || 0);
-    return computed.tierName as any;
+    
+    const count = Math.max(finishedAndPaid, Number(c.totalBookings || 0), Number((c as any).completedMassages || 0));
+    const computed = calculateMembershipTier(count);
+    return computed.tierName;
   };
 
   const getTierBadgeStyle = (tier: string) => {
     switch (tier) {
+      case 'Imperial VIP':
+        return 'bg-rose-950/20 text-rose-700 dark:text-amber-300 border border-amber-400/40';
+      case 'Black Diamond':
+        return 'bg-zinc-900/20 text-zinc-700 dark:text-zinc-300 border border-slate-700';
       case 'Diamond':
         return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40';
       case 'Gold':
@@ -197,7 +200,7 @@ export const ClientesPage: React.FC = () => {
 
         <div className="flex items-center gap-1.5 sm:gap-2 w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0">
           <span className="text-xs text-[var(--text-muted)] shrink-0">Membresía:</span>
-          {['todos', 'Platino', 'Gold', 'Diamond'].map((tier) => (
+          {['todos', 'Platino', 'Gold', 'Diamond', 'Black Diamond', 'Imperial VIP'].map((tier) => (
             <button
               key={tier}
               onClick={() => setTierFilter(tier)}
@@ -436,9 +439,11 @@ export const ClientesPage: React.FC = () => {
                   onChange={(e) => setFormState({ ...formState, membershipTier: e.target.value as any })}
                   className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] px-3 py-2 rounded-xl focus:outline-none focus:border-[#C9A55B]"
                 >
-                  <option value="Platino">Platino VIP (Nivel Inicial: 0-2 Masajes)</option>
-                  <option value="Gold">Gold VIP (3-4 Masajes)</option>
-                  <option value="Diamond">Diamond VIP (5+ Masajes)</option>
+                  <option value="Platino">Platino VIP (Nivel Inicial: 0-4 Masajes)</option>
+                  <option value="Gold">Gold VIP (5-10 Masajes)</option>
+                  <option value="Diamond">Diamond VIP (11-15 Masajes)</option>
+                  <option value="Black Diamond">Black Diamond VIP (16-20 Masajes)</option>
+                  <option value="Imperial VIP">Imperial VIP (21+ Masajes)</option>
                 </select>
               </div>
 

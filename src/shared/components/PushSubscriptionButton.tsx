@@ -6,7 +6,8 @@ import {
   requestNotificationPermission,
   registerServiceWorker,
   urlBase64ToUint8Array,
-  unsubscribeFromPushNotifications
+  unsubscribeFromPushNotifications,
+  getVapidPublicKeyFromServer
 } from '../services/pushService';
 import { vapidKey, getMessagingService, auth } from '../../lib/firebase';
 import { getToken } from 'firebase/messaging';
@@ -117,7 +118,8 @@ export const PushSubscriptionButton: React.FC<PushSubscriptionButtonProps> = ({
 
       // PASO 3: Convertir clave VAPID y ejecutar registration.pushManager.subscribe
       setStepStatus('3/3 Suscribiendo con clave VAPID...');
-      const convertedVapidKey = urlBase64ToUint8Array(vapidKey);
+      const activeVapidKey = await getVapidPublicKeyFromServer();
+      const convertedVapidKey = urlBase64ToUint8Array(activeVapidKey);
 
       // Desuscribir previas si hay conflicto
       let sub = await registration.pushManager.getSubscription();
@@ -150,7 +152,7 @@ export const PushSubscriptionButton: React.FC<PushSubscriptionButtonProps> = ({
         const messaging = await getMessagingService();
         if (messaging) {
           const token = await getToken(messaging, {
-            vapidKey,
+            vapidKey: activeVapidKey,
             serviceWorkerRegistration: registration
           });
           if (token) {

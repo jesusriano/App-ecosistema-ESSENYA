@@ -10,7 +10,8 @@ import {
   requestNotificationPermission, 
   isPushSupported,
   registerServiceWorker,
-  urlBase64ToUint8Array
+  urlBase64ToUint8Array,
+  getVapidPublicKeyFromServer
 } from '../../../shared/services/pushService';
 import { usePush } from '../../../shared/context/PushContext';
 import { vapidKey, getMessagingService, auth } from '../../../lib/firebase';
@@ -111,9 +112,10 @@ export const TherapistNotificationPermissionPrompt: React.FC<TherapistNotificati
         }
       }
 
-      // 3. VAPID subscription details
+      // 3. VAPID subscription details (sincronizado con el servidor)
       setSubStep('subscribing_vapid');
-      const convertedVapidKey = urlBase64ToUint8Array(vapidKey);
+      const activeVapidKey = await getVapidPublicKeyFromServer();
+      const convertedVapidKey = urlBase64ToUint8Array(activeVapidKey);
 
       // Clean up previous subscription details if necessary
       let sub = await registration.pushManager.getSubscription();
@@ -147,7 +149,7 @@ export const TherapistNotificationPermissionPrompt: React.FC<TherapistNotificati
         const messaging = await getMessagingService();
         if (messaging) {
           const token = await getToken(messaging, {
-            vapidKey,
+            vapidKey: activeVapidKey,
             serviceWorkerRegistration: registration
           });
           if (token) {

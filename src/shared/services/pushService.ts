@@ -353,6 +353,19 @@ if (typeof window !== 'undefined') {
   }, 4000);
 }
 
+export async function getVapidPublicKeyFromServer(): Promise<string> {
+  try {
+    const resKey = await fetch('/api/push/vapid-public-key');
+    const keyData = await resKey.json();
+    if (keyData.success && keyData.publicKey) {
+      return keyData.publicKey;
+    }
+  } catch (err) {
+    console.info('[WebPush] Error al obtener clave del servidor, usando fallback:', err);
+  }
+  return vapidKey;
+}
+
 export async function subscribeToPushNotifications(userId: string = 'anonymous'): Promise<{ success: boolean; error?: string; queued?: boolean }> {
   try {
     if (!isPushSupported()) {
@@ -371,17 +384,7 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
       return { success: false, error: 'No se pudo inicializar el Service Worker.' };
     }
 
-    let activePublicKey = vapidKey;
-    try {
-      const resKey = await fetch('/api/push/vapid-public-key');
-      const keyData = await resKey.json();
-      if (keyData.success && keyData.publicKey) {
-        activePublicKey = keyData.publicKey;
-      }
-    } catch {
-      console.info('[WebPush] Utilizando vapidKey configurada de Firebase:', vapidKey);
-    }
-
+    const activePublicKey = await getVapidPublicKeyFromServer();
     const convertedVapidKey = urlBase64ToUint8Array(activePublicKey);
 
     let subscription = await registration.pushManager.getSubscription();
@@ -441,13 +444,13 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
       }
     }
 
-    // Obtain and register Firebase Cloud Messaging token using vapidKey and active ServiceWorkerRegistration
+    // Obtain and register Firebase Cloud Messaging token using the ACTIVE server VAPID key
     let fcmToken: string | undefined = undefined;
     try {
       const msg = await getMessagingService();
       if (msg) {
         const token = await getToken(msg, {
-          vapidKey,
+          vapidKey: activePublicKey,
           serviceWorkerRegistration: registration
         });
         if (token) {
@@ -576,7 +579,7 @@ export async function unsubscribeFromPushNotifications(): Promise<{ success: boo
   }
 }
 
-export async function sendTestPushNotification(userId?: string, title?: string, body?: string, soundPreset?: SoundPreset): Promise<{ success: boolean; error?: string }> {
+export async function sendTestPushNotification(userId?: string, title?: string, body?: string, soundPreset?: SoundPreset): Promise<{ success: boolean; error?: string; sentCount?: number }> {
   try {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     const token = await auth.currentUser?.getIdToken();
@@ -597,7 +600,11 @@ export async function sendTestPushNotification(userId?: string, title?: string, 
       })
     });
     const data = await res.json();
-    return { success: data.success, error: data.error };
+    return { 
+      success: data.success, 
+      error: data.error,
+      sentCount: data.sentCount
+    };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -621,13 +628,20 @@ export function playNotificationSound(preset: SoundPreset | string = 'classic', 
     };
 
     const audioUrl = soundFileMap[preset] || (preset.startsWith('/') ? preset : `/sounds/${preset}.mp3`);
+    console.log(`[SoundPlayer] Intentando reproducir: ${preset} (${audioUrl})`);
+    
     const audio = new Audio(audioUrl);
     audio.volume = Math.max(0, Math.min(1, volume));
-    audio.play().catch(() => {
-      // Fallback to Web Audio API synthesis if HTML5 Audio fails or blocked
-      playSynthFallback(preset, volume);
-    });
+    
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((error) => {
+        console.warn('[SoundPlayer] El navegador bloqueó la reproducción automática o el archivo no cargó. Reintentando con sintetizador:', error);
+        playSynthFallback(preset, volume);
+      });
+    }
   } catch (e) {
+    console.warn('[SoundPlayer] Error en HTML5 Audio, cayendo a sintetizador:', e);
     playSynthFallback(preset, volume);
   }
 }

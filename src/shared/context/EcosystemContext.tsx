@@ -316,13 +316,16 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       return isClient && isFinished && isPaid;
     }).length;
 
-    setCompletedServicesCount(finishedAndPaid);
+    // Source of truth: the higher value between memory filter and persistent counter
+    const effectiveCount = Math.max(finishedAndPaid, Number(client.totalBookings || 0), Number((client as any).completedMassages || 0));
+
+    setCompletedServicesCount(effectiveCount);
 
     let computedTier: MembershipTier = 'Platino';
-    if (finishedAndPaid >= 16) computedTier = 'Imperial VIP';
-    else if (finishedAndPaid >= 11) computedTier = 'Black Diamond';
-    else if (finishedAndPaid >= 9) computedTier = 'Diamond';
-    else if (finishedAndPaid >= 5) computedTier = 'Gold';
+    if (effectiveCount >= 16) computedTier = 'Imperial VIP';
+    else if (effectiveCount >= 11) computedTier = 'Black Diamond';
+    else if (effectiveCount >= 5) computedTier = 'Diamond';
+    else if (effectiveCount >= 1) computedTier = 'Gold';
     else computedTier = 'Platino';
 
     if (client.membershipTier !== computedTier) {
@@ -1575,6 +1578,54 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     const bk = bookings.find(b => b.id === bookingId);
+    
+    // Increment persistent massage count for client on feedback
+    if (bk?.clientId && !bk.paidMassageCounted) {
+      const clientRef = doc(db, 'clientes', bk.clientId);
+      try {
+        const clientSnap = await getDoc(clientRef);
+        if (clientSnap.exists()) {
+          const cData = clientSnap.data();
+          const currentTotal = Number(cData.totalBookings || cData.completedMassages || 0) + 1;
+          const currentSpent = Number(cData.spentTotal || 0) + (bk?.total || 0);
+          
+          let newTier: MembershipTier = 'Platino';
+          if (currentTotal >= 21) newTier = 'Imperial VIP';
+          else if (currentTotal >= 16) newTier = 'Black Diamond';
+          else if (currentTotal >= 11) newTier = 'Diamond';
+          else if (currentTotal >= 5) newTier = 'Gold';
+          
+          const updateFields = {
+            totalBookings: currentTotal,
+            completedMassages: currentTotal,
+            spentTotal: currentSpent,
+            membershipTier: newTier,
+            updatedAt: reviewedAt
+          };
+
+          await updateDoc(clientRef, updateFields);
+
+          // Also update the 'users' collection to ensure consistency with AuthContext
+          try {
+            await updateDoc(doc(db, 'users', bk.clientId), updateFields);
+          } catch (userErr) {
+            console.warn("Could not update 'users' collection, but 'clientes' was updated:", userErr);
+          }
+          
+          setClients(prev => prev.map(c => c.id === bk.clientId ? { ...c, ...updateFields } : c));
+          if (client.id === bk.clientId) {
+            setClient(prev => ({ ...prev, ...updateFields }));
+          }
+        }
+      } catch (err) {
+        console.error("Error updating client massage count on feedback:", err);
+      }
+      updatePayload.paidMassageCounted = true;
+      try {
+        await updateDoc(doc(db, 'reservas', bookingId), { paidMassageCounted: true });
+      } catch {}
+    }
+
     if (bk?.therapistId) {
       const currentTherapist = therapists.find(t => t.id === bk.therapistId);
       const prevCount = currentTherapist?.reviewCount || 0;

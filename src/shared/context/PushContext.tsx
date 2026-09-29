@@ -29,7 +29,7 @@ interface PushContextType {
   setVolume: (vol: number) => void;
   enablePush: (userId?: string) => Promise<{ success: boolean; error?: string }>;
   disablePush: () => Promise<{ success: boolean; error?: string }>;
-  testPush: (userId?: string, title?: string, body?: string, preset?: SoundPreset) => Promise<{ success: boolean; error?: string }>;
+  testPush: (userId?: string, title?: string, body?: string, preset?: SoundPreset) => Promise<{ success: boolean; error?: string; sentCount?: number }>;
   previewSound: (preset?: SoundPreset) => void;
   inAppNotifications: InAppNotificationItem[];
   unreadCount: number;

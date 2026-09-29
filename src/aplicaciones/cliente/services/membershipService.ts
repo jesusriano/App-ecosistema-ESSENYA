@@ -19,7 +19,7 @@ export interface TierInfo {
 }
 
 export const calculateMembershipTier = (completedMassages: number): TierInfo => {
-  if (completedMassages >= 16) {
+  if (completedMassages >= 21) {
     return {
       tierName: 'Imperial VIP',
       fullLabel: 'Socio Imperial VIP',
@@ -35,7 +35,7 @@ export const calculateMembershipTier = (completedMassages: number): TierInfo => 
       perks: ['20% de descuento siempre', 'Terapeuta Master asignado', 'Sábanas de seda para camilla'],
       isDiamondOrHigher: true
     };
-  } else if (completedMassages >= 11) {
+  } else if (completedMassages >= 16) {
     return {
       tierName: 'Black Diamond',
       fullLabel: 'Socio Black Diamond',
@@ -44,14 +44,14 @@ export const calculateMembershipTier = (completedMassages: number): TierInfo => 
       iconType: 'sparkles',
       accentColor: '#fbbf24',
       nextTier: 'Imperial VIP',
-      neededForNext: 16 - completedMassages,
-      progressPercent: (completedMassages / 16) * 100,
-      incentiveMessage: `Te faltan ${16 - completedMassages} masajes para el rango Imperial.`,
+      neededForNext: 21 - completedMassages,
+      progressPercent: (completedMassages / 21) * 100,
+      incentiveMessage: `Te faltan ${21 - completedMassages} masajes para el rango Imperial.`,
       perk: '15% de descuento automático permanente',
       perks: ['15% de descuento siempre', 'Concierge Privado 24/7', 'Toallas de algodón egipcio'],
       isDiamondOrHigher: true
     };
-  } else if (completedMassages >= 9) {
+  } else if (completedMassages >= 11) {
     return {
       tierName: 'Diamond',
       fullLabel: 'Socio Diamond',
@@ -60,11 +60,11 @@ export const calculateMembershipTier = (completedMassages: number): TierInfo => 
       iconType: 'gem',
       accentColor: '#94a3b8',
       nextTier: 'Black Diamond',
-      neededForNext: 11 - completedMassages,
-      progressPercent: (completedMassages / 11) * 100,
-      incentiveMessage: `Te faltan ${11 - completedMassages} masajes para Black Diamond.`,
+      neededForNext: 16 - completedMassages,
+      progressPercent: (completedMassages / 16) * 100,
+      incentiveMessage: `Te faltan ${16 - completedMassages} masajes para Black Diamond.`,
       perk: '15% de descuento en tus 2 servicios de este nivel',
-      perks: ['15% de descuento en masajes 9 y 10', 'Terapeuta preferido'],
+      perks: ['15% de descuento en masajes de este nivel', 'Terapeuta preferido'],
       isDiamondOrHigher: true
     };
   } else if (completedMassages >= 5) {
@@ -76,11 +76,11 @@ export const calculateMembershipTier = (completedMassages: number): TierInfo => 
       iconType: 'sparkles',
       accentColor: '#fbbf24',
       nextTier: 'Diamond',
-      neededForNext: 9 - completedMassages,
-      progressPercent: (completedMassages / 9) * 100,
-      incentiveMessage: `Te faltan ${9 - completedMassages} masajes para ser Diamond.`,
+      neededForNext: 11 - completedMassages,
+      progressPercent: (completedMassages / 11) * 100,
+      incentiveMessage: `Te faltan ${11 - completedMassages} masajes para ser Diamond.`,
       perk: '10% de descuento en tus primeros 2 servicios de este nivel',
-      perks: ['10% de descuento en masajes 5 y 6', 'Aromaterapia Premium'],
+      perks: ['10% de descuento en masajes de este nivel', 'Aromaterapia Premium'],
       isDiamondOrHigher: false
     };
   } else {
