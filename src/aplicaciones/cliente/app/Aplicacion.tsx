@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from '../../../context/ToastContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
@@ -78,6 +79,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   onSendMessage,
   onRateBooking,
 }) => {
+  const navigate = useNavigate();
   const ecosystem = useEcosystem();
   const executeReschedule = onRescheduleBooking || ecosystem.handleRescheduleBooking;
   const executeCancel = onCancelBooking || ecosystem.handleCancelBooking;
@@ -504,10 +506,10 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     }
     setIsSubmittingBooking(true);
 
-    // NO therapist is assigned at creation time
-    const therapistDisplayName = undefined;
+    const chosenTherapist = selectedTherapistId !== 'auto'
+      ? ecosystem.therapists.find(t => t.id === selectedTherapistId)
+      : undefined;
 
-    
     const extrasList: any[] = [];
     if (selectedReflexology !== 'none') {
       extrasList.push({
@@ -541,6 +543,14 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       ...(extrasList.length > 0 ? { selectedExtras: extrasList } : {}),
       ...(selectedService.requiresDualTherapist ? { requiresDualTherapist: true } : {}),
       ...(selectedService.therapistAssignmentNote ? { dualTherapistNote: selectedService.therapistAssignmentNote } : {}),
+      ...(chosenTherapist ? {
+        therapistId: chosenTherapist.id,
+        therapistName: chosenTherapist.name,
+        therapistPhoto: chosenTherapist.photo,
+        therapistPhone: chosenTherapist.phone,
+        therapistIds: [chosenTherapist.id],
+        activeOfferTherapistIds: [chosenTherapist.id]
+      } : {}),
       price: rawPrice,
       tip: tipAmount,
       total: totalPrice,
@@ -1699,7 +1709,84 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                   </div>
                 </div>
 
-                {/* System Protocol Notice */}
+                {/* Available Certified Therapists Direct Selection */}
+                {ecosystem.therapists && ecosystem.therapists.length > 0 && (
+                  <div className="space-y-3 pt-3 border-t border-[#E5DFD3] dark:border-[#C9A55B]/15">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <label className="text-xs uppercase tracking-wider text-[#6B655F] dark:text-[#AAAAAA] font-semibold flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-[#C9A55B]" />
+                        <span>O selecciona directamente tu Especialista Certificada:</span>
+                      </label>
+                      {selectedTherapistId !== 'auto' && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTherapistId('auto')}
+                          className="text-[11px] text-[#C9A55B] hover:underline font-semibold self-start"
+                        >
+                          ✕ Restablecer a asignación automática
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {ecosystem.therapists.map((t) => {
+                        const isChosen = selectedTherapistId === t.id;
+                        return (
+                          <div
+                            key={t.id}
+                            onClick={() => {
+                              setSelectedTherapistId(t.id);
+                              if (t.gender) {
+                                setPreferences(prev => ({ ...prev, genderPreference: t.gender as any }));
+                              }
+                            }}
+                            className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between space-y-3 text-center ${
+                              isChosen
+                                ? 'bg-[#C9A55B]/15 dark:bg-[#C9A55B]/20 border-[#C9A55B] ring-2 ring-[#C9A55B] shadow-md'
+                                : 'bg-white dark:bg-[#141414] border-[#E5DFD3] dark:border-[#262626] hover:border-[#C9A55B]/60'
+                            }`}
+                          >
+                            <div className="relative mx-auto">
+                              <img
+                                src={t.photo || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=300'}
+                                alt={t.name}
+                                className="w-16 h-16 rounded-full object-cover border-2 border-[#C9A55B] mx-auto shadow-sm"
+                              />
+                              <span className="absolute -bottom-1 right-0 bg-emerald-500 text-white p-0.5 rounded-full text-[9px] font-bold">
+                                ✓
+                              </span>
+                            </div>
+
+                            <div className="space-y-1">
+                              <h5 className="font-serif font-bold text-sm text-[#1C1917] dark:text-white leading-tight">
+                                {t.name}
+                              </h5>
+                              <div className="flex items-center justify-center gap-1 text-[11px] text-[#C9A55B]">
+                                <span>★</span>
+                                <span className="font-bold text-[#1C1917] dark:text-white">{t.rating || 5.0}</span>
+                                <span className="text-[10px] text-[#888888] font-normal">({t.reviewCount || 48} citas)</span>
+                              </div>
+                              <p className="text-[10px] text-[#6B655F] dark:text-[#AAAAAA] line-clamp-2">
+                                {t.bio || (t.specialties ? t.specialties.join(', ') : 'Especialista Certificada ESSENYA')}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              className={`w-full py-1.5 rounded-xl text-[11px] font-bold transition-all ${
+                                isChosen
+                                  ? 'bg-[#C9A55B] text-black shadow-xs'
+                                  : 'bg-[#F5F1EA] dark:bg-[#222222] text-[#806020] dark:text-[#C9A55B] hover:bg-[#C9A55B]/20'
+                              }`}
+                            >
+                              {isChosen ? '✓ Terapeuta Elegida' : 'Elegir Especialista'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 rounded-xl border border-[#E5DFD3] dark:border-[#C9A55B]/30 flex items-start space-x-3 text-xs text-[#6B655F] dark:text-[#AAAAAA]">
                   <ShieldCheck className="w-5 h-5 text-[#C9A55B] shrink-0 mt-0.5" />
                   <div>
@@ -2252,32 +2339,42 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
                 <div className="space-y-2">
                   <span className="bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B] text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider border border-[#C9A55B]/30">
-                    {activeBooking.state === 'pendiente' ? 'Esperando Aprobación' : 'Solicitud Aprobada por Administración'}
+                    {activeBooking.therapistName ? 'Solicitud Enviada a Terapeuta' : 'Conectando con Terapeutas Disponibles'}
                   </span>
                   <h3 className="text-2xl font-serif font-bold text-[#1C1917] dark:text-white">
-                    {activeBooking.state === 'pendiente' 
-                      ? 'Procesando tu Solicitud...' 
-                      : 'Buscando Terapeuta Certificada...'}
+                    {activeBooking.therapistName 
+                      ? `Conectando con ${activeBooking.therapistName}...` 
+                      : 'Notificando a Especialistas en tu Zona...'}
                   </h3>
                   <p className="text-sm text-[#6B655F] dark:text-[#AAAAAA] max-w-md mx-auto">
-                    {activeBooking.state === 'pendiente' 
-                      ? 'Nuestra administración central está evaluando los detalles de tu ritual para proceder con su aprobación inmediata.'
-                      : `¡Excelente! Tu solicitud para ${activeBooking.serviceName} ha sido aprobada y se está asignando la mejor terapeuta certificada disponible en la zona de ${activeBooking.cityZone}.`}
+                    {activeBooking.therapistName 
+                      ? `Tu solicitud para ${activeBooking.serviceName} ha sido dirigida a ${activeBooking.therapistName}. En cuanto acepte el servicio, comenzará el seguimiento en vivo y se habilitará el chat directo.` 
+                      : `Tu solicitud para ${activeBooking.serviceName} está activa en ${activeBooking.cityZone}. Las terapeutas certificadas cercanas están recibiendo la alerta para confirmar tu ritual.`}
                   </p>
+                  
+                  {activeBooking.therapistName && (
+                    <div className="inline-flex items-center gap-2 bg-[#FAF8F5] dark:bg-[#1A1A1A] px-4 py-2 rounded-xl border border-[#C9A55B]/30 text-xs font-semibold text-[#806020] dark:text-[#C9A55B]">
+                      <span>💆</span>
+                      <span>Terapeuta solicitada: <strong>{activeBooking.therapistName}</strong></span>
+                    </div>
+                  )}
+
                   <p className="text-xs text-[#6B655F] dark:text-[#888888] italic">
-                    En cuanto una profesional sea asignada, verás aquí inmediatamente su <strong>nombre completo</strong>, <strong>fotografía</strong> y seguimiento en tiempo real.
+                    En cuanto la terapeuta acepte la solicitud, verás aquí su ubicación en vivo, tiempo estimado de llegada y botón de chat en tiempo real.
                   </p>
                 </div>
 
-                <div className="pt-4 border-t border-[#E5DFD3] dark:border-[#262626] max-w-sm mx-auto grid grid-cols-2 gap-3 text-xs text-[#6B655F] dark:text-[#AAAAAA] text-left">
+
+
+                <div className="pt-2 max-w-sm mx-auto grid grid-cols-2 gap-3 text-xs text-[#6B655F] dark:text-[#AAAAAA] text-left">
                   <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-2.5 rounded-xl border border-[#E5DFD3] dark:border-[#333333]">
                     <span className="text-[10px] text-[#888888] block">Fecha & Horario</span>
                     <strong className="text-[#1C1917] dark:text-white">{activeBooking.date} • {activeBooking.time}</strong>
                   </div>
                   <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-2.5 rounded-xl border border-[#E5DFD3] dark:border-[#333333]">
-                    <span className="text-[10px] text-[#888888] block">Estado Administrativo</span>
+                    <span className="text-[10px] text-[#888888] block">Estado de Conexión</span>
                     <strong className="text-[#1C1917] dark:text-white capitalize">
-                      {activeBooking.state === 'aceptada' ? 'Aprobada (Sin Asignar)' : activeBooking.state}
+                      {activeBooking.state === 'aceptada' ? 'Aceptada' : 'Buscando Terapeuta'}
                     </strong>
                   </div>
                 </div>

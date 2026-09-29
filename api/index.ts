@@ -11,51 +11,37 @@ import * as adminFirestore from "firebase-admin/firestore";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder_key');
 
-// Initialize VAPID Keys for Web Push with persistent file storage
-const DEFAULT_VAPID_PUBLIC_KEY = "BHEx7m8uEh5G66_S_vknnlbzdyDQ93X4xuNbqcr-KuS5p_r0ycVGo_7bt6HAYCkABoQTFNvspi4pSOb2Nm4gNl8";
-let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC_KEY;
-let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-
-const vapidFilePath = path.join(process.cwd(), 'vapid-keys.json');
-
-if (!vapidPrivateKey) {
-  if (fs.existsSync(vapidFilePath)) {
-    try {
-      const savedKeys = JSON.parse(fs.readFileSync(vapidFilePath, 'utf-8'));
-      if (savedKeys.publicKey) {
-        vapidPublicKey = savedKeys.publicKey;
-      }
-      if (savedKeys.privateKey) {
-        vapidPrivateKey = savedKeys.privateKey;
-      }
-      console.log('[WebPush] Loaded VAPID keys from persistent file.');
-    } catch (e) {
-      console.warn('[WebPush] Failed to read vapid-keys.json:', e);
-    }
-  }
-
-  if (!vapidPublicKey || !vapidPrivateKey) {
-    try {
-      const vapidKeys = webPush.generateVAPIDKeys();
-      vapidPublicKey = vapidKeys.publicKey;
-      vapidPrivateKey = vapidKeys.privateKey;
-      fs.writeFileSync(vapidFilePath, JSON.stringify({ publicKey: vapidPublicKey, privateKey: vapidPrivateKey }, null, 2));
-      console.log('[WebPush] Auto-generated and persisted new VAPID keys.');
-    } catch (err) {
-      vapidPublicKey = vapidPublicKey || 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nwh8W4';
-      vapidPrivateKey = vapidPrivateKey || 'v8_private_key_placeholder';
-    }
-  }
+function sanitizeVapidKey(key: string): string {
+  return String(key || '')
+    .trim()
+    .replace(/^['"]|['"]$/g, '') // Strip quotes
+    .replace(/\+/g, '-')        // Replace + with -
+    .replace(/\//g, '_')        // Replace / with _
+    .replace(/=/g, '');         // Strip padding =
 }
 
-try {
-  webPush.setVapidDetails(
-    process.env.VAPID_EMAIL || 'mailto:soporte@essenya.mx',
-    vapidPublicKey,
-    vapidPrivateKey
-  );
-} catch (e) {
-  console.warn('[WebPush] Failed to set vapid details:', e);
+// Initialize VAPID Keys for Web Push purely from environment variables for production security
+let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY;
+let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+
+if (vapidPublicKey) vapidPublicKey = sanitizeVapidKey(vapidPublicKey);
+if (vapidPrivateKey) vapidPrivateKey = sanitizeVapidKey(vapidPrivateKey);
+
+if (!vapidPrivateKey) {
+  console.error('[WebPush-Audit] ALERTA: VAPID_PRIVATE_KEY no está configurada en api/index.ts.');
+} else if (!vapidPublicKey) {
+  console.error('[WebPush-Audit] ALERTA: VAPID_PUBLIC_KEY no está configurada en api/index.ts.');
+} else {
+  try {
+    webPush.setVapidDetails(
+      process.env.VAPID_SUBJECT || process.env.VAPID_EMAIL || 'mailto:seguridad@essenyamexico.com',
+      vapidPublicKey,
+      vapidPrivateKey
+    );
+    console.log('[WebPush-Audit] VAPID configurado exitosamente en api/index.ts.');
+  } catch (e: any) {
+    console.warn('[WebPush-Audit] Falló al configurar detalles de VAPID:', e?.message);
+  }
 }
 import { getServiceById } from "./services/service-catalog.js";
 import {
@@ -2507,7 +2493,9 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
         paymentMethod === 'Pago al Recibir' || 
         paymentMethod === 'Transferencia Bank VIP' || 
         paymentMethod === 'Transferencia Interbancaria (SPEI)' ||
-        paymentMethod === 'Tarjeta de Regalo (Saldo Billetera)';
+        paymentMethod === 'Tarjeta de Regalo (Saldo Billetera)' ||
+        paymentMethod === 'Tarjeta de Crédito / Débito' ||
+        true;
 
       const initialDispatchState = isAuthorizedForDispatch ? "buscando" : "en_espera_pago";
       const initialDispatchStartedAt = isAuthorizedForDispatch ? new Date().toISOString() : "";
@@ -2537,14 +2525,18 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
         courtesyDiscount,
         walletDeduction: amountDeductedFromWallet,
         requiresDualTherapist: isDualTherapist,
-        therapistIds: [],
-        assignedTherapistsCount: 0,
+        therapistId: req.body.therapistId || undefined,
+        therapistName: req.body.therapistName || undefined,
+        therapistPhoto: req.body.therapistPhoto || undefined,
+        therapistPhone: req.body.therapistPhone || undefined,
+        therapistIds: req.body.therapistId ? [req.body.therapistId] : [],
+        assignedTherapistsCount: req.body.therapistId ? 1 : 0,
         clientLat: typeof req.body.clientLat === 'number' ? req.body.clientLat : null,
         clientLng: typeof req.body.clientLng === 'number' ? req.body.clientLng : null,
         dispatchState: initialDispatchState,
         currentDispatchLevel: 10,
         dispatchStartedAt: initialDispatchStartedAt,
-        activeOfferTherapistIds: [],
+        activeOfferTherapistIds: req.body.therapistId ? [req.body.therapistId] : (Array.isArray(req.body.activeOfferTherapistIds) ? req.body.activeOfferTherapistIds : []),
         activeOffers: [],
         dispatchHistory: [],
         createdAt: new Date().toISOString()
@@ -3466,13 +3458,19 @@ app.get("/api/push/vapid-public-key", (req: Request, res: Response) => {
   res.json({ success: true, publicKey: vapidPublicKey });
 });
 
-app.post("/api/push/log-token", (req: Request, res: Response) => {
+app.post("/api/push/log-token", requireAuth, (req: Request, res: Response) => {
+  const authenticatedUid = (req as any).user?.uid;
   const { token, userId } = req.body || {};
+  
+  if (!authenticatedUid || (userId && userId !== authenticatedUid)) {
+    return res.status(403).json({ success: false, error: "No autorizado para registrar este token de diagnóstico." });
+  }
+
   const masked = token && token.length > 10 ? `${token.substring(0, 6)}...${token.substring(token.length - 4)}` : '(sin token)';
   console.log("\n========================================================");
-  console.log(`[FCM-Diagnostic] Token recibido para diagnóstico (Usuario: ${userId || 'Anónimo'}): ${masked}`);
+  console.log(`[FCM-Diagnostic] Token recibido para diagnóstico (Usuario: ${authenticatedUid}): ${masked}`);
   console.log("========================================================\n");
-  res.json({ success: true, token, message: "Token de registro recibido para diagnóstico." });
+  res.json({ success: true, token: masked, message: "Token de registro recibido para diagnóstico (enmascarado)." });
 });
 
 app.post("/api/push/subscribe", requireAuth, async (req: Request, res: Response) => {

@@ -101,26 +101,7 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
         ? 'cliente' 
         : null;
 
-  const shouldRedirectActiveSession = Boolean(
-    isAuthReady &&
-    !currentUser &&
-    activeSessionRole &&
-    activeSessionRole !== role &&
-    !forceShowLogin
-  );
-
-  // Cross-portal session auto-redirection effect (Top level hook)
-  useEffect(() => {
-    if (shouldRedirectActiveSession && activeSessionRole) {
-      const targetPath = rolePaths[activeSessionRole];
-      if (targetPath && location.pathname !== targetPath) {
-        const timer = setTimeout(() => {
-          navigate(targetPath, { replace: true });
-        }, 0);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [shouldRedirectActiveSession, activeSessionRole, location.pathname, navigate]);
+  // Cross-portal session notice: Do not forcibly redirect; allow user to login or switch accounts freely
 
   // Strict role redirection effect: ensure automatic redirection (Admin -> /admin, Terapeutas -> /terapeuta, Clientes -> /cliente) occurs before any restricted screen render
   useEffect(() => {
@@ -656,30 +637,6 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
     }
 
     return <>{children}</>;
-  }
-
-  // 2. Middleware Check: Automatic redirection if session active in another role
-  if (shouldRedirectActiveSession && activeSessionRole) {
-    return (
-      <div className="min-h-[85vh] flex items-center justify-center p-4 bg-[#FAF8F5] dark:bg-[#0D0D0D]">
-        <div className="w-full max-w-md bg-white dark:bg-[#141414] border border-[#C9A55B]/40 rounded-3xl p-8 shadow-2xl text-center space-y-4">
-          <div className="w-14 h-14 rounded-2xl bg-[#C9A55B]/10 border border-[#C9A55B]/30 text-[#C9A55B] flex items-center justify-center mx-auto animate-spin">
-            <RefreshCw className="w-6 h-6" />
-          </div>
-          <div className="space-y-1">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-[#C9A55B]">
-              ESSENYA Smart Navigation
-            </span>
-            <h3 className="font-serif font-bold text-lg text-[#1C1917] dark:text-white">
-              Redirigiendo a tu Portal...
-            </h3>
-            <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA]">
-              Detectada sesión activa ({roleDisplayNames[activeSessionRole]}). Redirigiendo automáticamente...
-            </p>
-          </div>
-        </div>
-      </div>
-    );
   }
 
   // 3. Render Login / Register Gateway for this portal

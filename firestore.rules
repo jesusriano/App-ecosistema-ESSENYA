@@ -305,14 +305,20 @@ service cloud.firestore {
     }
 
     match /conversaciones/{bookingId} {
-      allow get, list: if isSignedIn() && (
+      allow get: if isSignedIn() && (
         isAdmin() || 
+        resource == null ||
         resource.data.clientId == request.auth.uid || 
         resource.data.therapistId == request.auth.uid ||
         (exists(/databases/$(database)/documents/reservas/$(bookingId)) && (
           get(/databases/$(database)/documents/reservas/$(bookingId)).data.clientId == request.auth.uid ||
           get(/databases/$(database)/documents/reservas/$(bookingId)).data.therapistId == request.auth.uid
         ))
+      );
+      allow list: if isSignedIn() && (
+        isAdmin() || 
+        resource.data.clientId == request.auth.uid || 
+        resource.data.therapistId == request.auth.uid
       );
       allow create, update: if isSignedIn() && (
         isAdmin() || 

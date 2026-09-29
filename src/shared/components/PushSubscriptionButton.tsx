@@ -377,18 +377,20 @@ export const PushSubscriptionButton: React.FC<PushSubscriptionButtonProps> = ({
           {fcmToken && (
             <div className="pt-2 border-t border-white/10 space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] text-slate-400">Token FCM (Registro):</span>
+                <span className="text-[11px] text-slate-400">Token FCM (Registro - Enmascarado):</span>
                 <button
                   type="button"
                   onClick={handleCopyFcm}
                   className="text-[11px] text-[#C9A55B] hover:underline flex items-center gap-1 cursor-pointer"
                 >
                   <Copy className="w-3 h-3" />
-                  <span>{copiedToken ? '¡Copiado!' : 'Copiar'}</span>
+                  <span>{copiedToken ? '¡Copiado!' : 'Copiar Token Real'}</span>
                 </button>
               </div>
               <p className="font-mono text-[10px] text-slate-300 bg-black/60 p-2 rounded-lg break-all select-all">
-                {fcmToken}
+                {fcmToken.length > 20 
+                  ? `${fcmToken.substring(0, 10)}...${fcmToken.substring(fcmToken.length - 10)}` 
+                  : '***'}
               </p>
             </div>
           )}

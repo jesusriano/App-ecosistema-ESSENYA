@@ -8,6 +8,7 @@ import {
   subscribeToChatMessages,
   ensureConversationDoc
 } from '../services/chatService';
+import { auth } from '../../lib/firebase';
 
 interface BookingChatDrawerProps {
   isOpen: boolean;
@@ -93,17 +94,18 @@ export const BookingChatDrawer: React.FC<BookingChatDrawerProps> = ({
 
     setSending(true);
     setErrorMsg(null);
+    const effectiveSenderId = auth.currentUser?.uid || currentUserId;
     try {
       await sendChatMessage({
         bookingId,
         bookingCode,
-        senderId: currentUserId,
+        senderId: effectiveSenderId,
         senderName: currentUserName,
         senderRole: currentUserRole,
         text: textToSend,
-        clientId: clientId || (currentUserRole === 'cliente' ? currentUserId : undefined),
+        clientId: clientId || (currentUserRole === 'cliente' ? effectiveSenderId : undefined),
         clientName: clientName || (currentUserRole === 'cliente' ? currentUserName : otherUserName),
-        therapistId: therapistId || (currentUserRole === 'terapeuta' ? currentUserId : undefined),
+        therapistId: therapistId || (currentUserRole === 'terapeuta' ? effectiveSenderId : undefined),
         therapistName: therapistName || (currentUserRole === 'terapeuta' ? currentUserName : otherUserName)
       });
       setInputValue('');

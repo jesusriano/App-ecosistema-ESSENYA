@@ -63,36 +63,22 @@ export async function ensureConversationDoc(
 
   try {
     const convRef = doc(db, 'conversaciones', bookingId);
-    const existingSnap = await getDoc(convRef);
     const nowIso = new Date().toISOString();
 
-    if (!existingSnap.exists()) {
-      await setDoc(convRef, {
-        id: bookingId,
-        bookingId,
-        bookingCode: data.bookingCode || 'ESS-0000',
-        clientId: data.clientId || '',
-        clientName: data.clientName || 'Cliente VIP',
-        therapistId: data.therapistId || '',
-        therapistName: data.therapistName || '',
-        serviceName: data.serviceName || 'Servicio ESSENYA',
-        cityZone: data.cityZone || 'CDMX',
-        lastMessage: 'Conversación iniciada',
-        lastSenderId: 'sistema',
-        lastSenderName: 'Sistema ESSENYA',
-        lastSenderRole: 'administrador',
-        createdAt: nowIso,
-        updatedAt: nowIso
-      });
-    } else {
-      // Update names or therapist if assigned
-      const updates: Record<string, any> = { updatedAt: nowIso };
-      if (data.clientName) updates.clientName = data.clientName;
-      if (data.therapistId) updates.therapistId = data.therapistId;
-      if (data.therapistName) updates.therapistName = data.therapistName;
-      if (data.bookingCode) updates.bookingCode = data.bookingCode;
-      await updateDoc(convRef, updates);
-    }
+    const initialData: Record<string, any> = {
+      id: bookingId,
+      bookingId,
+      bookingCode: data.bookingCode || 'ESS-0000',
+      serviceName: data.serviceName || 'Servicio ESSENYA',
+      cityZone: data.cityZone || 'CDMX',
+      updatedAt: nowIso
+    };
+    if (data.clientId) initialData.clientId = data.clientId;
+    if (data.clientName) initialData.clientName = data.clientName;
+    if (data.therapistId) initialData.therapistId = data.therapistId;
+    if (data.therapistName) initialData.therapistName = data.therapistName;
+
+    await setDoc(convRef, initialData, { merge: true });
   } catch (err) {
     console.warn('[chatService] Error ensuring conversation doc:', err);
   }

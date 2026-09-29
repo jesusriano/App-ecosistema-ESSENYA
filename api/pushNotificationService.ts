@@ -5,48 +5,41 @@ import type { Firestore } from 'firebase-admin/firestore';
 import { getMessaging, type Message } from 'firebase-admin/messaging';
 import { getApps } from 'firebase-admin/app';
 
-// Initialize and persist VAPID Keys
-const vapidFilePath = path.join(process.cwd(), 'vapid-keys.json');
-const DEFAULT_VAPID_PUBLIC_KEY = "BHEx7m8uEh5G66_S_vknnlbzdyDQ93X4xuNbqcr-KuS5p_r0ycVGo_7bt6HAYCkABoQTFNvspi4pSOb2Nm4gNl8";
-let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC_KEY;
-let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-
-if (!vapidPrivateKey) {
-  if (fs.existsSync(vapidFilePath)) {
-    try {
-      const savedKeys = JSON.parse(fs.readFileSync(vapidFilePath, 'utf-8'));
-      if (savedKeys.publicKey) {
-        vapidPublicKey = savedKeys.publicKey;
-      }
-      if (savedKeys.privateKey) {
-        vapidPrivateKey = savedKeys.privateKey;
-        console.log('[WebPush] Loaded VAPID keys from persistent file:', vapidFilePath);
-      }
-    } catch (e) {
-      console.warn('[WebPush] Error reading vapid-keys.json:', e);
-    }
-  }
-
-  if (!vapidPublicKey || !vapidPrivateKey) {
-    try {
-      const generated = webPush.generateVAPIDKeys();
-      vapidPublicKey = generated.publicKey;
-      vapidPrivateKey = generated.privateKey;
-      fs.writeFileSync(vapidFilePath, JSON.stringify({ publicKey: vapidPublicKey, privateKey: vapidPrivateKey }, null, 2));
-      console.log('[WebPush] Generated and saved new persistent VAPID keys.');
-    } catch (err) {
-      console.error('[WebPush] Error generating VAPID keys:', err);
-    }
-  }
+function sanitizeVapidKey(key: string): string {
+  return String(key || '')
+    .trim()
+    .replace(/^['"]|['"]$/g, '') // Strip quotes
+    .replace(/\+/g, '-')        // Replace + with -
+    .replace(/\//g, '_')        // Replace / with _
+    .replace(/=/g, '');         // Strip padding =
 }
 
-if (vapidPublicKey && vapidPrivateKey) {
-  webPush.setVapidDetails(
-    process.env.VAPID_SUBJECT || 'mailto:seguridad@essenyamexico.com',
-    vapidPublicKey,
-    vapidPrivateKey
-  );
-  console.log('[WebPush] VAPID details configured successfully.');
+// Initialize VAPID Keys exclusively from environment variables for production security
+let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY;
+let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+
+if (vapidPublicKey) vapidPublicKey = sanitizeVapidKey(vapidPublicKey);
+if (vapidPrivateKey) vapidPrivateKey = sanitizeVapidKey(vapidPrivateKey);
+
+const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:seguridad@essenyamexico.com';
+
+if (!vapidPrivateKey) {
+  console.error('[WebPush-Audit] ALERTA CRÍTICA: La variable de entorno VAPID_PRIVATE_KEY no está definida.');
+  console.error('[WebPush-Audit] Las notificaciones Web Push (VAPID) quedarán deshabilitadas. El sistema utilizará únicamente Firebase Cloud Messaging (FCM).');
+} else if (!vapidPublicKey) {
+  console.error('[WebPush-Audit] ALERTA CRÍTICA: La variable de entorno VAPID_PUBLIC_KEY / VITE_VAPID_PUBLIC_KEY no está definida.');
+} else {
+  try {
+    webPush.setVapidDetails(
+      vapidSubject,
+      vapidPublicKey,
+      vapidPrivateKey
+    );
+    console.log('[WebPush-Audit] Web Push (VAPID) configurado exitosamente mediante variables de entorno.');
+  } catch (err: any) {
+    console.error('[WebPush-Audit] Error al inicializar los detalles de VAPID con web-push:', err?.message);
+    vapidPrivateKey = undefined; // Force disable webpush fallback
+  }
 }
 
 export function getVapidPublicKey(): string | undefined {
@@ -213,6 +206,11 @@ export async function sendStandardWebPushToUser(
   userId: string,
   payload: PushNotificationPayload
 ): Promise<{ success: boolean; sentCount: number; errors?: any[] }> {
+  if (!vapidPrivateKey || !vapidPublicKey) {
+    console.warn('[WebPush-Audit] Cancelando Web Push fallback: Las claves VAPID no están configuradas en las variables de entorno.');
+    return { success: false, sentCount: 0, errors: ['VAPID keys not configured in server environment'] };
+  }
+
   try {
     const snapshot = await db.collection('push_subscriptions').where('userId', '==', userId).get();
     if (snapshot.empty) {
@@ -220,7 +218,22 @@ export async function sendStandardWebPushToUser(
       return { success: true, sentCount: 0 };
     }
 
-    const soundFile = payload.sound || (payload.soundPreset ? `/sounds/${payload.soundPreset}.mp3` : '/sounds/notification_default.mp3');
+    const presetMap: Record<string, string> = {
+      classic: '/sounds/notification_default.mp3',
+      bell: '/sounds/notification_reservation.mp3',
+      alert: '/sounds/notification_arrived.mp3',
+      soft: '/sounds/notification_started.mp3',
+      urgent: '/sounds/notification_completed.mp3',
+      reservation: '/sounds/notification_reservation.mp3',
+      accepted: '/sounds/notification_accepted.mp3',
+      arrived: '/sounds/notification_arrived.mp3',
+      started: '/sounds/notification_started.mp3',
+      completed: '/sounds/notification_completed.mp3',
+      message: '/sounds/notification_message.mp3'
+    };
+
+    const resolvedPreset = payload.soundPreset || 'classic';
+    const soundFile = payload.sound || presetMap[resolvedPreset] || '/sounds/notification_default.mp3';
 
     const formattedPayload = JSON.stringify({
       title: payload.title || 'ESSENYA — Notificación',
@@ -229,7 +242,7 @@ export async function sendStandardWebPushToUser(
       badge: payload.badge || '/icons/badge-72.png',
       url: payload.url || (payload.data?.bookingId ? `/terapeuta/servicios?bookingId=${payload.data.bookingId}` : '/'),
       tag: payload.tag || `notif-${Date.now()}`,
-      soundPreset: payload.soundPreset || 'classic',
+      soundPreset: resolvedPreset,
       sound: soundFile,
       data: payload.data || { type: 'general' }
     });

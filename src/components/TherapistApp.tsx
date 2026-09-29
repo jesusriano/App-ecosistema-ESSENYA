@@ -24,6 +24,7 @@ import {
   isUrgentChatMessage 
 } from '../shared/utils/notificationAudio';
 import { sendChatMessage, subscribeToChatMessages } from '../shared/services/chatService';
+import { TherapistNotificationPermissionPrompt } from '../aplicaciones/terapeuta/components/TherapistNotificationPermissionPrompt';
 
 
 interface TherapistAppProps {
@@ -301,6 +302,14 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
       return true;
     }
 
+    // Direct assignment check: if specifically assigned to another therapist, exclude
+    if (b.therapistId && b.therapistId !== activeTherapist.id) {
+      const isDualSlot = b.requiresDualTherapist || b.serviceId === 'srv-pareja';
+      if (!isDualSlot) return false;
+      // In dual slot, if therapist 1 is someone else, therapist 2 can accept
+      if (b.therapistId2 && b.therapistId2 !== activeTherapist.id) return false;
+    }
+
     // Direct assignment override: if therapist is explicitly assigned
     if (b.therapistId === activeTherapist.id || b.therapistId2 === activeTherapist.id || (Array.isArray(b.therapistIds) && b.therapistIds.includes(activeTherapist.id))) {
       return true;
@@ -317,24 +326,13 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
       const bZone = (b.cityZone || '').toLowerCase().trim();
       const inZone = zones.some(z => {
         const normZ = String(z).toLowerCase().trim();
-        return normZ === bZone || bZone.includes(normZ) || normZ.includes(bZone);
+        return normZ === bZone || bZone.includes(normZ) || normZ.includes(bZone) ||
+          normZ.includes('cdmx') || bZone.includes('cdmx') || normZ.includes('ciudad de méxico') || bZone.includes('ciudad de méxico') ||
+          bZone.includes('metropolitana');
       });
       if (!inZone) return false;
-    } else {
-      // If no zones configured on profile, check if therapist has a currentZone / zonaActual
-      const therapistCurrentZone = (activeTherapist.currentZone || (activeTherapist as any).zonaActual || '').toLowerCase().trim();
-      if (therapistCurrentZone) {
-        const bZone = (b.cityZone || '').toLowerCase().trim();
-        if (!bZone.includes(therapistCurrentZone) && !therapistCurrentZone.includes(bZone)) {
-          return false;
-        }
-      }
     }
 
-    // If progressive dispatch engine is targeting specific therapists and activeOfferTherapistIds is non-empty, only show if therapist is included
-    if (Array.isArray(b.activeOfferTherapistIds) && b.activeOfferTherapistIds.length > 0) {
-      return b.activeOfferTherapistIds.includes(activeTherapist.id);
-    }
     return true;
   });
   const [expandedPendingId, setExpandedPendingId] = useState<string | null>(null);
@@ -988,6 +986,9 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         
+        {/* Prominent, descriptive push permission request specifically for therapists */}
+        <TherapistNotificationPermissionPrompt therapistId={activeTherapist.id} />
+
         {/* INCOMING BOOKING NOTIFICATIONS (FOR PENDING BOOKINGS) */}
         {pendingBookings.length > 0 && (
           <div className="space-y-3">

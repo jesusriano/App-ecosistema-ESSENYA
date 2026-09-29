@@ -5,7 +5,7 @@
  */
 
 import { getToken } from 'firebase/messaging';
-import { getMessagingService, vapidKey } from '../../lib/firebase';
+import { getMessagingService, vapidKey, auth } from '../../lib/firebase';
 import { registerServiceWorker } from '../services/pushService';
 
 export interface FirebaseTokenResult {
@@ -67,15 +67,27 @@ export async function getFirebaseRegistrationToken(userId?: string): Promise<Fir
       console.log('%cPuedes copiar este token directamente arriba ☝️', 'color: #F59E0B; font-weight: bold;');
       console.log('%c========================================================', 'color: #C9A55B; font-weight: bold;');
 
-      // 6. Transmitir al servidor para que aparezca en los logs del backend
-      fetch('/api/push/log-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token: currentToken,
-          userId: userId || 'usuario_local'
-        })
-      }).catch(() => {});
+      // 6. Transmitir al servidor para que aparezca en los logs del backend con autorización segura
+      const reportLogToken = async () => {
+        try {
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          const idToken = await auth.currentUser?.getIdToken();
+          if (idToken) {
+            headers['Authorization'] = `Bearer ${idToken}`;
+          }
+          await fetch('/api/push/log-token', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              token: currentToken,
+              userId: auth.currentUser?.uid || userId || 'usuario_local'
+            })
+          });
+        } catch (err) {
+          console.warn('[FCM-Diagnostic] No se pudo enviar el token de diagnóstico al servidor:', err);
+        }
+      };
+      reportLogToken();
 
       // 7. Exponer globalmente en window para acceso instantáneo desde DevTools
       if (typeof window !== 'undefined') {
