@@ -257,6 +257,13 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    match /pwa_diagnostic_logs/{logId} {
+      allow get: if isAdmin() && isValidId(logId);
+      allow list: if isAdmin();
+      allow create: if isValidId(logId);
+      allow update, delete: if isAdmin();
+    }
+
     // ========================================================
     // 7. BUSINESS OPERATIONS (Bookings, Invoices, Payments)
     // ========================================================

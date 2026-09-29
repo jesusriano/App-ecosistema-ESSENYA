@@ -1,104 +1,128 @@
-// ESSENYA Unified Service Worker with Firebase Cloud Messaging (FCM), Workbox PWA & Web Push Support
-// Precache manifest injection point for Workbox / VitePWA
+// public/service-worker.js
+// ESSENYA Unified Service Worker — Web Push (VAPID) & FCM Native Support
+// Aligned with the push notification and exponential backoff subscription system in 'src/shared/services/pushService.ts'
+
+// Injection point for precache manifest when using VitePWA / Workbox build tooling
 // eslint-disable-next-line no-unused-expressions
 self.__WB_MANIFEST;
 
+// ========================================================
+// 1. LIFECYCLE: Immediate Installation & Activation
+// ========================================================
 self.addEventListener('install', (event) => {
+  console.log('[ServiceWorker] Installed. Activating immediately...');
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(clients.claim());
+  console.log('[ServiceWorker] Activated. Reclaiming active client tabs...');
+  event.waitUntil(self.clients.claim());
 });
 
+// ========================================================
+// 2. EVENT 'push': Web Push Reception & OS Notification Display
+// ========================================================
 self.addEventListener('push', (event) => {
+  console.log('[ServiceWorker] Push event received.');
+
+  // Default backup configuration for the ESSENYA ecosystem
   let data = {
-    title: '🔔 Masaje solicitado',
-    body: 'Tienes una nueva solicitud de masaje.',
+    title: '🔔 ESSENYA',
+    body: 'Tienes una nueva actualización en tu panel de bienestar.',
     icon: '/icons/icon-192.png',
-    badge: '/icons/badge-72.png',
-    url: '/terapeuta/servicios',
-    tag: 'essenya-notification',
-    soundPreset: 'bell',
-    sound: '/sounds/notification_reservation.mp3',
-    data: { type: 'NEW_BOOKING' }
+    badge: '/icons/icon-192.png',
+    url: '/',
+    tag: 'essenya-alert',
+    sound: '/sounds/notification_default.mp3',
+    data: {}
   };
 
+  // Try parsing incoming JSON data payload
   if (event.data) {
     try {
       const payload = event.data.json();
+      console.log('[ServiceWorker] Parsing push JSON payload:', payload);
 
-      // Soporte para estructura nativa de Firebase Cloud Messaging (FCM)
+      // Support Firebase Cloud Messaging (FCM) payload formats
       if (payload.notification) {
         data.title = payload.notification.title || data.title;
         data.body = payload.notification.body || data.body;
         data.icon = payload.notification.icon || data.icon;
         data.badge = payload.notification.badge || data.badge;
       }
+
       if (payload.fcmOptions?.link) {
         data.url = payload.fcmOptions.link;
       }
+
+      // Read custom attached metadata fields
       if (payload.data) {
         data.data = { ...data.data, ...payload.data };
         if (payload.data.title && !payload.notification?.title) data.title = payload.data.title;
         if (payload.data.body && !payload.notification?.body) data.body = payload.data.body;
         if (payload.data.url) data.url = payload.data.url;
+        if (payload.data.sound) data.sound = payload.data.sound;
       }
 
-      // Soporte para WebPush estándar
+      // Support standard RFC 8291 / Web-Push package formats
       data = {
         ...data,
         ...payload,
         data: { ...data.data, ...(payload.data || {}) }
       };
+
       if (payload.notification) {
         data.title = payload.notification.title || data.title;
         data.body = payload.notification.body || data.body;
       }
-    } catch (e) {
-      console.warn('[ServiceWorker] Could not parse push payload as JSON:', e);
+    } catch (parseError) {
+      console.warn('[ServiceWorker] Push payload is not valid JSON. Reading as plain text:', parseError);
       data.body = event.data.text() || data.body;
     }
   }
 
-  const soundFile = data.sound || (data.soundPreset ? `/sounds/${data.soundPreset}.mp3` : '/sounds/notification_reservation.mp3');
+  // Choose the optimal sound file based on the preset or payload parameter
+  const soundFile = data.sound || '/sounds/notification_default.mp3';
+  const vibratePattern = [300, 150, 300, 150];
 
-  const vibrateMap = {
-    classic: [200, 100, 200],
-    bell: [300, 150, 300, 150],
-    alert: [100, 50, 100, 50, 100],
-    soft: [150, 200, 150],
-    urgent: [400, 200, 400, 200, 400]
-  };
-
-  const options = {
+  // Configure high-fidelity operating system notification options
+  const notificationOptions = {
     body: data.body,
     icon: data.icon || '/icons/icon-192.png',
-    badge: data.badge || '/icons/badge-72.png',
-    tag: data.tag || (data.data?.bookingId ? `booking-${data.data.bookingId}` : 'essenya-booking-notification'),
+    badge: data.badge || '/icons/icon-192.png',
+    tag: data.tag || (data.data?.bookingId ? `booking-${data.data.bookingId}` : 'essenya-push-alert'),
     sound: soundFile,
     data: {
-      url: data.url || '/terapeuta/servicios',
+      url: data.url || (data.data?.bookingId ? `/terapeuta/servicios?bookingId=${data.data.bookingId}` : '/'),
       sound: soundFile,
-      soundPreset: data.soundPreset || 'bell',
+      timestamp: Date.now(),
       ...data.data
     },
-    vibrate: vibrateMap[data.soundPreset || 'bell'] || [300, 150, 300, 150],
-    requireInteraction: true
+    vibrate: vibratePattern,
+    // requireInteraction keeps notification active on screen until user explicitly clicks or dismisses it
+    requireInteraction: true,
+    actions: [
+      {
+        action: 'open',
+        title: 'Ver en ESSENYA',
+        icon: '/icons/icon-192.png'
+      },
+      {
+        action: 'close',
+        title: 'Cerrar'
+      }
+    ]
   };
 
+  // Enforce user visible notifications requirement (W3C Push API specification)
   event.waitUntil(
     (async () => {
-      const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-      const hasVisibleWindow = allClients.some(c => c.visibilityState === 'visible');
+      // 1. Show the OS system-level native notification
+      await self.registration.showNotification(data.title, notificationOptions);
 
-      // FASE 6 (Evitar Duplicados): Si la app está en segundo plano o cerrada, mostrar la notificación del sistema
-      if (!hasVisibleWindow) {
-        await self.registration.showNotification(data.title, options);
-      }
-
-      // Notificar a las ventanas activas para actualización inmediata de estado
-      for (const client of allClients) {
+      // 2. Broadcast message internally to all active tabs for instant React UI sync/sound playback
+      const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const client of windowClients) {
         client.postMessage({
           type: 'PUSH_NOTIFICATION_RECEIVED',
           payload: data,
@@ -109,24 +133,45 @@ self.addEventListener('push', (event) => {
   );
 });
 
+// ========================================================
+// 3. EVENT 'notificationclick': Focus & Deep Navigation
+// ========================================================
 self.addEventListener('notificationclick', (event) => {
+  console.log('[ServiceWorker] Notification clicked:', event.notification.tag);
+
+  // Close the clicked system notification immediately
   event.notification.close();
 
-  const data = event.notification.data || {};
-  const bookingId = data.bookingId;
-  const baseUrl = data.url || '/terapeuta/servicios';
+  // If "Cerrar" action button was clicked, stop further processing
+  if (event.action === 'close') {
+    return;
+  }
+
+  const notificationData = event.notification.data || {};
+  const bookingId = notificationData.bookingId;
+  const baseUrl = notificationData.url || '/';
+
+  // Construct target URL. If bookingId exists, append query parameter for direct state opening in React
   const targetUrl = bookingId && !baseUrl.includes('bookingId=')
     ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}bookingId=${bookingId}`
     : baseUrl;
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (windowClients) => {
+    (async () => {
+      const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+      // Search for any existing open ESSENYA tab to focus and navigate
       for (const client of windowClients) {
         if ('focus' in client) {
           await client.focus();
-          if ('navigate' in client && client.url !== new URL(targetUrl, self.location.origin).href) {
-            await client.navigate(targetUrl);
+
+          // Navigate the tab if its current URL differs from the push target URL
+          const targetAbsoluteUrl = new URL(targetUrl, self.location.origin).href;
+          if ('navigate' in client && client.url !== targetAbsoluteUrl) {
+            await client.navigate(targetAbsoluteUrl);
           }
+
+          // Send an internal notification to React for immediate overlay opening / booking detail expansion
           client.postMessage({
             type: 'NOTIFICATION_CLICKED_BOOKING',
             bookingId: bookingId,
@@ -135,13 +180,68 @@ self.addEventListener('notificationclick', (event) => {
           return;
         }
       }
-      if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
+
+      // If no open tabs exist, open a fresh window/tab directly on the destination URL
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
       }
-    })
+    })()
   );
 });
 
+// ========================================================
+// 4. EVENT 'notificationclose': Audit & Tracking
+// ========================================================
 self.addEventListener('notificationclose', (event) => {
-  console.log('[ServiceWorker] Notification closed:', event.notification.tag);
+  console.log('[ServiceWorker] Notification dismissed by user:', event.notification.tag);
+});
+
+// ========================================================
+// 5. EVENT 'fetch': 'Stale-While-Revalidate' for Images
+// ========================================================
+const IMAGE_CACHE_NAME = 'essenya-images-cache';
+
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // Identify therapist portrait assets, service catalog photos, and other general visual resources
+  const isImageRequest = 
+    event.request.destination === 'image' ||
+    url.pathname.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)$/i) ||
+    url.hostname.includes('images.unsplash.com') ||
+    url.hostname.includes('firebasestorage.googleapis.com');
+
+  // Skip non-GET requests, API calls, and external non-image queries
+  if (event.request.method !== 'GET' || !isImageRequest) {
+    return;
+  }
+
+  event.respondWith(
+    (async () => {
+      try {
+        const cache = await caches.open(IMAGE_CACHE_NAME);
+        const cachedResponse = await cache.match(event.request);
+
+        // Dispatch network fetch in parallel (Revalidate)
+        const fetchPromise = fetch(event.request).then(async (networkResponse) => {
+          // Store response copy if successful or if it's an opaque cross-origin resource (status 0)
+          if (networkResponse.ok || networkResponse.status === 0) {
+            await cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        }).catch((err) => {
+          console.log('[ServiceWorker Fetch] Revalidation failed (offline mode):', url.href, err);
+          // Return the cached response if fetch failed (to support offline mode)
+          if (cachedResponse) return cachedResponse;
+          throw err;
+        });
+
+        // Serve the cached version instantly, or wait for the network request to resolve as fallback
+        return cachedResponse || fetchPromise;
+      } catch (err) {
+        // Safe fallback in case of cache access failure
+        return fetch(event.request);
+      }
+    })()
+  );
 });

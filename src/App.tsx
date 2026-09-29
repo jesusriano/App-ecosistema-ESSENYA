@@ -21,6 +21,7 @@ import { subscribeToPushNotifications, isPushSupported } from './shared/services
 import { ConfigValidator } from './shared/components/ConfigValidator';
 import { ErrorBoundary } from './shared/components/ErrorBoundary';
 import { OfflineNotice } from './shared/components/OfflineNotice';
+import { InstallPrompt } from './components/InstallPrompt';
 import { initGA, trackPageView } from './shared/utils/analytics';
 import { StripeProductCheckout } from './shared/components/StripeProductCheckout';
 import { PaymentSuccessOrder } from './shared/components/PaymentSuccessOrder';
@@ -278,6 +279,9 @@ function MainAppContent() {
 
       {/* Custom Offline Detection & Notice Modal */}
       <OfflineNotice />
+
+      {/* PWA In-App Install Prompt Banner/Modal */}
+      <InstallPrompt />
     </div>
   );
 }

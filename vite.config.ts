@@ -74,6 +74,36 @@ export default defineConfig(() => {
                 },
               },
             },
+            {
+              // Cache standard API catalog endpoints (services/servicios) with StaleWhileRevalidate
+              urlPattern: /\/api\/(servicios|services)/i,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'essenya-services-cache',
+                expiration: {
+                  maxEntries: 30,
+                  maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+            {
+              // Cache Firestore REST / Longpolling Document requests for ultra-fast load times under high latency
+              urlPattern: /^https:\/\/firestore\.googleapis\.com\/v1\/projects\/.*\/databases\/.*\/documents/i,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'firestore-documents-cache',
+                expiration: {
+                  maxEntries: 100,
+                  maxAgeSeconds: 60 * 60 * 24, // 24 hours
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
           ],
         },
         devOptions: {

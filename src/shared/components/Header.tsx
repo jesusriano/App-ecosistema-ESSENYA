@@ -120,23 +120,28 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Main Navigation Bar (Separate Panel Header) */}
       <div className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 py-2.5 sm:py-3.5 flex items-center justify-between gap-3 w-full overflow-hidden">
         {/* Brand Logo & Current Separate Panel Title */}
-        <div className="flex items-center space-x-3 min-w-0">
-          <EssenyaLogo size="sm" showText={true} align="left" />
+        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
+          <EssenyaLogo size="xs" showText={false} align="left" className="block sm:hidden" />
+          <EssenyaLogo size="sm" showText={true} align="left" className="hidden sm:block" />
           
-          <div className="flex flex-col justify-center border-l border-[#E5DFD3] dark:border-[#333333] pl-3 py-0.5">
-            <span className="text-[9px] bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B] border border-[#C9A55B]/30 px-2 py-0.5 rounded-full uppercase tracking-widest font-bold self-start truncate">
+          <div className="flex flex-col justify-center border-l border-[#E5DFD3] dark:border-[#333333] pl-2 sm:pl-3 py-0.5 min-w-0">
+            <span className="text-[8px] sm:text-[9px] bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B] border border-[#C9A55B]/30 px-1.5 sm:px-2 py-0.5 rounded-full uppercase tracking-widest font-bold self-start truncate">
               {currentPortal === 'admin' ? 'Administración' : currentPortal === 'therapist' ? 'Terapeuta' : 'Cliente VIP'}
             </span>
-            <h1 className="text-xs sm:text-sm font-bold text-[var(--text-primary)] truncate mt-0.5">
-              {portalTitle}
+            <h1 className="text-[10px] sm:text-xs md:text-sm font-bold text-[var(--text-primary)] truncate mt-0.5 leading-tight">
+              <span className="block sm:hidden">
+                {currentPortal === 'admin' ? 'Admin' : currentPortal === 'therapist' ? 'Terapeutas' : 'Clientes VIP'}
+              </span>
+              <span className="hidden sm:block">
+                {portalTitle}
+              </span>
             </h1>
           </div>
         </div>
 
-
-
         {/* Panel Actions / Website Link & Status */}
-        <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
+        <div className="flex items-center space-x-1.5 sm:space-x-3 shrink-0">
+          <PWAInstallButton dismissible={true} />
           <PushSubscriptionButton variant="minimal" className="inline-flex" />
 
           <a

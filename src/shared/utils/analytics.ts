@@ -109,3 +109,117 @@ export function trackConversion(eventName: string, params: ConversionEventParams
     }
   }
 }
+
+/**
+ * Tracks a successful Push notification subscription
+ */
+export function trackPushSubscriptionSuccess(
+  platform: 'web' | 'android' | 'ios',
+  userId: string = 'anonymous',
+  method: 'vapid' | 'fcm' = 'vapid'
+) {
+  if (typeof window === 'undefined') return;
+  
+  const params = {
+    platform,
+    user_id: userId,
+    method,
+    timestamp: new Date().toISOString()
+  };
+
+  if (window.gtag) {
+    window.gtag('event', 'push_subscription_success', params);
+  } else {
+    console.log('[Analytics] Event: push_subscription_success', params);
+  }
+
+  if (window.fbq) {
+    window.fbq('trackCustom', 'PushSubscriptionSuccess', params);
+  }
+}
+
+/**
+ * Tracks a failed Push notification subscription attempt
+ */
+export function trackPushSubscriptionError(
+  platform: 'web' | 'android' | 'ios',
+  userId: string = 'anonymous',
+  errorMessage: string = 'Unknown Error'
+) {
+  if (typeof window === 'undefined') return;
+
+  const params = {
+    platform,
+    user_id: userId,
+    error_message: errorMessage.substring(0, 100), // Limit parameter size
+    timestamp: new Date().toISOString()
+  };
+
+  if (window.gtag) {
+    window.gtag('event', 'push_subscription_failed', params);
+  } else {
+    console.log('[Analytics] Event: push_subscription_failed', params);
+  }
+
+  if (window.fbq) {
+    window.fbq('trackCustom', 'PushSubscriptionFailed', params);
+  }
+}
+
+/**
+ * Tracks the successful delivery (receipt) of a push notification on the client
+ */
+export function trackPushNotificationReceived(
+  platform: 'web' | 'android' | 'ios',
+  title: string,
+  bookingId?: string
+) {
+  if (typeof window === 'undefined') return;
+
+  const params = {
+    platform,
+    notification_title: title,
+    booking_id: bookingId || 'none',
+    timestamp: new Date().toISOString()
+  };
+
+  if (window.gtag) {
+    window.gtag('event', 'push_notification_received', params);
+  } else {
+    console.log('[Analytics] Event: push_notification_received', params);
+  }
+
+  if (window.fbq) {
+    window.fbq('trackCustom', 'PushNotificationReceived', params);
+  }
+}
+
+/**
+ * Tracks when a user clicks on a received push notification
+ */
+export function trackPushNotificationClicked(
+  platform: 'web' | 'android' | 'ios',
+  title: string,
+  bookingId?: string,
+  action?: string
+) {
+  if (typeof window === 'undefined') return;
+
+  const params = {
+    platform,
+    notification_title: title,
+    booking_id: bookingId || 'none',
+    action_clicked: action || 'open_app',
+    timestamp: new Date().toISOString()
+  };
+
+  if (window.gtag) {
+    window.gtag('event', 'push_notification_clicked', params);
+  } else {
+    console.log('[Analytics] Event: push_notification_clicked', params);
+  }
+
+  if (window.fbq) {
+    window.fbq('trackCustom', 'PushNotificationClicked', params);
+  }
+}

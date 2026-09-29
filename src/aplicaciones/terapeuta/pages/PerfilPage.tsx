@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { 
   User, ShieldCheck, Phone, MapPin, Award, Upload, FileText, 
   CheckCircle2, XCircle, Clock, AlertTriangle, Calendar, Mail, 
-  BookOpen, Plus, Save, Edit3, Image as ImageIcon, Camera
+  BookOpen, Plus, Save, Edit3, Image as ImageIcon, Camera,
+  Database, RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../../../shared/context/AuthContext';
 import { useTherapistContext } from '../../../shared/context/TherapistContext';
@@ -12,6 +13,7 @@ import { DocumentVerificationSection } from '../components/DocumentVerificationS
 import { TechSupportWhatsAppButton } from '../../../shared/components/TechSupportWhatsAppButton';
 import { NotificationSoundSettings } from '../../../shared/components/NotificationSoundSettings';
 import { PushSettingsCard } from '../../../shared/components/PushSettingsCard';
+import { clearServicesCache, hardResetPWAEcosystem } from '../../../shared/utils/cacheManager';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../../lib/firebase';
 
@@ -660,6 +662,54 @@ export const PerfilPage: React.FC = () => {
             <div className="pt-4 space-y-4">
               <NotificationSoundSettings role="therapist" />
               <PushSettingsCard role="therapist" userId={activeTherapist.id} />
+
+              {/* Local Storage & Cache Management Diagnostic Card */}
+              <div className="bg-white dark:bg-[#111111] rounded-2xl border border-[#E5DFD3] dark:border-[#262626] p-5 shadow-xs space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-[#C9A55B]/15 border border-[#C9A55B]/30 flex items-center justify-center text-[#C9A55B] shrink-0">
+                    <Database className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold font-serif text-[#1C1917] dark:text-[#FAF8F5]">
+                      Diagnóstico de Almacenamiento y Caché
+                    </h4>
+                    <p className="text-[10px] text-[#6B655F] dark:text-[#888888]">
+                      Administra tus datos locales para asegurar información totalmente actualizada del catálogo de masajes
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const success = await clearServicesCache();
+                      if (success) {
+                        showToast('success', '¡Caché de servicios purgada con éxito! Se cargarán datos frescos del catálogo.');
+                      } else {
+                        showToast('error', 'No se encontraron datos de caché de servicios para limpiar.');
+                      }
+                    }}
+                    className="flex items-center justify-center space-x-2 rounded-xl border border-[#C9A55B]/40 bg-[#C9A55B]/5 hover:bg-[#C9A55B]/10 px-4 py-2.5 text-xs font-bold text-[#806020] dark:text-[#C9A55B] transition cursor-pointer"
+                  >
+                    <RefreshCw className="w-4 h-4 animate-spin-hover" />
+                    <span>Purgar Catálogo de Servicios</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (window.confirm('¿Confirmas reiniciar de fábrica todos los datos de almacenamiento, Service Worker y archivos temporales de la app?')) {
+                        await hardResetPWAEcosystem();
+                      }
+                    }}
+                    className="flex items-center justify-center space-x-2 rounded-xl border border-rose-500/30 bg-rose-500/5 hover:bg-rose-500/10 px-4 py-2.5 text-xs font-bold text-rose-600 dark:text-rose-400 transition cursor-pointer"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    <span>Reiniciar App de Fábrica (PWA)</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </form>
         )}

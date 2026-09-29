@@ -175,6 +175,22 @@
       },
       "required": ["id", "action", "userName", "timestamp"]
     },
+    "PWADiagnosticLog": {
+      "title": "PWA Diagnostic Log",
+      "description": "Error, warning, and telemetry logs for Service Worker, VAPID, and PushManager operations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["service-worker", "push-manager", "network", "application"] },
+        "level": { "type": "string", "enum": ["error", "warn", "info"] },
+        "message": { "type": "string" },
+        "stack": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" },
+        "userAgent": { "type": "string" }
+      },
+      "required": ["id", "type", "level", "message", "timestamp", "userAgent"]
+    },
     "GiftCard": {
       "title": "Gift Card",
       "description": "Client digital gift card voucher and credit balance",
@@ -229,6 +245,10 @@
     "audit_logs/{logId}": {
       "schema": "AuditLog",
       "description": "System event audit trail"
+    },
+    "pwa_diagnostic_logs/{logId}": {
+      "schema": "PWADiagnosticLog",
+      "description": "Error, warning, and trace events from Service Worker and PushManager clients"
     }
   }
 }

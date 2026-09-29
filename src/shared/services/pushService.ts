@@ -1,6 +1,9 @@
 // Advanced Web Push Notifications Client Service for ESSENYA
 import { vapidKey, getMessagingService, auth } from '../../lib/firebase';
 import { getToken } from 'firebase/messaging';
+import { logPWAError, logPWAWarning, logPWAInfo } from '../utils/errorLogger';
+import { trackPushSubscriptionSuccess, trackPushSubscriptionError } from '../utils/analytics';
+import { Capacitor } from '@capacitor/core';
 
 export type SoundPreset = 'classic' | 'bell' | 'alert' | 'soft' | 'urgent';
 
@@ -77,12 +80,239 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
     console.log('[WebPush] Service Worker registrado con éxito:', registration.scope);
     return registration;
   } catch (err) {
-    console.error('[WebPush] Error al registrar Service Worker:', err);
+    console.warn('[WebPush] Advertencia al registrar Service Worker:', err);
     return null;
   }
 }
 
-export async function subscribeToPushNotifications(userId: string = 'anonymous'): Promise<{ success: boolean; error?: string }> {
+// ==========================================
+// INDEXEDDB PERSISTENT OFFLINE RETRY QUEUE
+// ==========================================
+export interface PendingPushSubscription {
+  id: string;
+  userId: string;
+  fcmToken?: string;
+  subscription?: any;
+  timestamp: number;
+  attempts: number;
+}
+
+const IDB_NAME = 'essenya_push_db';
+const IDB_STORE = 'subscription_retry_queue';
+const IDB_VERSION = 1;
+
+function openPushDB(): Promise<IDBDatabase | null> {
+  if (typeof window === 'undefined' || !('indexedDB' in window)) {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    try {
+      const request = window.indexedDB.open(IDB_NAME, IDB_VERSION);
+      request.onupgradeneeded = (event) => {
+        const db = (event.target as IDBOpenDBRequest).result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE, { keyPath: 'id' });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = (e) => {
+        console.warn('[WebPush DB] Error abriendo IndexedDB:', e);
+        resolve(null);
+      };
+    } catch (e) {
+      console.warn('[WebPush DB] Excepción abriendo IndexedDB:', e);
+      resolve(null);
+    }
+  });
+}
+
+export async function enqueuePendingSubscription(item: PendingPushSubscription): Promise<void> {
+  const db = await openPushDB();
+  if (!db) return;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_STORE);
+      store.put(item);
+      tx.oncomplete = () => {
+        console.log(`[WebPush DB] Suscripción encolada en IndexedDB para usuario ${item.userId} (ID: ${item.id})`);
+        resolve();
+      };
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+export async function getPendingSubscriptions(): Promise<PendingPushSubscription[]> {
+  const db = await openPushDB();
+  if (!db) return [];
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    } catch {
+      resolve([]);
+    }
+  });
+}
+
+export async function removePendingSubscription(id: string): Promise<void> {
+  const db = await openPushDB();
+  if (!db) return;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_STORE);
+      store.delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+/**
+ * Executes a fetch request with exponential backoff retries and randomized jitter.
+ * Designed specifically to handle network offline errors or transient server errors (5xx/429)
+ * for VAPID push notification subscription synchronization.
+ */
+export async function fetchWithExponentialBackoff(
+  url: string,
+  options: RequestInit,
+  maxRetries: number = 4,
+  baseDelayMs: number = 1000
+): Promise<Response> {
+  let attempt = 0;
+  while (true) {
+    try {
+      const response = await fetch(url, options);
+
+      // If successful or non-retryable user/client error (any 4xx except 429), return response
+      if (response.ok || (response.status < 500 && response.status !== 429)) {
+        return response;
+      }
+
+      if (attempt >= maxRetries) {
+        console.warn(`[PushBackoff] Max retries (${maxRetries}) reached. Returning response with status ${response.status}`);
+        return response;
+      }
+
+      const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 200;
+      console.warn(`[PushBackoff] Attempt ${attempt + 1} failed (status ${response.status}). Retrying in ${Math.round(delay)}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      attempt++;
+    } catch (networkError) {
+      if (attempt >= maxRetries) {
+        console.error(`[PushBackoff] Max retries (${maxRetries}) reached for network issue. Throwing error.`);
+        throw networkError;
+      }
+
+      const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 200;
+      console.warn(`[PushBackoff] Attempt ${attempt + 1} failed due to network offline/timeout. Retrying in ${Math.round(delay)}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      attempt++;
+    }
+  }
+}
+
+/**
+ * Vacia y procesa todas las suscripciones pendientes guardadas en IndexedDB
+ */
+export async function flushPendingSubscriptions(): Promise<number> {
+  if (typeof window === 'undefined' || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+    return 0;
+  }
+  try {
+    const queue = await getPendingSubscriptions();
+    if (!queue || queue.length === 0) return 0;
+
+    console.log(`[WebPush DB] Procesando cola de reintentos IndexedDB (${queue.length} pendientes)...`);
+    let syncedCount = 0;
+
+    for (const item of queue) {
+      try {
+        // Si el item no tiene datos de suscripción, significa que la solicitud al navegador (PushManager)
+        // falló originalmente debido a red inestable y requerimos re-ejecutar el flujo completo de suscripción.
+        if (!item.subscription) {
+          console.log(`[WebPush DB] Intentando re-suscripción completa para el usuario: ${item.userId}`);
+          const resSub = await subscribeToPushNotifications(item.userId);
+          if (resSub.success && !resSub.queued) {
+            await removePendingSubscription(item.id);
+            syncedCount++;
+            console.log(`[WebPush DB] Re-suscripción completa de ${item.userId} realizada con éxito.`);
+          } else {
+            item.attempts = (item.attempts || 0) + 1;
+            if (item.attempts >= 10) {
+              await removePendingSubscription(item.id);
+            } else {
+              await enqueuePendingSubscription(item);
+            }
+          }
+          continue;
+        }
+
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        try {
+          const token = await auth.currentUser?.getIdToken();
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+        } catch {}
+
+        const res = await fetchWithExponentialBackoff('/api/push/subscribe', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            userId: item.userId,
+            fcmToken: item.fcmToken,
+            subscription: item.subscription
+          })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          await removePendingSubscription(item.id);
+          syncedCount++;
+          console.log(`[WebPush DB] Suscripción offline de ${item.userId} sincronizada con éxito en el servidor.`);
+        } else {
+          item.attempts = (item.attempts || 0) + 1;
+          if (item.attempts >= 10) {
+            await removePendingSubscription(item.id);
+          } else {
+            await enqueuePendingSubscription(item);
+          }
+        }
+      } catch (networkError) {
+        console.warn(`[WebPush DB] Reintento diferido para ${item.id}:`, networkError);
+      }
+    }
+    return syncedCount;
+  } catch (err) {
+    console.warn('[WebPush DB] Error al vaciar cola de reintentos:', err);
+    return 0;
+  }
+}
+
+// Escuchador de reconexión automática a Internet
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    console.log('[WebPush] Conexión a Internet restablecida. Procesando cola persistente de suscripciones...');
+    flushPendingSubscriptions().catch(() => {});
+  });
+
+  // Ejecución preventiva inicial
+  setTimeout(() => {
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      flushPendingSubscriptions().catch(() => {});
+    }
+  }, 4000);
+}
+
+export async function subscribeToPushNotifications(userId: string = 'anonymous'): Promise<{ success: boolean; error?: string; queued?: boolean }> {
   try {
     if (!isPushSupported()) {
       return { success: false, error: 'Push no soportado en este navegador.' };
@@ -90,11 +320,13 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
 
     const permission = await requestNotificationPermission();
     if (permission !== 'granted') {
+      trackPushSubscriptionError(Capacitor.isNativePlatform() ? 'android' : 'web', userId, 'Permiso de notificaciones denegado');
       return { success: false, error: 'Permiso de notificaciones denegado por el usuario.' };
     }
 
     const registration = await registerServiceWorker();
     if (!registration) {
+      trackPushSubscriptionError(Capacitor.isNativePlatform() ? 'android' : 'web', userId, 'Inicialización de Service Worker fallida');
       return { success: false, error: 'No se pudo inicializar el Service Worker.' };
     }
 
@@ -136,10 +368,36 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
     }
 
     if (!subscription) {
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: convertedVapidKey
-      });
+      try {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedVapidKey
+        });
+      } catch (subErr: any) {
+        const isNetworkErr = !navigator.onLine || 
+          subErr.name === 'NetworkError' || 
+          subErr.message?.toLowerCase().includes('network') || 
+          subErr.message?.toLowerCase().includes('offline') ||
+          subErr.message?.toLowerCase().includes('connect');
+
+        if (isNetworkErr) {
+          console.warn('[WebPush] Error de red al suscribir en PushManager. Encolando acción de re-suscripción para cuando vuelva la conexión:', subErr);
+          await logPWAWarning('push-manager', `Fallo de red al solicitar suscripción PushManager para ${userId}. Encolando reintento.`);
+          
+          await enqueuePendingSubscription({
+            id: `resub_${userId}_${Date.now()}`,
+            userId,
+            timestamp: Date.now(),
+            attempts: 0,
+            subscription: null, // Marca que se requiere generar una nueva suscripción
+          });
+          
+          trackPushSubscriptionSuccess(Capacitor.isNativePlatform() ? 'android' : 'web', userId, 'vapid');
+          return { success: true, queued: true };
+        }
+        
+        throw subErr;
+      }
     }
 
     // Obtain and register Firebase Cloud Messaging token using vapidKey and active ServiceWorkerRegistration
@@ -160,6 +418,24 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
       console.info('[FCM] Nota de obtención FCM:', fcmErr);
     }
 
+    const subscriptionData = subscription ? subscription.toJSON() : undefined;
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+
+    // Si el usuario está offline al suscribirse, guardar de inmediato en IndexedDB
+    if (isOffline) {
+      console.log('[WebPush] Usuario sin conexión a red. Guardando suscripción en cola IndexedDB para sincronización posterior.');
+      await enqueuePendingSubscription({
+        id: `sub_${userId}_${Date.now()}`,
+        userId,
+        fcmToken,
+        subscription: subscriptionData,
+        timestamp: Date.now(),
+        attempts: 0
+      });
+      trackPushSubscriptionSuccess(Capacitor.isNativePlatform() ? 'android' : 'web', userId, 'vapid');
+      return { success: true, queued: true };
+    }
+
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -170,24 +446,55 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
       console.warn('[WebPush] No se pudo obtener el token de autenticación para push subscribe:', authErr);
     }
 
-    const subRes = await fetch('/api/push/subscribe', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
+    try {
+      const subRes = await fetchWithExponentialBackoff('/api/push/subscribe', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          userId,
+          fcmToken,
+          subscription: subscriptionData
+        })
+      });
+
+      const subResult = await subRes.json();
+      if (!subResult.success) {
+        // Encolar reintento persistente ante fallo del servidor
+        await logPWAWarning('push-manager', `Servidor devolvió error en suscripción para ${userId}: ${subResult.error}`);
+        trackPushSubscriptionError(Capacitor.isNativePlatform() ? 'android' : 'web', userId, `Error del servidor: ${subResult.error}`);
+        await enqueuePendingSubscription({
+          id: `sub_${userId}_${Date.now()}`,
+          userId,
+          fcmToken,
+          subscription: subscriptionData,
+          timestamp: Date.now(),
+          attempts: 1
+        });
+        return { success: false, error: subResult.error || 'Error al guardar la suscripción en el servidor (encolado para reintento).' };
+      }
+
+      // Vaciado proactivo de cualquier otra suscripción pendiente
+      await logPWAInfo('push-manager', `Suscripción guardada exitosamente para ${userId}`);
+      trackPushSubscriptionSuccess(Capacitor.isNativePlatform() ? 'android' : 'web', userId, fcmToken ? 'fcm' : 'vapid');
+      flushPendingSubscriptions().catch(() => {});
+
+      return { success: true };
+    } catch (netErr: any) {
+      await logPWAError('network', `Error de red al registrar suscripción para ${userId}`, netErr);
+      trackPushSubscriptionSuccess(Capacitor.isNativePlatform() ? 'android' : 'web', userId, 'vapid'); // Success in client (offline queue)
+      await enqueuePendingSubscription({
+        id: `sub_${userId}_${Date.now()}`,
         userId,
         fcmToken,
-        subscription: subscription ? subscription.toJSON() : undefined
-      })
-    });
-
-    const subResult = await subRes.json();
-    if (!subResult.success) {
-      return { success: false, error: subResult.error || 'Error al guardar la suscripción en el servidor.' };
+        subscription: subscriptionData,
+        timestamp: Date.now(),
+        attempts: 1
+      });
+      return { success: true, queued: true };
     }
-
-    return { success: true };
   } catch (err: any) {
-    console.error('[WebPush] Error en subscribeToPushNotifications:', err);
+    await logPWAError('push-manager', `Fallo crítico en subscribeToPushNotifications para ${userId}`, err);
+    trackPushSubscriptionError(Capacitor.isNativePlatform() ? 'android' : 'web', userId, err.message || 'Error desconocido');
     return { success: false, error: err.message || 'Error desconocido al suscribirse a Push.' };
   }
 }
@@ -223,7 +530,7 @@ export async function unsubscribeFromPushNotifications(): Promise<{ success: boo
 
     return { success: true };
   } catch (err: any) {
-    console.error('[WebPush] Error al desuscribir:', err);
+    console.warn('[WebPush] Nota al desuscribir:', err);
     return { success: false, error: err.message };
   }
 }
