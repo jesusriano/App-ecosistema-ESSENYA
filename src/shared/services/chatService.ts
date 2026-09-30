@@ -140,39 +140,84 @@ export async function sendChatMessage(params: {
   // 4. Trigger Web Push Notification to recipient
   try {
     const isClientSender = params.senderRole === 'cliente';
-    const targetUserId = isClientSender ? params.therapistId : params.clientId;
-    const targetRole = isClientSender ? 'terapeuta' : 'cliente';
-    const recipientTitle = `💬 Mensaje de ${params.senderName}`;
-    const truncatedBody = cleanText.length > 90 ? cleanText.substring(0, 87) + '...' : cleanText;
+    let targetUserId = isClientSender ? params.therapistId : params.clientId;
 
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-    } catch {}
-
-    fetch('/api/push/send', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        userId: targetUserId,
-        role: targetRole,
-        title: recipientTitle,
-        body: truncatedBody,
-        url: targetRole === 'terapeuta' ? '/terapeuta' : '/cliente',
-        tag: `chat-${params.bookingId}`,
-        soundPreset: 'bell',
-        data: {
-          type: 'chat_message',
-          bookingId: params.bookingId,
-          senderName: params.senderName
+    // Safe resolution of targetUserId if omitted in UI call parameters
+    if (!targetUserId) {
+      try {
+        const convSnap = await getDoc(convRef);
+        if (convSnap.exists()) {
+          const convData = convSnap.data();
+          targetUserId = isClientSender ? convData?.therapistId : convData?.clientId;
         }
-      })
-    }).catch(e => console.warn('[chatService] Push notify error:', e));
-  } catch (e) {
-    // Non-blocking
+        if (!targetUserId) {
+          const bookingSnap = await getDoc(doc(db, 'reservas', params.bookingId));
+          if (bookingSnap.exists()) {
+            const bData = bookingSnap.data();
+            targetUserId = isClientSender ? (bData?.therapistId || bData?.therapistId2) : bData?.clientId;
+          }
+        }
+      } catch (lookupErr) {
+        console.warn('[chatService] Error al resolver targetUserId de conversación/reserva en Firestore:', lookupErr);
+      }
+    }
+
+    if (targetUserId && typeof targetUserId === 'string' && targetUserId.trim()) {
+      const targetRole = isClientSender ? 'terapeuta' : 'cliente';
+      const recipientTitle = `💬 Mensaje de ${params.senderName}`;
+      const truncatedBody = cleanText.length > 90 ? cleanText.substring(0, 87) + '...' : cleanText;
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        } else {
+          console.warn('[chatService] Usuario no autenticado al obtener token Bearer para Push de chat.');
+        }
+      } catch (authErr) {
+        console.warn('[chatService] Error al obtener token de autenticación para Push de chat:', authErr);
+      }
+
+      try {
+        const pushRes = await fetch('/api/push/send', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            userId: targetUserId,
+            role: targetRole,
+            title: recipientTitle,
+            body: truncatedBody,
+            url: targetRole === 'terapeuta' ? '/terapeuta' : '/cliente',
+            tag: `chat-${params.bookingId}`,
+            soundPreset: 'bell',
+            data: {
+              type: 'chat_message',
+              bookingId: params.bookingId,
+              senderName: params.senderName
+            }
+          })
+        });
+
+        if (!pushRes.ok) {
+          const errorData = await pushRes.json().catch(() => null);
+          console.warn('[chatService] Error del servidor en Push de chat:', pushRes.status, errorData?.error || pushRes.statusText);
+        } else {
+          const pushResult = await pushRes.json().catch(() => null);
+          if (pushResult && !pushResult.success) {
+            console.warn('[chatService] Push de chat no entregado:', pushResult.error);
+          } else {
+            console.log(`[chatService] Push de chat enviado exitosamente a ${targetUserId}`);
+          }
+        }
+      } catch (fetchErr) {
+        console.warn('[chatService] Error de red en enviando Push de chat a /api/push/send:', fetchErr);
+      }
+    } else {
+      console.warn(`[chatService] No se pudo enviar Push de chat: destinatario no especificado y no encontrado para reserva ${params.bookingId}`);
+    }
+  } catch (e: any) {
+    console.warn('[chatService] Error general en flujo secundario de Push de chat:', e?.message || e);
   }
 
   return {

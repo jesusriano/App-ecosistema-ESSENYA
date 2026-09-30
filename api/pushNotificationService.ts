@@ -74,23 +74,10 @@ export async function ensureVapidConfig(db: Firestore): Promise<boolean> {
       }
     }
 
-    // 2. Generate and persist if nothing found or invalid
-    console.warn('[WebPush-Audit] VAPID keys missing or unconfigured. Generating new pair...');
-    const keys = webPush.generateVAPIDKeys();
-    vapidPublicKey = keys.publicKey;
-    vapidPrivateKey = keys.privateKey;
-
-    await configRef.set({
-      publicKey: vapidPublicKey,
-      privateKey: vapidPrivateKey,
-      generatedAt: new Date().toISOString(),
-      subject: vapidSubject
-    });
-
-    webPush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
-    vapidConfigured = true;
-    console.log('[WebPush-Audit] New VAPID keys generated and persisted to Firestore.');
-    return true;
+    // 2. Explicit failure if keys are missing from env and Firestore (DO NOT generate new keys)
+    console.error('[WebPush-Audit] ERROR CRÍTICO VAPID: No se encontraron claves VAPID configuradas en las variables de entorno ni en Firestore (config/vapid).');
+    vapidConfigured = false;
+    return false;
   } catch (err: any) {
     console.error('[WebPush-Audit] Critical error in ensureVapidConfig:', err?.message);
     return false;

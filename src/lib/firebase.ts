@@ -6,7 +6,7 @@ import { getMessaging, isSupported, Messaging } from 'firebase/messaging';
 import appletConfig from '../../firebase-applet-config.json';
 import { vapidKey as configVapidKey, firebaseConfig as fullConfig } from '../firebase-config.js';
 
-export const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY || configVapidKey || "BHEx7m8uEh5G66_S_vknnlbzdyDQ93X4xuNbqcr-KuS5p_r0ycVGo_7bt6HAYCkABoQTFNvspi4pSOb2Nm4gNl8";
+export const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY || configVapidKey || "";
 
 // Single source of truth for Firebase Production Configuration
 const firebaseConfig = {
