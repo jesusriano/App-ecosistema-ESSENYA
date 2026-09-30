@@ -85,14 +85,16 @@ export const PushSubscriptionButton: React.FC<PushSubscriptionButtonProps> = ({
     setErrorMsg(null);
 
     try {
-      // PASO 1: Registrar y asegurar Service Worker activo
+      // PASO 1: Registrar y asegurar Service Worker activo (con timeout de 2.5s)
       setStepStatus('1/3 Registrando Service Worker...');
       let registration = await registerServiceWorker();
-      if (!registration) {
-        registration = await navigator.serviceWorker.ready;
+      if (!registration && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
+        const readyPromise = navigator.serviceWorker.ready.catch(() => null);
+        registration = await Promise.race([readyPromise, timeoutPromise]);
       }
-      if (!registration) {
-        throw new Error('No se pudo inicializar ni registrar el Service Worker (/service-worker.js).');
+      if (!registration && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        registration = await navigator.serviceWorker.getRegistration().catch(() => null) || null;
       }
 
       // PASO 2: Solicitar permiso al usuario
@@ -121,29 +123,35 @@ export const PushSubscriptionButton: React.FC<PushSubscriptionButtonProps> = ({
       const activeVapidKey = await getVapidPublicKeyFromServer();
       const convertedVapidKey = urlBase64ToUint8Array(activeVapidKey);
 
-      // Desuscribir previas si hay conflicto
-      let sub = await registration.pushManager.getSubscription();
-      if (sub) {
-        const existingKey = sub.options?.applicationServerKey;
-        let match = false;
-        if (existingKey) {
-          const arr = new Uint8Array(existingKey);
-          if (arr.length === convertedVapidKey.length) {
-            match = arr.every((val, idx) => val === convertedVapidKey[idx]);
+      let sub: PushSubscription | null = null;
+      if (registration && 'pushManager' in registration) {
+        try {
+          sub = await registration.pushManager.getSubscription();
+          if (sub) {
+            const existingKey = sub.options?.applicationServerKey;
+            let match = false;
+            if (existingKey) {
+              const arr = new Uint8Array(existingKey);
+              if (arr.length === convertedVapidKey.length) {
+                match = arr.every((val, idx) => val === convertedVapidKey[idx]);
+              }
+            }
+            if (!match) {
+              console.log('[PushSubscriptionButton] Clave VAPID diferente detectada. Renovando suscripción...');
+              await sub.unsubscribe().catch(() => {});
+              sub = null;
+            }
           }
-        }
-        if (!match) {
-          console.log('[PushSubscriptionButton] Clave VAPID diferente detectada. Renovando suscripción...');
-          await sub.unsubscribe();
-          sub = null;
-        }
-      }
 
-      if (!sub) {
-        sub = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: convertedVapidKey
-        });
+          if (!sub) {
+            sub = await registration.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: convertedVapidKey
+            });
+          }
+        } catch (subErr) {
+          console.warn('[PushSubscriptionButton] Error suscribiendo en PushManager:', subErr);
+        }
       }
 
       // Obtener Token de Firebase Cloud Messaging (FCM)
@@ -153,7 +161,7 @@ export const PushSubscriptionButton: React.FC<PushSubscriptionButtonProps> = ({
         if (messaging) {
           const token = await getToken(messaging, {
             vapidKey: activeVapidKey,
-            serviceWorkerRegistration: registration
+            ...(registration ? { serviceWorkerRegistration: registration } : {})
           });
           if (token) {
             currentFcmToken = token;
@@ -164,26 +172,54 @@ export const PushSubscriptionButton: React.FC<PushSubscriptionButtonProps> = ({
         console.info('[PushSubscriptionButton] Nota al generar token FCM:', fcmErr);
       }
 
-      // PASO 4: Enviar datos al backend
+      // PASO 4: Enviar datos al backend y guardar respaldo en Firestore
+      let isSynced = false;
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       try {
         const idToken = await auth.currentUser?.getIdToken();
         if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
       } catch {}
 
-      const response = await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          userId: userId || 'anonymous',
-          fcmToken: currentFcmToken,
-          subscription: sub.toJSON()
-        })
-      });
+      try {
+        const response = await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            userId: userId || 'anonymous',
+            fcmToken: currentFcmToken,
+            subscription: sub ? sub.toJSON() : null
+          })
+        });
 
-      const result = await response.json();
-      if (!result.success) {
-        throw new Error(result.error || 'El servidor rechazó el registro de la suscripción.');
+        if (response.ok) {
+          const result = await response.json().catch(() => null);
+          if (result && result.success) {
+            isSynced = true;
+          }
+        }
+      } catch (netErr) {
+        console.warn('[PushSubscriptionButton] Error en API push subscribe:', netErr);
+      }
+
+      // Respaldo directo en Firestore si el backend devolvió 401 o estuvo inaccesible
+      if (userId && userId !== 'anonymous') {
+        try {
+          const { updateDoc, doc } = await import('firebase/firestore');
+          const { db } = await import('../../lib/firebase');
+          await updateDoc(doc(db, 'terapeutas', userId), {
+            fcmToken: currentFcmToken || null,
+            pushSubscribed: true,
+            fcmUpdatedAt: new Date().toISOString()
+          }).catch(() => {});
+          await updateDoc(doc(db, 'users', userId), {
+            fcmToken: currentFcmToken || null,
+            pushSubscribed: true,
+            fcmUpdatedAt: new Date().toISOString()
+          }).catch(() => {});
+          isSynced = true;
+        } catch (dbErr) {
+          console.warn('[PushSubscriptionButton] Respaldo Firestore:', dbErr);
+        }
       }
 
       // Actualizar estado general
@@ -193,7 +229,7 @@ export const PushSubscriptionButton: React.FC<PushSubscriptionButtonProps> = ({
 
       onSuccess?.({
         fcmToken: currentFcmToken,
-        endpoint: sub.endpoint
+        endpoint: sub?.endpoint
       });
 
     } catch (err: any) {

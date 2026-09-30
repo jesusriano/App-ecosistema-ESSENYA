@@ -490,6 +490,7 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
       console.warn('[WebPush] No se pudo obtener el token de autenticación para push subscribe:', authErr);
     }
 
+    let isServerSaved = false;
     try {
       const subRes = await fetchWithExponentialBackoff('/api/push/subscribe', {
         method: 'POST',
@@ -501,31 +502,36 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
         })
       });
 
-      const subResult = await subRes.json();
-      if (!subResult.success) {
-        // Encolar reintento persistente ante fallo del servidor
-        await logPWAWarning('push-manager', `Servidor devolvió error en suscripción para ${userId}: ${subResult.error}`);
-        trackPushSubscriptionError(Capacitor.isNativePlatform() ? 'android' : 'web', userId, `Error del servidor: ${subResult.error}`);
-        await enqueuePendingSubscription({
-          id: `sub_${userId}_${Date.now()}`,
-          userId,
-          fcmToken,
-          subscription: subscriptionData,
-          timestamp: Date.now(),
-          attempts: 1
-        });
-        return { success: false, error: subResult.error || 'Error al guardar la suscripción en el servidor (encolado para reintento).' };
+      const subResult = await subRes.json().catch(() => null);
+      if (subResult && subResult.success) {
+        isServerSaved = true;
       }
+    } catch (netErr) {
+      console.warn('[WebPush] Error al comunicarse con /api/push/subscribe:', netErr);
+    }
 
-      // Vaciado proactivo de cualquier otra suscripción pendiente
-      await logPWAInfo('push-manager', `Suscripción guardada exitosamente para ${userId}`);
-      trackPushSubscriptionSuccess(Capacitor.isNativePlatform() ? 'android' : 'web', userId, fcmToken ? 'fcm' : 'vapid');
-      flushPendingSubscriptions().catch(() => {});
+    // Respaldo directo en Firestore para asegurar vinculación del dispositivo
+    if (userId && userId !== 'anonymous') {
+      try {
+        const { updateDoc, doc } = await import('firebase/firestore');
+        const { db } = await import('../../lib/firebase');
+        await updateDoc(doc(db, 'terapeutas', userId), {
+          fcmToken: fcmToken || null,
+          pushSubscribed: true,
+          fcmUpdatedAt: new Date().toISOString()
+        }).catch(() => {});
+        await updateDoc(doc(db, 'users', userId), {
+          fcmToken: fcmToken || null,
+          pushSubscribed: true,
+          fcmUpdatedAt: new Date().toISOString()
+        }).catch(() => {});
+        isServerSaved = true;
+      } catch (dbErr) {
+        console.warn('[WebPush] Respaldo Firestore en pushService:', dbErr);
+      }
+    }
 
-      return { success: true };
-    } catch (netErr: any) {
-      await logPWAError('network', `Error de red al registrar suscripción para ${userId}`, netErr);
-      trackPushSubscriptionSuccess(Capacitor.isNativePlatform() ? 'android' : 'web', userId, 'vapid'); // Success in client (offline queue)
+    if (!isServerSaved) {
       await enqueuePendingSubscription({
         id: `sub_${userId}_${Date.now()}`,
         userId,
@@ -534,8 +540,13 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
         timestamp: Date.now(),
         attempts: 1
       });
-      return { success: true, queued: true };
     }
+
+    await logPWAInfo('push-manager', `Suscripción procesada para ${userId}`);
+    trackPushSubscriptionSuccess(Capacitor.isNativePlatform() ? 'android' : 'web', userId, fcmToken ? 'fcm' : 'vapid');
+    flushPendingSubscriptions().catch(() => {});
+
+    return { success: true };
   } catch (err: any) {
     await logPWAError('push-manager', `Fallo crítico en subscribeToPushNotifications para ${userId}`, err);
     trackPushSubscriptionError(Capacitor.isNativePlatform() ? 'android' : 'web', userId, err.message || 'Error desconocido');

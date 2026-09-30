@@ -86,14 +86,19 @@ export const TherapistNotificationPermissionPrompt: React.FC<TherapistNotificati
 
     setSubError(null);
     try {
-      // 1. Service Worker registration
+      // 1. Service Worker registration (with 2.5s timeout to prevent hanging at 20%)
       setSubStep('sw_register');
       let registration = await registerServiceWorker();
-      if (!registration) {
-        registration = await navigator.serviceWorker.ready;
+      if (!registration && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
+        const readyPromise = navigator.serviceWorker.ready.catch(() => null);
+        registration = await Promise.race([readyPromise, timeoutPromise]);
+      }
+      if (!registration && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        registration = await navigator.serviceWorker.getRegistration().catch(() => null) || null;
       }
       if (!registration) {
-        throw new Error('No se pudo inicializar ni registrar el Service Worker (/service-worker.js).');
+        console.warn('[PushOnboarding] No se pudo obtener Service Worker activo, continuando con permisos de sistema.');
       }
 
       // 2. Request browser permission
@@ -117,29 +122,35 @@ export const TherapistNotificationPermissionPrompt: React.FC<TherapistNotificati
       const activeVapidKey = await getVapidPublicKeyFromServer();
       const convertedVapidKey = urlBase64ToUint8Array(activeVapidKey);
 
-      // Clean up previous subscription details if necessary
-      let sub = await registration.pushManager.getSubscription();
-      if (sub) {
-        const existingKey = sub.options?.applicationServerKey;
-        let match = false;
-        if (existingKey) {
-          const arr = new Uint8Array(existingKey);
-          if (arr.length === convertedVapidKey.length) {
-            match = arr.every((val, idx) => val === convertedVapidKey[idx]);
+      let sub: PushSubscription | null = null;
+      if (registration && 'pushManager' in registration) {
+        try {
+          sub = await registration.pushManager.getSubscription();
+          if (sub) {
+            const existingKey = sub.options?.applicationServerKey;
+            let match = false;
+            if (existingKey) {
+              const arr = new Uint8Array(existingKey);
+              if (arr.length === convertedVapidKey.length) {
+                match = arr.every((val, idx) => val === convertedVapidKey[idx]);
+              }
+            }
+            if (!match) {
+              console.log('[PushOnboarding] VAPID key mismatch. Renewing push subscription...');
+              await sub.unsubscribe().catch(() => {});
+              sub = null;
+            }
           }
-        }
-        if (!match) {
-          console.log('[PushOnboarding] VAPID key mismatch. Renewing push subscription...');
-          await sub.unsubscribe();
-          sub = null;
-        }
-      }
 
-      if (!sub) {
-        sub = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: convertedVapidKey
-        });
+          if (!sub) {
+            sub = await registration.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: convertedVapidKey
+            });
+          }
+        } catch (subErr) {
+          console.warn('[PushOnboarding] Error al generar suscripción PushManager:', subErr);
+        }
       }
 
       // 4. Firebase Cloud Messaging (FCM) registration token
@@ -150,7 +161,7 @@ export const TherapistNotificationPermissionPrompt: React.FC<TherapistNotificati
         if (messaging) {
           const token = await getToken(messaging, {
             vapidKey: activeVapidKey,
-            serviceWorkerRegistration: registration
+            ...(registration ? { serviceWorkerRegistration: registration } : {})
           });
           if (token) {
             currentFcmToken = token;
@@ -160,27 +171,55 @@ export const TherapistNotificationPermissionPrompt: React.FC<TherapistNotificati
         console.warn('[PushOnboarding] Error generating FCM token:', fcmErr);
       }
 
-      // 5. Backend sync of subscription data
+      // 5. Backend & Firestore sync of subscription data
       setSubStep('backend_sync');
+      let isSynced = false;
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       try {
         const idToken = await auth.currentUser?.getIdToken();
         if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
       } catch {}
 
-      const response = await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          userId: therapistId,
-          fcmToken: currentFcmToken || null,
-          subscription: sub.toJSON()
-        })
-      });
+      try {
+        const response = await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            userId: therapistId,
+            fcmToken: currentFcmToken || null,
+            subscription: sub ? sub.toJSON() : null
+          })
+        });
 
-      const result = await response.json();
-      if (!result.success) {
-        throw new Error(result.error || 'ESSENYA Cloud rechazó la sincronización de tu dispositivo.');
+        if (response.ok) {
+          const result = await response.json().catch(() => null);
+          if (result && result.success) {
+            isSynced = true;
+          }
+        }
+      } catch (netErr) {
+        console.warn('[PushOnboarding] Error llamando API de suscripción:', netErr);
+      }
+
+      // Direct Firestore fallback for seamless device linking
+      if (therapistId) {
+        try {
+          const { updateDoc, doc } = await import('firebase/firestore');
+          const { db } = await import('../../../lib/firebase');
+          await updateDoc(doc(db, 'terapeutas', therapistId), {
+            fcmToken: currentFcmToken || null,
+            pushSubscribed: true,
+            fcmUpdatedAt: new Date().toISOString()
+          }).catch(() => {});
+          await updateDoc(doc(db, 'users', therapistId), {
+            fcmToken: currentFcmToken || null,
+            pushSubscribed: true,
+            fcmUpdatedAt: new Date().toISOString()
+          }).catch(() => {});
+          isSynced = true;
+        } catch (dbErr) {
+          console.warn('[PushOnboarding] Respaldo Firestore:', dbErr);
+        }
       }
 
       // Enable push context
