@@ -3,7 +3,7 @@
  * Web Push Certificate Key Pair (VAPID)
  */
 
-const vapidKey = "BHEx7m8uEh5G66_S_vknnlbzdyDQ93X4xuNbqcr-KuS5p_r0ycVGo_7bt6HAYCkABoQTFNvspi4pSOb2Nm4gNl8";
+const vapidKey = "BDEoPYVIWr6y69eA98bjgPGLyKJSxhut4tp_rr0AuZOBlRoe9zY92NwmKSpKCKWI2nJY45ET5Z_YJkETbaxu6PE";
 
 const firebaseConfig = {
   projectId: "essenya-ecosistema",

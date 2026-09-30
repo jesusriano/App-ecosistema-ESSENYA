@@ -5,7 +5,7 @@
 
 import appletConfig from '../firebase-applet-config.json';
 
-export const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY || "";
+export const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY || "BDEoPYVIWr6y69eA98bjgPGLyKJSxhut4tp_rr0AuZOBlRoe9zY92NwmKSpKCKWI2nJY45ET5Z_YJkETbaxu6PE";
 
 export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || appletConfig.apiKey,
@@ -15,7 +15,7 @@ export const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || appletConfig.messagingSenderId,
   appId: import.meta.env.VITE_FIREBASE_APP_ID || appletConfig.appId,
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || appletConfig.measurementId || "",
-  vapidKey: import.meta.env.VITE_VAPID_PUBLIC_KEY || ""
+  vapidKey: import.meta.env.VITE_VAPID_PUBLIC_KEY || "BDEoPYVIWr6y69eA98bjgPGLyKJSxhut4tp_rr0AuZOBlRoe9zY92NwmKSpKCKWI2nJY45ET5Z_YJkETbaxu6PE"
 };
 
 export default firebaseConfig;

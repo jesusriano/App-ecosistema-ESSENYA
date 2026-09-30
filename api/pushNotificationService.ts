@@ -34,8 +34,8 @@ function isValidVapidKey(key: string | undefined, minLength: number): boolean {
   return clean.length >= minLength;
 }
 
-// Initialize VAPID Keys exclusively from environment variables for production security
-let rawPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY;
+// Initialize VAPID Keys exclusively from environment variables or official Firebase Console key
+let rawPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY || "BDEoPYVIWr6y69eA98bjgPGLyKJSxhut4tp_rr0AuZOBlRoe9zY92NwmKSpKCKWI2nJY45ET5Z_YJkETbaxu6PE";
 let rawPrivateKey = process.env.VAPID_PRIVATE_KEY;
 
 let vapidPublicKey = isValidVapidKey(rawPublicKey, 80) ? sanitizeVapidKey(rawPublicKey!) : undefined;
