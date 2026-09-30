@@ -167,7 +167,8 @@ service cloud.firestore {
     
     match /terapeutas_publicos/{terapeutaId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow update: if (isOwner(terapeutaId) || isAdmin()) && isValidId(terapeutaId);
+      allow create, delete: if isAdmin();
     }
 
     // ========================================================
