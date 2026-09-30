@@ -151,6 +151,44 @@ export const ServiciosPage: React.FC = () => {
         </div>
       </div>
 
+      {therapist?.notificacionAprobacion && (
+        <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/15 to-emerald-500/10 border-2 border-emerald-500/40 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-500 flex items-center justify-center font-bold shrink-0 shadow-sm">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-emerald-500/30 uppercase tracking-widest">
+                  ¡Acreditación Aprobada!
+                </span>
+              </div>
+              <h4 className="text-sm font-serif font-bold text-[#1C1917] dark:text-white mt-1">
+                🎉 ¡Fuiste aceptada por Administración!
+              </h4>
+              <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] mt-0.5">
+                Tu expediente ha sido validado exitosamente. Ya tienes acceso completo a las alertas de servicio a domicilio.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={async () => {
+              try {
+                const { updateDoc, doc } = await import('firebase/firestore');
+                const { db } = await import('../../../lib/firebase');
+                if (therapist?.id) {
+                  await updateDoc(doc(db, 'terapeutas', therapist.id), { notificacionAprobacion: false }).catch(() => {});
+                  await updateDoc(doc(db, 'users', therapist.id), { notificacionAprobacion: false }).catch(() => {});
+                }
+              } catch {}
+            }}
+            className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-4 py-2 rounded-xl transition-all shadow-sm cursor-pointer shrink-0 self-end sm:self-center"
+          >
+            Entendido
+          </button>
+        </div>
+      )}
+
       <AnimatePresence mode="wait">
         {activeTab === 'citas' ? (
           <motion.div

@@ -418,9 +418,67 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
       }
     }
 
-    // Check if therapist is pending approval or rejected
+    // Check if therapist is approved with unacknowledged notice, pending approval, or rejected
     if (role === 'terapeuta') {
       const therapistStatus = currentUser.estado || currentUser.therapistProfile?.estado;
+
+      // Acceptance Celebration Notice
+      if (therapistStatus === 'activo' && currentUser.notificacionAprobacion === true) {
+        return (
+          <div className="min-h-[85vh] flex items-center justify-center p-4 bg-[#FAF8F5] dark:bg-[#0D0D0D]">
+            <div className="w-full max-w-lg bg-white dark:bg-[#141414] border-2 border-[#C9A55B] rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 text-center relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-[#C9A55B] via-[#DFBF7A] to-[#806020]" />
+              <div className="w-20 h-20 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/10">
+                <CheckCircle2 className="w-10 h-10 animate-bounce" />
+              </div>
+
+              <div className="space-y-3">
+                <span className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-xs font-extrabold px-3.5 py-1 rounded-full border border-emerald-500/30 uppercase tracking-widest">
+                  🎉 ¡Solicitud Aprobada por Administración!
+                </span>
+                <h2 className="text-2xl font-serif font-bold text-[#1C1917] dark:text-white pt-1">
+                  ¡Fuiste Aceptada, Ingresa!
+                </h2>
+                <p className="text-sm text-[#6B655F] dark:text-[#AAAAAA] leading-relaxed max-w-md mx-auto">
+                  Tu perfil profesional y expediente han sido evaluados y aprobados con éxito por el Comité Administrativo de <strong>ESSENYA VIP</strong>.
+                </p>
+              </div>
+
+              <div className="bg-[#FAF8F5] dark:bg-[#1A1A1A] p-4 rounded-2xl border border-[#C9A55B]/30 text-left text-xs space-y-2">
+                <p className="font-bold text-[#1C1917] dark:text-white flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-[#C9A55B]" />
+                  <span>Resumen de Acreditación Oficial:</span>
+                </p>
+                <p className="text-[#6B655F] dark:text-[#AAAAAA]"><strong>Especialista:</strong> {currentUser.nombre} {currentUser.apellidos}</p>
+                <p className="text-[#6B655F] dark:text-[#AAAAAA]"><strong>Estado de Cuenta:</strong> <span className="text-emerald-600 dark:text-emerald-400 font-bold uppercase">Activa & Verificada</span></p>
+                <p className="text-[#6B655F] dark:text-[#AAAAAA]"><strong>Portal Profesional:</strong> Habilitado para gestión de agenda y citas</p>
+              </div>
+
+              <div className="pt-2 flex flex-col items-center space-y-3">
+                <button
+                  onClick={async () => {
+                    const uid = currentUser.id || currentUser.uid;
+                    if (uid) {
+                      try {
+                        const { updateDoc, doc } = await import('firebase/firestore');
+                        const { db } = await import('../../../lib/firebase');
+                        await updateDoc(doc(db, 'terapeutas', uid), { notificacionAprobacion: false }).catch(() => {});
+                        await updateDoc(doc(db, 'users', uid), { notificacionAprobacion: false }).catch(() => {});
+                      } catch {}
+                    }
+                    navigate('/terapeuta', { replace: true });
+                  }}
+                  className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-[#C9A55B] via-[#DFBF7A] to-[#806020] text-black font-extrabold text-sm hover:brightness-110 transition-all shadow-xl shadow-[#C9A55B]/20 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>Ingresar a mi Portal Profesional</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
       if (therapistStatus === 'pendiente') {
         return (
           <div className="min-h-[85vh] flex items-center justify-center p-4 bg-[#FAF8F5] dark:bg-[#0D0D0D]">

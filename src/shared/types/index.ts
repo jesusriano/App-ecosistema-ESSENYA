@@ -66,6 +66,8 @@ export interface Therapist {
   estado?: 'activo' | 'bloqueado' | 'pendiente';
   specialties?: string[];
   completedServicesCount?: number;
+  notificacionAprobacion?: boolean;
+  fechaAprobacion?: string;
 }
 
 export interface ClientUser {

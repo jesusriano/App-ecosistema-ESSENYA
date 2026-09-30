@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { doc, setDoc, getDoc, updateDoc, collection, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, collection, deleteDoc, onSnapshot, addDoc } from 'firebase/firestore';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { db, auth } from '../../lib/firebase';
 import { TherapistFullProfile, TherapistDocument, DocumentStatus, AccountStatus } from '../types/auth';
@@ -921,6 +921,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       fechaActualizacion: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       ...(status === 'activo' ? {
+        notificacionAprobacion: true,
         fechaAprobacion: new Date().toISOString(),
         aprobadoPor: auth.currentUser?.email || 'admin@essenya.mx',
         estadoVerificacion: 'verificado'
@@ -935,6 +936,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
           isActive: status === 'activo',
           fechaActualizacion: new Date().toISOString(),
           ...(status === 'activo' ? {
+            notificacionAprobacion: true,
             fechaAprobacion: new Date().toISOString(),
             aprobadoPor: auth.currentUser?.email || 'admin@essenya.mx'
           } : {})
@@ -942,6 +944,17 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       } catch {}
 
       if (status === 'activo') {
+        try {
+          await addDoc(collection(db, 'notificaciones'), {
+            userId: id,
+            terapeutaId: id,
+            title: '🎉 ¡Fuiste Aceptada por Administración!',
+            description: '¡Felicidades! Tu cuenta ha sido aprobada e incorporada a la red oficial de terapeutas ESSENYA VIP. Ingresa a tu portal profesional.',
+            eventType: 'therapist.approved',
+            timestamp: new Date().toISOString(),
+            read: false
+          });
+        } catch {}
         const publicPayload = {
           id: target.id,
           name: `${target.nombre} ${target.apellidos || ''}`.trim(),

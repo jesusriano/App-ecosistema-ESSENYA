@@ -75,6 +75,8 @@ export interface TherapistFullProfile {
   fechaAlta: string;
   ultimoAcceso: string;
   fechaActualizacion: string;
+  notificacionAprobacion?: boolean;
+  fechaAprobacion?: string;
 }
 
 export interface UserAuthProfile {
@@ -94,6 +96,8 @@ export interface UserAuthProfile {
   biografia?: string;
   fechaActualizacion: string; // ISO date string
   mustChangePassword?: boolean; // First login password reset flag
+  notificacionAprobacion?: boolean;
+  fechaAprobacion?: string;
   therapistProfile?: TherapistFullProfile;
   membershipTier?: string;
   motivoRechazoAccount?: string;
