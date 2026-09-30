@@ -94,45 +94,73 @@ export const PerfilPage: React.FC = () => {
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    const targetId = firebaseUser?.uid || authUser?.id || client?.id;
+    if (!file || !targetId) return;
 
-    if (file.size > 8 * 1024 * 1024) {
-      showToast('Error de tamaño', 'La imagen supera el límite de 8MB.', 'error');
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('Error de tamaño', 'La imagen supera el límite de 10MB.', 'error');
       return;
     }
 
     if (!file.type.startsWith('image/')) {
-      showToast('Formato inválido', 'Por favor selecciona un archivo de imagen válido (JPG, PNG, WebP).', 'error');
+      showToast('Formato inválido', 'Por favor selecciona un archivo de imagen válido.', 'error');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const dataUrl = event.target?.result as string;
-      if (dataUrl && client?.id) {
-        try {
-          setClientPhoto(dataUrl);
-          // Persist to Firestore directly (100% Secure)
-          const { doc, setDoc } = await import('firebase/firestore');
-          const { db } = await import('../../../lib/firebase');
-          const clientRef = doc(db, 'clientes', client.id);
-          await setDoc(clientRef, {
-            id: client.id,
-            name: client.name || 'Socio VIP',
-            email: client.email || authUser?.correo || '',
-            membershipTier: client.membershipTier || 'Platino',
-            photo: dataUrl,
-            updatedAt: new Date().toISOString()
-          }, { merge: true });
-          
-          showToast('Foto de Perfil Actualizada', 'Tu fotografía de socio VIP se ha guardado exitosamente en el servidor.', 'success');
-        } catch (error) {
-          console.error('Error updating photo in Firestore:', error);
-          showToast('Error al guardar foto', 'No se pudo guardar la foto en el servidor.', 'error');
-        }
-      }
-    };
-    reader.readAsDataURL(file);
+    // Inform user that processing is happening
+    showToast('Subiendo fotografía', 'Procesando y guardando tu imagen en el servidor seguro...', 'info');
+
+    try {
+      // Use dynamic imports to keep initial bundle small
+      const { ref, uploadBytesResumable, getDownloadURL } = await import('firebase/storage');
+      const { storage, db } = await import('../../../lib/firebase');
+      const { doc, setDoc } = await import('firebase/firestore');
+
+      // 1. Prepare Storage path and metadata
+      // Normalize extension to .jpg if it's jpeg or other compatible
+      const fileExt = file.type === 'image/png' ? 'png' : 'jpg';
+      const storagePath = `clientes/${targetId}/foto_perfil.${fileExt}`;
+      const storageRef = ref(storage, storagePath);
+      
+      // Force content type to match rules (only jpeg and png are allowed in storage.rules)
+      const contentType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      const metadata = { contentType };
+
+      // 2. Upload to Firebase Storage
+      const uploadTask = uploadBytesResumable(storageRef, file, metadata);
+      
+      await new Promise<void>((resolve, reject) => {
+        uploadTask.on(
+          'state_changed', 
+          null, 
+          (error) => {
+            console.error('Storage upload error:', error);
+            reject(error);
+          }, 
+          () => resolve()
+        );
+      });
+
+      // 3. Get download URL
+      const downloadUrl = await getDownloadURL(storageRef);
+      setClientPhoto(downloadUrl);
+
+      // 4. Update Firestore with the URL (NOT the Data URL)
+      const clientRef = doc(db, 'clientes', targetId);
+      await setDoc(clientRef, {
+        id: targetId,
+        photo: downloadUrl,
+        fotografia: downloadUrl, // Sync with both potential field names
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      
+      showToast('Foto Actualizada', 'Tu fotografía de socio VIP se ha guardado exitosamente.', 'success');
+    } catch (error: any) {
+      console.error('Error updating client photo:', error);
+      let msg = 'No se pudo guardar la foto.';
+      if (error.code === 'storage/unauthorized') msg = 'Error de permisos en el servidor.';
+      showToast('Error al guardar', msg, 'error');
+    }
   };
 
   const getTierIcon = () => {

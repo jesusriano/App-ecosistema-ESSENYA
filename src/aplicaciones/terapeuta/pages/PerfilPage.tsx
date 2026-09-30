@@ -259,7 +259,8 @@ export const PerfilPage: React.FC = () => {
 
       const storagePath = `terapeutas/${activeTherapist.id}/perfil/foto-perfil.jpg`;
       const storageRef = ref(storage, storagePath);
-      const uploadTask = uploadBytesResumable(storageRef, blob);
+      const metadata = { contentType: 'image/jpeg' };
+      const uploadTask = uploadBytesResumable(storageRef, blob, metadata);
 
       await new Promise<void>((resolve, reject) => {
         uploadTask.on(
