@@ -77,7 +77,9 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
   // Lockout banner countdown
   const [lockoutTimer, setLockoutTimer] = useState<number>(0);
 
-  const currentUser = getUser(role);
+  // 1. Resolve active user session across ALL roles (Priority: Administrador > Terapeuta > Cliente)
+  const activeProfile = sessions.administrador || sessions.terapeuta || sessions.cliente;
+  const currentUser = activeProfile;
 
   // Role names in Spanish for display
   const roleDisplayNames: Record<UserRole, string> = {
@@ -316,8 +318,6 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
     }
     // Security check: ensure user role matches expected portal role - automatically redirect instead of showing error card
     if (currentUser.rol && currentUser.rol !== role && rolePaths[currentUser.rol as UserRole]) {
-      const targetPath = rolePaths[currentUser.rol as UserRole];
-      navigate(targetPath, { replace: true });
       return (
         <div className="min-h-[85vh] flex items-center justify-center p-4 bg-[#FAF8F5] dark:bg-[#0D0D0D]">
           <div className="w-full max-w-md bg-white dark:bg-[#141414] border border-[#C9A55B]/40 rounded-3xl p-8 shadow-2xl text-center space-y-4">

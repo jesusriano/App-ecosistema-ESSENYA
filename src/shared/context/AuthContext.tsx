@@ -252,6 +252,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             const role = profile.rol;
             setSessions(prev => ({ ...prev, [role]: profile }));
+
+            // Automatic Capacitor Native / PWA Push Notification registration in auth flow
+            import('../services/nativePushService').then(({ registerNativePushToken }) => {
+              registerNativePushToken(firebaseUser.uid, profile.rol).catch(pushErr => {
+                console.warn('[AuthContext] Intento de registro push nativo:', pushErr);
+              });
+            });
           }
 
           // 5. Realtime listener on current user document to reflect immediate Admin approvals/rejections
@@ -755,6 +762,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Logout Handler
   const logout = async (role: UserRole): Promise<void> => {
+    const activeUid = sessions[role]?.id || sessions[role]?.uid || auth.currentUser?.uid;
+    if (activeUid) {
+      import('../services/nativePushService').then(({ unregisterNativePushToken }) => {
+        unregisterNativePushToken(activeUid).catch(() => {});
+      });
+    }
     try {
       await signOut(auth);
     } catch {}

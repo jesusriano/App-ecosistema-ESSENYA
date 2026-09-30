@@ -12,7 +12,6 @@ import { PortalAuthGuard } from './shared/components/auth/PortalAuthGuard';
 import { ThemeToggle } from './shared/components/ThemeToggle';
 import { Header } from './shared/components/Header';
 import { PortalType } from './shared/types';
-import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
@@ -51,7 +50,7 @@ function MainAppContent() {
     setCurrentPortal,
   } = useEcosystem();
 
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, getUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -68,82 +67,34 @@ function MainAppContent() {
   const { unreadCount, handleIncomingPush } = usePush();
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = React.useState(false);
 
-  // Initialize Capacitor Push Notifications and save device push token to Firestore
+  const activeProfile = getUser('cliente') || getUser('terapeuta') || getUser('administrador');
+
+  // Initialize Capacitor Native Push Notifications via nativePushService
   React.useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
-    
-    let isMounted = true;
-    let registrationListener: any = null;
-    let errorListener: any = null;
-    let pushReceivedListener: any = null;
-    let actionListener: any = null;
+    if (!Capacitor.isNativePlatform() || !firebaseUser?.uid) return;
 
-    const initPushNotifications = async () => {
-      try {
-        const permStatus = await PushNotifications.requestPermissions();
-        if (permStatus.receive === 'granted') {
-          await PushNotifications.register();
-        }
-
-        if (!isMounted) return;
-
-        registrationListener = await PushNotifications.addListener('registration', async (token) => {
-          console.log('[PushNotifications] Registration success, device token:', token.value);
-          if (firebaseUser?.uid) {
-            try {
-              const therapistRef = doc(db, 'terapeutas', firebaseUser.uid);
-              await setDoc(therapistRef, {
-                pushToken: token.value,
-                fcmToken: token.value,
-                fechaActualizacion: new Date().toISOString()
-              }, { merge: true });
-
-              const userRef = doc(db, 'users', firebaseUser.uid);
-              await setDoc(userRef, {
-                pushToken: token.value,
-                fcmToken: token.value,
-                fechaActualizacion: new Date().toISOString()
-              }, { merge: true });
-
-              console.log('[PushNotifications] Push token successfully saved to Firestore for user/therapist:', firebaseUser.uid);
-            } catch (firestoreErr) {
-              console.error('[PushNotifications] Error saving push token to Firestore:', firestoreErr);
-            }
-          }
-        });
-
-        errorListener = await PushNotifications.addListener('registrationError', (error: any) => {
-          console.error('[PushNotifications] Error on registration: ', error);
-        });
-
-        pushReceivedListener = await PushNotifications.addListener('pushNotificationReceived', (notification) => {
-          console.log('[PushNotifications] Push notification received (incoming service request): ', notification);
-          // Process notification through unified handler for sound and in-app display
+    import('./shared/services/nativePushService').then(({ registerNativePushToken }) => {
+      registerNativePushToken(firebaseUser.uid, activeProfile?.rol || 'cliente', {
+        onNotificationReceived: (notification) => {
+          console.log('[App] Push nativo recibido:', notification);
           handleIncomingPush(notification);
-        });
-
-        actionListener = await PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
-          console.log('[PushNotifications] Push action performed: ', notification);
-          const bookingId = notification.notification.data?.bookingId;
+        },
+        onActionPerformed: (action) => {
+          console.log('[App] Acción de push realizada:', action);
+          const bookingId = action.notification?.data?.bookingId;
           if (bookingId) {
             navigate(`/terapeuta/servicios?bookingId=${bookingId}`);
           }
-        });
-      } catch (e) {
-        console.warn('[PushNotifications] Push notifications not supported in current browser environment:', e);
-      }
-    };
-
-    initPushNotifications();
+        }
+      });
+    });
 
     return () => {
-      isMounted = false;
-      registrationListener?.remove();
-      errorListener?.remove();
-      pushReceivedListener?.remove();
-      actionListener?.remove();
+      import('./shared/services/nativePushService').then(({ removeNativePushListeners }) => {
+        removeNativePushListeners().catch(() => {});
+      });
     };
-  }, [firebaseUser?.uid, handleIncomingPush, navigate]);
+  }, [firebaseUser?.uid, activeProfile?.rol, handleIncomingPush, navigate]);
 
   // Web Push Notifications: Inicialización automática de Service Worker, permiso y suscripción con clave VAPID
   React.useEffect(() => {

@@ -56,10 +56,39 @@ export async function getFirebaseRegistrationToken(userId?: string): Promise<Fir
     const { getVapidPublicKeyFromServer } = await import('../services/pushService');
     const activeVapidKey = await getVapidPublicKeyFromServer();
 
-    const currentToken = await getToken(messaging, {
-      vapidKey: activeVapidKey,
-      serviceWorkerRegistration: swRegistration || undefined
-    });
+    // Sincronizar token de autenticación de usuario de Firebase si existe
+    if (auth.currentUser) {
+      try {
+        await auth.currentUser.getIdToken(/* forceRefresh */ false);
+      } catch (authErr) {
+        console.warn('[FCM] Usuario sin token de autenticación activo antes de FCM:', authErr);
+      }
+    }
+
+    let currentToken: string | undefined = undefined;
+
+    try {
+      currentToken = await getToken(messaging, {
+        vapidKey: activeVapidKey,
+        serviceWorkerRegistration: swRegistration || undefined
+      });
+    } catch (tokenErr: any) {
+      console.warn('[FCM] Intento de token VAPID servidor:', tokenErr?.message || tokenErr);
+      
+      // Si falla por token-subscribe-failed, reintentar con la clave VAPID por defecto del cliente
+      if (tokenErr?.code === 'messaging/token-subscribe-failed' || tokenErr?.message?.includes('token-subscribe-failed')) {
+        try {
+          if (vapidKey && vapidKey !== activeVapidKey) {
+            currentToken = await getToken(messaging, {
+              vapidKey: vapidKey,
+              serviceWorkerRegistration: swRegistration || undefined
+            });
+          }
+        } catch (retryErr: any) {
+          console.warn('[FCM] Reintento con clave VAPID por defecto:', retryErr?.message || retryErr);
+        }
+      }
+    }
 
     if (currentToken) {
       // 5. Mostrar en consola con formato destacado para copiar
@@ -99,13 +128,18 @@ export async function getFirebaseRegistrationToken(userId?: string): Promise<Fir
 
       return { success: true, token: currentToken };
     } else {
-      const err = 'No se pudo generar el token de registro de Firebase. Revisa los permisos y el service worker.';
-      console.warn('[FCM]', err);
+      const err = 'No se pudo generar el token de registro de Firebase. Se utilizará la suscripción Web Push nativa del navegador.';
+      console.info('[FCM]', err);
       return { success: false, error: err };
     }
   } catch (error: any) {
-    console.error('🔥 Error al obtener el token de registro de Firebase:', error);
-    return { success: false, error: error?.message || 'Error desconocido al obtener token.' };
+    const isSubscribeFailed = error?.code === 'messaging/token-subscribe-failed' || error?.message?.includes('token-subscribe-failed');
+    if (isSubscribeFailed) {
+      console.warn('[FCM] Suscripción de token FCM directa omitida (usando Web Push estándar del Service Worker):', error?.message || error);
+    } else {
+      console.warn('[FCM] Nota al obtener el token de registro de Firebase:', error?.message || error);
+    }
+    return { success: false, error: error?.message || 'Error al obtener token de registro de Firebase.' };
   }
 }
 

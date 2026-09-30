@@ -47,7 +47,7 @@ import { CancelBookingModal } from '../components/CancelBookingModal';
 import { checkRescheduleEligibility, checkCancellationEligibility } from '../../../shared/data/scheduling';
 import { verifyStripeFrontendConfig } from '../../../shared/utils/stripeCheck';
 import { useEcosystem } from '../../../shared/context/EcosystemContext';
-import { auth } from '../../../lib/firebase';
+import { auth, db, storage } from '../../../lib/firebase';
 
 
 interface ClientAppProps {
@@ -260,7 +260,6 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
     try {
       const { ref, uploadBytesResumable, getDownloadURL } = await import('firebase/storage');
-      const { storage, db } = await import('../../../lib/firebase');
       const { doc, setDoc } = await import('firebase/firestore');
 
       const fileExt = file.type === 'image/png' ? 'png' : 'jpg';
@@ -467,7 +466,6 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     // Secondary check for VIP15 (Courtesy) usage in Firestore
     if (result.type === 'VIP15' && client?.id) {
       const { getDoc, doc } = await import('firebase/firestore');
-      const { db } = await import('../../../lib/firebase');
       const clientSnap = await getDoc(doc(db, 'clientes', client.id));
       if (clientSnap.exists() && clientSnap.data().courtesyUsed) {
         showToast('Beneficio Ya Utilizado', 'Esta cortesía única de nivel Diamond ya ha sido aplicada anteriormente.', 'error');

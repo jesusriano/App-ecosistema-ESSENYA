@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useCliente } from '../hooks/useCliente';
 import { useAuth } from '../../../shared/context/AuthContext';
+import { db, storage } from '../../../lib/firebase';
 import { useToast } from '../../../context/ToastContext';
 import { calculateMembershipTier, getCompletedAndPaidBookings } from '../services/membershipService';
 import { NotificationSoundSettings } from '../../../shared/components/NotificationSoundSettings';
@@ -75,7 +76,6 @@ export const PerfilPage: React.FC = () => {
     setSavingAddress(true);
     try {
       const { doc, setDoc } = await import('firebase/firestore');
-      const { db } = await import('../../../lib/firebase');
       const clientRef = doc(db, 'clientes', targetId);
       await setDoc(clientRef, {
         id: targetId,
@@ -117,7 +117,6 @@ export const PerfilPage: React.FC = () => {
     try {
       // Use dynamic imports to keep initial bundle small
       const { ref, uploadBytesResumable, getDownloadURL } = await import('firebase/storage');
-      const { storage, db } = await import('../../../lib/firebase');
       const { doc, setDoc } = await import('firebase/firestore');
 
       const targetId = firebaseUser?.uid || authUser?.id || client?.id;
