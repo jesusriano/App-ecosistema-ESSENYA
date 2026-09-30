@@ -13,6 +13,7 @@ import { PushSettingsCard } from '../../../shared/components/PushSettingsCard';
 import { COMPREHENSIVE_ZONES } from '../../../shared/constants/zones';
 import { ClientPoliciesModal } from '../../../shared/components/ClientPoliciesModal';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
+import { validateProfilePhoto } from '../../../shared/utils/fileValidation';
 
 export const PerfilPage: React.FC = () => {
   const { client, bookings } = useCliente();
@@ -97,13 +98,9 @@ export const PerfilPage: React.FC = () => {
     const targetId = firebaseUser?.uid || authUser?.id || client?.id;
     if (!file || !targetId) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      showToast('Error de tamaño', 'La imagen supera el límite de 10MB.', 'error');
-      return;
-    }
-
-    if (!file.type.startsWith('image/')) {
-      showToast('Formato inválido', 'Por favor selecciona un archivo de imagen válido.', 'error');
+    const validation = validateProfilePhoto(file);
+    if (!validation.isValid) {
+      showToast('Archivo no válido', validation.error || 'Verifica el tamaño y tipo de imagen.', 'error');
       return;
     }
 

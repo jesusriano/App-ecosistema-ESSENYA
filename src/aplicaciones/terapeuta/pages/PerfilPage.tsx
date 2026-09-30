@@ -16,6 +16,7 @@ import { PushSettingsCard } from '../../../shared/components/PushSettingsCard';
 import { clearServicesCache, hardResetPWAEcosystem } from '../../../shared/utils/cacheManager';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../../lib/firebase';
+import { validateProfilePhoto } from '../../../shared/utils/fileValidation';
 
 const AVAILABLE_SPECIALTIES = [
   'Masaje Tejido Profundo',
@@ -179,13 +180,9 @@ export const PerfilPage: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 15 * 1024 * 1024) {
-      showToast('error', 'La imagen supera el límite de 15MB.');
-      return;
-    }
-
-    if (!file.type.startsWith('image/')) {
-      showToast('error', 'Formato no permitido. Solo se aceptan archivos JPG, PNG y WebP.');
+    const validation = validateProfilePhoto(file);
+    if (!validation.isValid) {
+      showToast('error', validation.error || 'Archivo no válido.');
       return;
     }
 
