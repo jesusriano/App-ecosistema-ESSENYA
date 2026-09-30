@@ -328,10 +328,12 @@ export async function sendStandardWebPushToUser(
         sentCount++;
       } catch (err: any) {
         console.warn(`[WebPush] Failed delivering to ${doc.id} (user: ${userId}):`, err?.statusCode, err?.message);
-        if (err?.statusCode === 410 || err?.statusCode === 404 || err?.statusCode === 401) {
+        // Clean up stale, invalid, or forbidden endpoints (400, 401, 403, 404, 410)
+        if (err?.statusCode === 410 || err?.statusCode === 404 || err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 400) {
+          console.log(`[WebPush] Eliminando suscripción obsoleta ${doc.id} para usuario ${userId} (HTTP ${err?.statusCode})`);
           await doc.ref.delete().catch(() => {});
         } else {
-          errors.push({ docId: doc.id, error: err?.message });
+          errors.push({ docId: doc.id, error: err?.message || 'Error de entrega WebPush' });
         }
       }
     }
