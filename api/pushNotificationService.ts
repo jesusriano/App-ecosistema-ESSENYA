@@ -327,13 +327,15 @@ export async function sendStandardWebPushToUser(
         await webPush.sendNotification(pushSub, formattedPayload);
         sentCount++;
       } catch (err: any) {
-        console.warn(`[WebPush] Failed delivering to ${doc.id} (user: ${userId}):`, err?.statusCode, err?.message);
-        // Clean up stale, invalid, or forbidden endpoints (400, 401, 403, 404, 410)
-        if (err?.statusCode === 410 || err?.statusCode === 404 || err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 400) {
-          console.log(`[WebPush] Eliminando suscripción obsoleta ${doc.id} para usuario ${userId} (HTTP ${err?.statusCode})`);
+        const status = err?.statusCode;
+        const msg = String(err?.message || '');
+        console.warn(`[WebPush] Failed delivering to ${doc.id} (user: ${userId}):`, status, msg);
+        // Clean up stale, invalid, expired, or forbidden endpoints (HTTP 4xx or unexpected response code)
+        if ((status >= 400 && status < 500) || msg.includes('unexpected response code') || status === 410 || status === 404 || status === 401 || status === 403 || status === 400) {
+          console.log(`[WebPush] Eliminando suscripción obsoleta ${doc.id} para usuario ${userId} (HTTP ${status || '4xx'})`);
           await doc.ref.delete().catch(() => {});
         } else {
-          errors.push({ docId: doc.id, error: err?.message || 'Error de entrega WebPush' });
+          errors.push({ docId: doc.id, error: msg || 'Error de entrega WebPush' });
         }
       }
     }
