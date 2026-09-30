@@ -13,6 +13,7 @@ import { useTherapistContext } from '../../context/TherapistContext';
 import { useAuth } from '../../context/AuthContext';
 import { PasswordStrengthMeter } from './PasswordStrengthMeter';
 import { getFriendlyErrorMessage } from '../../utils/authValidations';
+import { validateProfilePhoto } from '../../utils/fileValidation';
 
 interface TherapistRegistrationFormProps {
   onSuccess: () => void;
@@ -202,6 +203,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
       password,
       telefono: telefono.trim(),
       fotografia: finalFotografia,
+      photo: finalFotografia,
       fechaNacimiento: fechaNacimiento || '',
       direccion: direccion.trim() || '',
       curp: (curp || '').trim().toUpperCase(),
@@ -567,10 +569,17 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
               </label>
               <input
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) {
+                    const validation = validateProfilePhoto(file);
+                    if (!validation.isValid) {
+                      setErrorMessage(validation.error || 'Archivo de imagen no válido.');
+                      e.target.value = '';
+                      return;
+                    }
+                    setErrorMessage(null);
                     setRawFiles(prev => ({ ...prev, photo: file }));
                     const reader = new FileReader();
                     reader.onload = () => {
@@ -769,10 +778,17 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
                   <label className="text-[10px] font-semibold text-[#6B655F] dark:text-[#AAAAAA]">Identificación Oficial (INE / Pasaporte)</label>
                   <input
                     type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
+                    accept="image/jpeg,image/png"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
+                        const validation = validateProfilePhoto(file);
+                        if (!validation.isValid) {
+                          setErrorMessage(validation.error || 'Archivo de identificación no válido.');
+                          e.target.value = '';
+                          return;
+                        }
+                        setErrorMessage(null);
                         setRawFiles(prev => ({ ...prev, ine: file }));
                         const reader = new FileReader();
                         reader.onload = () => {
@@ -794,10 +810,17 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
                   <label className="text-[10px] font-semibold text-[#6B655F] dark:text-[#AAAAAA]">Certificado o Diploma de Masoterapia</label>
                   <input
                     type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
+                    accept="image/jpeg,image/png"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
+                        const validation = validateProfilePhoto(file);
+                        if (!validation.isValid) {
+                          setErrorMessage(validation.error || 'Archivo de certificado no válido.');
+                          e.target.value = '';
+                          return;
+                        }
+                        setErrorMessage(null);
                         setRawFiles(prev => ({ ...prev, cert: file }));
                         const reader = new FileReader();
                         reader.onload = () => {

@@ -7,6 +7,7 @@ import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { TherapistDocument, DocumentStatus } from '../../../shared/types/auth';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../../lib/firebase';
+import { validateProfilePhoto } from '../../../shared/utils/fileValidation';
 
 interface DocumentVerificationSectionProps {
   therapistId: string;
@@ -137,8 +138,10 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 15 * 1024 * 1024) {
-      showToast('error', 'El archivo supera el límite de 15MB.');
+    const validation = validateProfilePhoto(file);
+    if (!validation.isValid) {
+      showToast('error', validation.error || 'Archivo no válido para el expediente.');
+      e.target.value = '';
       return;
     }
 
@@ -146,8 +149,9 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
     let ext: 'pdf' | 'jpg' | 'png' = 'pdf';
     if (nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) ext = 'jpg';
     else if (nameLower.endsWith('.png')) ext = 'png';
-    else if (!nameLower.endsWith('.pdf')) {
-      showToast('error', 'Formato no permitido. Utiliza PDF, JPG o PNG.');
+    else {
+      // If validateProfilePhoto passed but it's not jpg/png (unlikely given ALLOWED_TYPES)
+      showToast('error', 'Formato no permitido. Utiliza JPG o PNG.');
       return;
     }
 
@@ -643,11 +647,11 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
 
               {/* File Selector */}
               <div className="space-y-1">
-                <label className="font-bold text-[#6B655F] dark:text-[#888888] uppercase">Archivo Digital (PDF, JPG, PNG) *</label>
+                <label className="font-bold text-[#6B655F] dark:text-[#888888] uppercase">Archivo Digital (JPG, PNG) *</label>
                 <div className="border-2 border-dashed border-[#E5DFD3] dark:border-[#333333] rounded-2xl p-4 text-center hover:border-[#C9A55B] transition-all bg-[#FAF8F5] dark:bg-[#1A1A1A]">
                   <input
                     type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
+                    accept="image/jpeg,image/png"
                     onChange={handleFileSelection}
                     className="hidden"
                     id="docFileInput"
@@ -655,7 +659,7 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
                   <label htmlFor="docFileInput" className="cursor-pointer space-y-1 block">
                     <Upload className="w-6 h-6 text-[#C9A55B] mx-auto" />
                     <p className="font-bold text-xs text-[#1C1917] dark:text-white">Haz clic para examinar o arrastra tu archivo</p>
-                    <p className="text-[10px] text-[#888888]">Formatos permitidos: PDF, JPG, PNG (Máx 15MB)</p>
+                    <p className="text-[10px] text-[#888888]">Formatos permitidos: JPG, PNG (Máx 2MB por auditoría)</p>
                   </label>
                 </div>
               </div>

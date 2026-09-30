@@ -992,6 +992,8 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
         rol: "terapeuta",
         isActive: false, // Inactiva hasta aprobación por admin
         estado: "pendiente",
+        fotografia: fotografia || "",
+        photo: fotografia || "",
         creadoEn: adminFirestore.FieldValue.serverTimestamp(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -1009,6 +1011,7 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
         email: trimmedEmail,
         telefono: telefono.trim(),
         fotografia: fotografia || "",
+        photo: fotografia || "",
         fechaNacimiento: fechaNacimiento || "",
         direccion: direccion || "",
         curp: (curp || "").toUpperCase().trim(),

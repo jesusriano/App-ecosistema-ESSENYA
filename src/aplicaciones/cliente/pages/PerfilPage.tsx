@@ -286,7 +286,7 @@ export const PerfilPage: React.FC = () => {
               <input
                 id="perfil-photo-input"
                 type="file"
-                accept="image/png, image/jpeg, image/webp, image/gif"
+                accept="image/png, image/jpeg"
                 onChange={handlePhotoUpload}
                 className="hidden"
               />

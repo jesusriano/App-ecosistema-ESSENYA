@@ -1371,10 +1371,12 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
 
       // Sync photograph or basic fields with users and terapeutas_publicos collections
-      if (updates.fotografia !== undefined) {
+      const finalPhoto = updates.fotografia || updates.photo;
+      if (finalPhoto !== undefined) {
         try {
           await updateDoc(doc(db, 'users', therapistId), {
-            fotografia: updates.fotografia,
+            fotografia: finalPhoto,
+            photo: finalPhoto,
             fechaActualizacion: new Date().toISOString()
           });
         } catch (err) {
@@ -1386,7 +1388,8 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
           const publicDocSnap = await getDoc(publicDocRef);
           if (publicDocSnap.exists()) {
             await updateDoc(publicDocRef, {
-              fotografia: updates.fotografia,
+              fotografia: finalPhoto,
+              photo: finalPhoto,
               updatedAt: new Date().toISOString()
             });
           }

@@ -359,7 +359,7 @@ export const PerfilPage: React.FC = () => {
               <input
                 id="therapist-header-photo-input"
                 type="file"
-                accept="image/png, image/jpeg, image/webp, image/gif"
+                accept="image/png, image/jpeg"
                 onChange={handleFileSelectForCrop}
                 className="hidden"
               />
@@ -528,7 +528,7 @@ export const PerfilPage: React.FC = () => {
                       <input
                         id="form-photo-upload-input"
                         type="file"
-                        accept="image/png, image/jpeg, image/webp, image/gif"
+                        accept="image/png, image/jpeg"
                         onChange={handleFileSelectForCrop}
                         className="hidden"
                       />

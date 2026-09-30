@@ -18,14 +18,14 @@ export function validateProfilePhoto(file: File): FileValidationResult {
   if (file.size > MAX_SIZE) {
     return { 
       isValid: false, 
-      error: `La imagen supera el límite de 2MB (Tamaño actual: ${(file.size / (1024 * 1024)).toFixed(2)}MB).` 
+      error: `La imagen supera el límite de 2MB solicitado por la auditoría (Tamaño actual: ${(file.size / (1024 * 1024)).toFixed(2)}MB).` 
     };
   }
 
   if (!ALLOWED_TYPES.includes(file.type)) {
     return { 
       isValid: false, 
-      error: 'Formato no permitido. Solo se aceptan archivos JPEG y PNG.' 
+      error: 'Formato no permitido. Solo se aceptan imágenes JPEG y PNG por seguridad.' 
     };
   }
 
