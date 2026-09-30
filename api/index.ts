@@ -810,6 +810,20 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
 
     const extrasDurationMinutes = validatedExtras.reduce((acc, e) => acc + (Number(e.durationMinutes) || 0), 0);
 
+    const pmNormalized = String(paymentMethod || '').toLowerCase().trim();
+    const isCardPayment = pmNormalized.includes('tarjeta') || pmNormalized.includes('stripe') || pmNormalized.includes('card') || pmNormalized === '';
+
+    const isAuthorizedForDispatch = officialTotal === 0 || 
+      (!isCardPayment && (
+        paymentMethod === 'Pago al Recibir' || 
+        paymentMethod === 'Transferencia Bank VIP' || 
+        paymentMethod === 'Transferencia Interbancaria (SPEI)' ||
+        paymentMethod === 'Tarjeta de Regalo (Saldo Billetera)'
+      ));
+
+    const initialDispatchState = isAuthorizedForDispatch ? "buscando" : "en_espera_pago";
+    const initialDispatchStartedAt = isAuthorizedForDispatch ? new Date().toISOString() : "";
+
     const newBooking = {
       id: '', // Will be assigned doc.id
       code,
@@ -834,10 +848,10 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
       preferences: preferences || {},
       paymentMethod: paymentMethod || 'Tarjeta de Crédito / Débito',
       state: "pendiente",
-      paymentStatus: "pendiente", // ALWAYS pendiente on creation
-      dispatchState: "buscando",
+      paymentStatus: officialTotal === 0 ? "pagado" : "pendiente",
+      dispatchState: initialDispatchState,
       currentDispatchLevel: 10,
-      dispatchStartedAt: new Date().toISOString(),
+      dispatchStartedAt: initialDispatchStartedAt,
       activeOfferTherapistIds: [],
       activeOffers: [],
       dispatchHistory: [],
@@ -2476,13 +2490,16 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
 
       const isDualTherapist = serviceId === 'srv-pareja' || !!(srvData && srvData.requiresDualTherapist);
 
+      const pmNormalized = String(paymentMethod || '').toLowerCase().trim();
+      const isCardPayment = pmNormalized.includes('tarjeta') || pmNormalized.includes('stripe') || pmNormalized.includes('card') || pmNormalized === '';
+
       const isAuthorizedForDispatch = calculatedFinalTotal === 0 || 
-        paymentMethod === 'Pago al Recibir' || 
-        paymentMethod === 'Transferencia Bank VIP' || 
-        paymentMethod === 'Transferencia Interbancaria (SPEI)' ||
-        paymentMethod === 'Tarjeta de Regalo (Saldo Billetera)' ||
-        paymentMethod === 'Tarjeta de Crédito / Débito' ||
-        true;
+        (!isCardPayment && (
+          paymentMethod === 'Pago al Recibir' || 
+          paymentMethod === 'Transferencia Bank VIP' || 
+          paymentMethod === 'Transferencia Interbancaria (SPEI)' ||
+          paymentMethod === 'Tarjeta de Regalo (Saldo Billetera)'
+        ));
 
       const initialDispatchState = isAuthorizedForDispatch ? "buscando" : "en_espera_pago";
       const initialDispatchStartedAt = isAuthorizedForDispatch ? new Date().toISOString() : "";

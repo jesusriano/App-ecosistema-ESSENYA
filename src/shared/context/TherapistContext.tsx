@@ -281,7 +281,11 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
   const fetchTherapistsFromBackend = useCallback(async () => {
     console.log('[TherapistContext] Fetching therapists from backend API /api/admin/therapists...');
     try {
-      const res = await fetch('/api/admin/therapists');
+      const token = await auth.currentUser?.getIdToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/admin/therapists', { headers });
       if (res.ok) {
         const data = await res.json();
         console.log('[TherapistContext] Backend response for therapists:', data);

@@ -107,7 +107,7 @@ export interface ServicePreference {
   focusAreas?: string[];
 }
 
-export type DispatchState = 'buscando' | 'asignada' | 'sin_disponibilidad' | 'cancelada';
+export type DispatchState = 'buscando' | 'asignada' | 'sin_disponibilidad' | 'cancelada' | 'en_espera_pago';
 
 export interface DispatchLevelConfig {
   maxEtaMinutes: number;

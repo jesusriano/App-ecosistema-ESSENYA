@@ -225,7 +225,8 @@ export const ReservasPage: React.FC = () => {
   };
 
   const stateBadges: Record<string, { label: string; color: string }> = {
-    pendiente: { label: 'Pendiente de Aprobación', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+    pendiente: { label: 'Pendiente de Asignación', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+    en_espera_pago: { label: 'En Espera de Pago (Stripe)', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30 font-bold animate-pulse' },
     aceptada: { label: 'Solicitud Aceptada', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
     aceptado: { label: 'Confirmado / En Agenda', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
     rechazada: { label: 'Solicitud Rechazada', color: 'bg-rose-500/20 text-rose-400 border-rose-500/30 font-bold' },
@@ -356,7 +357,12 @@ export const ReservasPage: React.FC = () => {
                         <div className="w-full bg-[var(--bg-subcard)] border border-[#C9A55B]/30 rounded-xl p-3 text-xs space-y-2 mt-2">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
-                              {b.dispatchState === 'buscando' ? (
+                              {b.dispatchState === 'en_espera_pago' ? (
+                                <strong className="text-amber-400 flex items-center gap-1.5">
+                                  <Clock className="w-3.5 h-3.5 animate-spin" />
+                                  ⏳ EN ESPERA DE PAGO DEL CLIENTE (PASARELA STRIPE)
+                                </strong>
+                              ) : b.dispatchState === 'buscando' ? (
                                 <>
                                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
                                   <strong className="text-emerald-400 font-mono flex items-center gap-1.5">
