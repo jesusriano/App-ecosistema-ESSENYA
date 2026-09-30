@@ -230,59 +230,63 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
     let finalUrl = docFileUrl;
     let finalStoragePath = replacingDoc?.storagePath || '';
 
-    if (selectedFile) {
-      try {
-        const uploadResult = await uploadFileToStorage(selectedFile);
-        finalUrl = uploadResult.url;
-        finalStoragePath = uploadResult.path;
-      } catch (err: any) {
-        setIsSubmitting(false);
-        showToast('error', err.message || 'Error al subir el archivo a Firebase Storage.');
-        return;
+    try {
+      if (selectedFile) {
+        try {
+          const uploadResult = await uploadFileToStorage(selectedFile);
+          finalUrl = uploadResult.url;
+          finalStoragePath = uploadResult.path;
+        } catch (err: any) {
+          showToast('error', err.message || 'Error al subir el archivo a Firebase Storage.');
+          return;
+        }
       }
-    }
 
-    if (replacingDoc) {
-      const res = await onReplaceDocument(replacingDoc.id, {
-        nombreDocumento: docNombre.trim(),
-        tipo: docTipo,
-        institucion: docInstitucion.trim(),
-        fechaEmision: docFechaEmision,
-        fileUrl: finalUrl,
-        fileType: docFileType,
-        storagePath: finalStoragePath
-      });
-      setIsSubmitting(false);
+      if (replacingDoc) {
+        const res = await onReplaceDocument(replacingDoc.id, {
+          nombreDocumento: docNombre.trim(),
+          tipo: docTipo,
+          institucion: docInstitucion.trim(),
+          fechaEmision: docFechaEmision,
+          fileUrl: finalUrl,
+          fileType: docFileType,
+          storagePath: finalStoragePath
+        });
 
-      if (res.success) {
-        setShowUploadModal(false);
-        setReplacingDoc(null);
-        setSelectedFile(null);
-        setUploadProgress(null);
-        showToast('success', 'Documento reenviado. Se ha colocado en "Pendiente de revisión" para el administrador.');
+        if (res.success) {
+          setShowUploadModal(false);
+          setReplacingDoc(null);
+          setSelectedFile(null);
+          setUploadProgress(null);
+          showToast('success', 'Documento reenviado. Se ha colocado en "Pendiente de revisión" para el administrador.');
+        } else {
+          showToast('error', res.error || 'Error al actualizar el documento.');
+        }
       } else {
-        showToast('error', res.error || 'Error al actualizar el documento.');
-      }
-    } else {
-      const res = await onUploadDocument({
-        nombreDocumento: docNombre.trim(),
-        tipo: docTipo,
-        institucion: docInstitucion.trim(),
-        fechaEmision: docFechaEmision,
-        fileUrl: finalUrl,
-        fileType: docFileType,
-        storagePath: finalStoragePath
-      });
-      setIsSubmitting(false);
+        const res = await onUploadDocument({
+          nombreDocumento: docNombre.trim(),
+          tipo: docTipo,
+          institucion: docInstitucion.trim(),
+          fechaEmision: docFechaEmision,
+          fileUrl: finalUrl,
+          fileType: docFileType,
+          storagePath: finalStoragePath
+        });
 
-      if (res.success) {
-        setShowUploadModal(false);
-        setSelectedFile(null);
-        setUploadProgress(null);
-        showToast('success', 'Documento cargado correctamente. Estado: "Pendiente de revisión".');
-      } else {
-        showToast('error', res.error || 'Error al cargar el documento.');
+        if (res.success) {
+          setShowUploadModal(false);
+          setSelectedFile(null);
+          setUploadProgress(null);
+          showToast('success', 'Documento cargado correctamente. Estado: "Pendiente de revisión".');
+        } else {
+          showToast('error', res.error || 'Error al cargar el documento.');
+        }
       }
+    } catch (submitErr: any) {
+      console.error('Error submitting document:', submitErr);
+      showToast('error', submitErr?.message || 'Ocurrió un error inesperado al enviar el documento.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

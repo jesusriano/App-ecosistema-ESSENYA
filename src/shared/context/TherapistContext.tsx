@@ -330,16 +330,11 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     setLoading(true);
 
     if (isAdminSession) {
-      // 1. Inmediatamente consultar vía backend para garantizar visibilidad sin fricción
-      fetchTherapistsFromBackend();
-
-      // 2. Si hay conexión y usuario en Firebase Auth, suscribirse en tiempo real a la colección
       if (firebaseUser) {
         const unsubscribe = onSnapshot(collection(db, 'terapeutas'), (snapshot) => {
           setFirestoreError(null);
           setLoading(false);
           if (snapshot.empty) {
-            // Revalidar con backend antes de vaciar por completo
             fetchTherapistsFromBackend();
           } else {
             const loaded: TherapistFullProfile[] = snapshot.docs
@@ -360,10 +355,11 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         }, (err) => {
           setLoading(false);
           console.warn('Firestore onSnapshot fallback a backend para terapeutas:', err);
-          // Si Firestore client tiene problemas de reglas o conexión, el backend resuelve
           fetchTherapistsFromBackend();
         });
         return () => unsubscribe();
+      } else {
+        fetchTherapistsFromBackend();
       }
     } else if (isTherapistSession) {
       // Subscribe ONLY to their own therapist document
@@ -1123,7 +1119,8 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (!target) return { success: false, error: 'Terapeuta no encontrada.' };
 
     const statusNormalized = status === 'aprobado' ? 'validado' : status;
-    const updatedDocs = target.documentos.map(doc => {
+    const currentDocs = Array.isArray(target?.documentos) ? target.documentos : [];
+    const updatedDocs = currentDocs.map(doc => {
       if (doc.id === documentId) {
         return {
           ...doc,
@@ -1198,7 +1195,8 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
     logPersistenceDiagnostic('uploadDocument', therapistId, 'METADATA_GENERATED', { newDoc, storagePath: uniqueStoragePath });
 
-    const updatedDocs = [...target.documentos, newDoc];
+    const currentDocs = Array.isArray(target?.documentos) ? target.documentos : [];
+    const updatedDocs = [...currentDocs, newDoc];
     const updatePayload = {
       documentos: updatedDocs,
       [`documents.${documentType}Url`]: docData.fileUrl,
@@ -1243,7 +1241,8 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     const inferredMime = docData.fileType === 'pdf' ? 'application/pdf' : (docData.fileType === 'png' ? 'image/png' : 'image/jpeg');
     const cleanFileName = (docData.nombreDocumento || 'documento').replace(/[^a-zA-Z0-9.-]/g, '_') + '.' + (docData.fileType || 'pdf');
 
-    const updatedDocs = target.documentos.map(d => {
+    const currentDocs = Array.isArray(target?.documentos) ? target.documentos : [];
+    const updatedDocs = currentDocs.map(d => {
       if (d.id === documentId) {
         return {
           ...d,
@@ -1296,7 +1295,8 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     const target = therapists.find(t => t.id === therapistId);
     if (!target) return { success: false, error: 'Terapeuta no encontrada.' };
 
-    const updatedDocs = target.documentos.filter(d => d.id !== documentId);
+    const currentDocs = Array.isArray(target?.documentos) ? target.documentos : [];
+    const updatedDocs = currentDocs.filter(d => d.id !== documentId);
     const updatePayload = {
       documentos: updatedDocs,
       fechaActualizacion: new Date().toISOString()
