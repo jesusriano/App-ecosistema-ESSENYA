@@ -181,24 +181,30 @@ export const PushSubscriptionButton: React.FC<PushSubscriptionButtonProps> = ({
       } catch {}
 
       try {
-        const response = await fetch('/api/push/subscribe', {
+        const response = await fetch('/api/push/registrations', {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            userId: userId || 'anonymous',
             fcmToken: currentFcmToken,
             subscription: sub ? sub.toJSON() : null
           })
         });
 
-        if (response.ok) {
+        if (!response.ok) {
+          const errText = await response.text().catch(() => '');
+          console.error('[Push Registrations] HTTP error:', {
+            status: response.status,
+            statusText: response.statusText,
+            body: errText
+          });
+        } else {
           const result = await response.json().catch(() => null);
           if (result && result.success) {
             isSynced = true;
           }
         }
       } catch (netErr) {
-        console.warn('[PushSubscriptionButton] Error en API push subscribe:', netErr);
+        console.warn('[PushSubscriptionButton] Error en API push registrations:', netErr);
       }
 
       // Respaldo directo en Firestore si el backend devolvió 401 o estuvo inaccesible

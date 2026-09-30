@@ -3479,7 +3479,7 @@ app.post("/api/push/log-token", requireAuth, (req: Request, res: Response) => {
   res.json({ success: true, token: masked, message: "Token de registro recibido para diagnóstico (enmascarado)." });
 });
 
-app.post("/api/push/subscribe", requireAuth, async (req: Request, res: Response) => {
+app.post(["/api/push/subscribe", "/api/push/registrations"], requireAuth, async (req: Request, res: Response) => {
   try {
     const authenticatedUid = (req as any).user?.uid;
     if (!authenticatedUid) {
@@ -3491,9 +3491,17 @@ app.post("/api/push/subscribe", requireAuth, async (req: Request, res: Response)
       return res.status(400).json({ success: false, error: "Se requiere subscription válida o fcmToken." });
     }
 
-    // Regla de seguridad: Si body.userId difiere del UID autenticado, se descarta y se registra inconsistencia
+    const maskedFcm = fcmToken && fcmToken.length > 10 ? `${fcmToken.substring(0, 6)}...${fcmToken.substring(fcmToken.length - 4)}` : '(ninguno)';
+    console.log('[Push Registrations] Request received:', {
+      endpoint: req.path,
+      method: req.method,
+      uid: authenticatedUid,
+      hasSubscription: Boolean(subscription?.endpoint),
+      fcmToken: maskedFcm
+    });
+
     if (bodyUserId && bodyUserId !== authenticatedUid) {
-      console.warn(`[FCM-Security] Inconsistencia detectada: body.userId (${bodyUserId}) no coincide con UID autenticado (${authenticatedUid}). Se descarta el ID del body y se protege la cuenta.`);
+      console.warn(`[FCM-Security] Inconsistencia detectada: body.userId (${bodyUserId}) no coincide con UID autenticado (${authenticatedUid}). Se utiliza exclusivamente el UID verificado.`);
     }
 
     const db = getAdminFirestore();
@@ -3515,10 +3523,6 @@ app.post("/api/push/subscribe", requireAuth, async (req: Request, res: Response)
 
     // 2. Persistir token FCM directamente al terapeuta y usuario utilizando el UID autenticado
     if (fcmToken) {
-      const maskedToken = fcmToken.length > 10
-        ? `${fcmToken.substring(0, 6)}...${fcmToken.substring(fcmToken.length - 4)}`
-        : '***';
-
       // Actualizar en colección terapeutas si corresponde al UID autenticado
       try {
         const therapistRef = db.collection("terapeutas").doc(authenticatedUid);
@@ -3528,7 +3532,7 @@ app.post("/api/push/subscribe", requireAuth, async (req: Request, res: Response)
             fcmToken: fcmToken,
             fcmUpdatedAt: nowIso
           }, { merge: true });
-          console.log(`[FCM] Token asociado exitosamente al terapeuta autenticado ${authenticatedUid} (${maskedToken})`);
+          console.log(`[FCM] Token asociado exitosamente al terapeuta autenticado ${authenticatedUid} (${maskedFcm})`);
         }
       } catch (tErr) {
         console.warn(`[FCM] No se pudo actualizar fcmToken en terapeuta ${authenticatedUid}:`, tErr);
@@ -3543,13 +3547,13 @@ app.post("/api/push/subscribe", requireAuth, async (req: Request, res: Response)
       } catch {}
     }
 
-    res.json({
+    return res.status(200).json({
       success: true,
       message: "Suscripción push y token FCM registrados correctamente para el usuario autenticado."
     });
   } catch (err: any) {
-    console.error("Error en /api/push/subscribe:", err);
-    res.status(500).json({ success: false, error: err.message });
+    console.error("Error en /api/push/registrations:", err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

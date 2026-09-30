@@ -304,27 +304,35 @@ export async function flushPendingSubscriptions(): Promise<number> {
           if (token) headers['Authorization'] = `Bearer ${token}`;
         } catch {}
 
-        const res = await fetchWithExponentialBackoff('/api/push/subscribe', {
+        const res = await fetchWithExponentialBackoff('/api/push/registrations', {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            userId: item.userId,
             fcmToken: item.fcmToken,
             subscription: item.subscription
           })
         });
 
-        const data = await res.json();
-        if (data.success) {
-          await removePendingSubscription(item.id);
-          syncedCount++;
-          console.log(`[WebPush DB] Suscripción offline de ${item.userId} sincronizada con éxito en el servidor.`);
+        if (!res.ok) {
+          const bodyText = await res.text().catch(() => '');
+          console.error('[Push Registrations] HTTP error:', {
+            status: res.status,
+            statusText: res.statusText,
+            body: bodyText
+          });
         } else {
-          item.attempts = (item.attempts || 0) + 1;
-          if (item.attempts >= 10) {
+          const data = await res.json().catch(() => null);
+          if (data && data.success) {
             await removePendingSubscription(item.id);
+            syncedCount++;
+            console.log(`[WebPush DB] Suscripción offline de ${item.userId} sincronizada con éxito en el servidor.`);
           } else {
-            await enqueuePendingSubscription(item);
+            item.attempts = (item.attempts || 0) + 1;
+            if (item.attempts >= 10) {
+              await removePendingSubscription(item.id);
+            } else {
+              await enqueuePendingSubscription(item);
+            }
           }
         }
       } catch (networkError) {
@@ -492,22 +500,30 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
 
     let isServerSaved = false;
     try {
-      const subRes = await fetchWithExponentialBackoff('/api/push/subscribe', {
+      const subRes = await fetchWithExponentialBackoff('/api/push/registrations', {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          userId,
           fcmToken,
           subscription: subscriptionData
         })
       });
 
-      const subResult = await subRes.json().catch(() => null);
-      if (subResult && subResult.success) {
-        isServerSaved = true;
+      if (!subRes.ok) {
+        const bodyText = await subRes.text().catch(() => '');
+        console.error('[Push Registrations] HTTP error:', {
+          status: subRes.status,
+          statusText: subRes.statusText,
+          body: bodyText
+        });
+      } else {
+        const subResult = await subRes.json().catch(() => null);
+        if (subResult && subResult.success) {
+          isServerSaved = true;
+        }
       }
     } catch (netErr) {
-      console.warn('[WebPush] Error al comunicarse con /api/push/subscribe:', netErr);
+      console.warn('[Push Registrations] Error al comunicarse con /api/push/registrations:', netErr);
     }
 
     // Respaldo directo en Firestore para asegurar vinculación del dispositivo

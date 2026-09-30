@@ -181,17 +181,23 @@ export const TherapistNotificationPermissionPrompt: React.FC<TherapistNotificati
       } catch {}
 
       try {
-        const response = await fetch('/api/push/subscribe', {
+        const response = await fetch('/api/push/registrations', {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            userId: therapistId,
             fcmToken: currentFcmToken || null,
             subscription: sub ? sub.toJSON() : null
           })
         });
 
-        if (response.ok) {
+        if (!response.ok) {
+          const errText = await response.text().catch(() => '');
+          console.error('[Push Registrations] HTTP error:', {
+            status: response.status,
+            statusText: response.statusText,
+            body: errText
+          });
+        } else {
           const result = await response.json().catch(() => null);
           if (result && result.success) {
             isSynced = true;
