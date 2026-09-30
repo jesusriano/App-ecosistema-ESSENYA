@@ -310,9 +310,10 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
       if (b.therapistId2 && b.therapistId2 !== activeTherapist.id) return false;
     }
 
-    // Direct assignment override: if therapist is explicitly assigned
+    // EXCLUSION: If the therapist is already assigned to this booking, it is no longer "pending" for them.
+    // It should transition to the "currentBooking" (active) selection.
     if (b.therapistId === activeTherapist.id || b.therapistId2 === activeTherapist.id || (Array.isArray(b.therapistIds) && b.therapistIds.includes(activeTherapist.id))) {
-      return true;
+      return false;
     }
 
     // Normalize therapist coverage zones across all possible property names in Firestore profile
@@ -363,8 +364,17 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
     return () => clearInterval(interval);
   }, [activeTherapist.id, activeTherapist.status]);
 
-  // Find active booking assigned to therapist
-  const currentBooking = bookings.find(b => b.state !== 'servicio_finalizado' && b.state !== 'cancelado' && b.state !== 'pendiente') || bookings.find(b => b.state !== 'servicio_finalizado' && b.state !== 'cancelado') || null;
+  // Find active booking assigned to therapist.
+  // We only pick bookings where the therapist is explicitly assigned and is not in a final state.
+  const currentBooking = bookings.find(b => {
+    const isAssignedToMe = b.therapistId === activeTherapist.id || 
+                           b.therapistId2 === activeTherapist.id || 
+                           (Array.isArray(b.therapistIds) && b.therapistIds.includes(activeTherapist.id));
+    
+    // We prioritize bookings that are in an active flow (accepted, on the way, arrived, or started)
+    // but we also include 'pendiente' if the therapist has already accepted a slot (e.g. dual booking slot 1).
+    return isAssignedToMe && b.state !== 'servicio_finalizado' && b.state !== 'cancelado';
+  }) || null;
 
   // Watch position and update Firestore for active bookings
   useEffect(() => {

@@ -6,17 +6,28 @@ import { getMessaging, type Message } from 'firebase-admin/messaging';
 import { getApps } from 'firebase-admin/app';
 
 function sanitizeVapidKey(key: string): string {
-  return String(key || '')
-    .trim()
-    .replace(/^['"]|['"]$/g, '') // Strip quotes
-    .replace(/\+/g, '-')        // Replace + with -
-    .replace(/\//g, '_')        // Replace / with _
-    .replace(/=/g, '');         // Strip padding =
+  let str = String(key || '').trim();
+  // Strip outer quotes if any
+  str = str.replace(/^['"]|['"]$/g, '').trim();
+  // Check if it has JSON or key label artifacts like "publicKey":"..."
+  if (str.includes('"') || str.includes(':') || str.includes('{')) {
+    const lastQuote = str.lastIndexOf('"');
+    if (lastQuote !== -1) {
+      str = str.slice(lastQuote + 1);
+    }
+  }
+  return str
+    .replace(/^=+/g, '')            // Strip leading '=' padding/artifacts
+    .replace(/=+$/g, '')            // Strip trailing '=' padding
+    .replace(/\+/g, '-')           // Replace + with -
+    .replace(/\//g, '_')           // Replace / with _
+    .replace(/[^a-zA-Z0-9_-]/g, '') // Keep only URL-safe base64 characters
+    .trim();
 }
 
 function isValidVapidKey(key: string | undefined, minLength: number): boolean {
   if (!key) return false;
-  const clean = key.trim().replace(/^['"]|['"]$/g, '');
+  const clean = sanitizeVapidKey(key);
   if (clean === 'undefined' || clean === 'null' || clean === '' || clean.startsWith('placeholder') || clean.includes('YOUR_')) {
     return false;
   }
@@ -29,6 +40,7 @@ let rawPrivateKey = process.env.VAPID_PRIVATE_KEY;
 
 let vapidPublicKey = isValidVapidKey(rawPublicKey, 80) ? sanitizeVapidKey(rawPublicKey!) : undefined;
 let vapidPrivateKey = isValidVapidKey(rawPrivateKey, 40) ? sanitizeVapidKey(rawPrivateKey!) : undefined;
+let vapidConfigured = false;
 
 const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:seguridad@essenyamexico.com';
 
@@ -37,7 +49,7 @@ const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:seguridad@essenyamexic
  * If still missing, generates a new pair and saves them to Firestore for persistence.
  */
 export async function ensureVapidConfig(db: Firestore): Promise<boolean> {
-  if (vapidPublicKey && vapidPrivateKey) return true;
+  if (vapidConfigured && vapidPublicKey && vapidPrivateKey) return true;
 
   try {
     // 1. Try Firestore retrieval
@@ -47,16 +59,23 @@ export async function ensureVapidConfig(db: Firestore): Promise<boolean> {
     if (configSnap.exists) {
       const data = configSnap.data();
       if (isValidVapidKey(data?.publicKey, 80) && isValidVapidKey(data?.privateKey, 40)) {
-        vapidPublicKey = sanitizeVapidKey(data?.publicKey);
-        vapidPrivateKey = sanitizeVapidKey(data?.privateKey);
-        console.log('[WebPush-Audit] VAPID keys retrieved from Firestore.');
-        webPush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
-        return true;
+        const testPub = sanitizeVapidKey(data?.publicKey);
+        const testPriv = sanitizeVapidKey(data?.privateKey);
+        try {
+          webPush.setVapidDetails(vapidSubject, testPub, testPriv);
+          vapidPublicKey = testPub;
+          vapidPrivateKey = testPriv;
+          vapidConfigured = true;
+          console.log('[WebPush-Audit] VAPID keys retrieved and verified from Firestore.');
+          return true;
+        } catch (setErr: any) {
+          console.warn('[WebPush-Audit] Stored Firestore VAPID keys invalid, will regenerate:', setErr?.message);
+        }
       }
     }
 
-    // 2. Generate and persist if nothing found
-    console.warn('[WebPush-Audit] VAPID keys missing in env and Firestore. Generating new pair...');
+    // 2. Generate and persist if nothing found or invalid
+    console.warn('[WebPush-Audit] VAPID keys missing or unconfigured. Generating new pair...');
     const keys = webPush.generateVAPIDKeys();
     vapidPublicKey = keys.publicKey;
     vapidPrivateKey = keys.privateKey;
@@ -69,6 +88,7 @@ export async function ensureVapidConfig(db: Firestore): Promise<boolean> {
     });
 
     webPush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+    vapidConfigured = true;
     console.log('[WebPush-Audit] New VAPID keys generated and persisted to Firestore.');
     return true;
   } catch (err: any) {
@@ -81,9 +101,13 @@ export async function ensureVapidConfig(db: Firestore): Promise<boolean> {
 if (vapidPublicKey && vapidPrivateKey) {
   try {
     webPush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+    vapidConfigured = true;
     console.log('[WebPush-Audit] Web Push (VAPID) configured via environment variables.');
   } catch (err: any) {
     console.error('[WebPush-Audit] Error configuring VAPID from env:', err?.message);
+    vapidPublicKey = undefined;
+    vapidPrivateKey = undefined;
+    vapidConfigured = false;
   }
 }
 
@@ -317,7 +341,7 @@ export async function sendStandardWebPushToUser(
         sentCount++;
       } catch (err: any) {
         console.warn(`[WebPush] Failed delivering to ${doc.id} (user: ${userId}):`, err?.statusCode, err?.message);
-        if (err?.statusCode === 410 || err?.statusCode === 404) {
+        if (err?.statusCode === 410 || err?.statusCode === 404 || err?.statusCode === 401) {
           await doc.ref.delete().catch(() => {});
         } else {
           errors.push({ docId: doc.id, error: err?.message });

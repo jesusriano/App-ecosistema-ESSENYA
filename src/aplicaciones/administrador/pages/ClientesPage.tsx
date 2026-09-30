@@ -7,7 +7,7 @@ import {
 import { useAdmin } from '../hooks/useAdmin';
 import { useToast } from '../../../shared/context/ToastContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
-import { ClientUser } from '../../../shared/types';
+import { ClientUser, MembershipTier } from '../../../shared/types';
 import { calculateMembershipTier } from '../../cliente/services/membershipService';
 
 export const sanitizeClientUser = (raw: any): ClientUser => {
