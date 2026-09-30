@@ -24,20 +24,22 @@ service firebase.storage {
       return request.resource.size > 0 && request.resource.size <= 15 * 1024 * 1024;
     }
 
-    // Only allow JPG, PNG, PDF matching exact content type and extension
+    // Only allow JPG, PNG, WEBP, PDF matching exact content type and extension
     function isAllowedDocument(fileName) {
       return isAllowedSize() && (
-        (request.resource.contentType == 'image/jpeg' && (fileName.matches('.*\\.(jpg|jpeg)$') || fileName.matches('.*\\.(JPG|JPEG)$'))) ||
-        (request.resource.contentType == 'image/png' && (fileName.matches('.*\\.png$') || fileName.matches('.*\\.PNG$'))) ||
-        (request.resource.contentType == 'application/pdf' && (fileName.matches('.*\\.pdf$') || fileName.matches('.*\\.PDF$')))
+        (request.resource.contentType == 'image/jpeg' && fileName.lower().matches('.*\\.(jpg|jpeg)$')) ||
+        (request.resource.contentType == 'image/png' && fileName.lower().matches('.*\\.png$')) ||
+        (request.resource.contentType == 'image/webp' && fileName.lower().matches('.*\\.webp$')) ||
+        (request.resource.contentType == 'application/pdf' && fileName.lower().matches('.*\\.pdf$'))
       );
     }
 
-    // Photos: only JPG and PNG (no PDF for catalog photos)
+    // Photos: JPG, PNG, WEBP
     function isAllowedPhoto(fileName) {
       return isAllowedSize() && (
-        (request.resource.contentType == 'image/jpeg' && (fileName.matches('.*\\.(jpg|jpeg)$') || fileName.matches('.*\\.(JPG|JPEG)$'))) ||
-        (request.resource.contentType == 'image/png' && (fileName.matches('.*\\.png$') || fileName.matches('.*\\.PNG$')))
+        (request.resource.contentType == 'image/jpeg' && fileName.lower().matches('.*\\.(jpg|jpeg)$')) ||
+        (request.resource.contentType == 'image/png' && fileName.lower().matches('.*\\.png$')) ||
+        (request.resource.contentType == 'image/webp' && fileName.lower().matches('.*\\.webp$'))
       );
     }
 

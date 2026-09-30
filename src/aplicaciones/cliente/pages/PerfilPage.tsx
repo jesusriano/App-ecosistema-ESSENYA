@@ -116,14 +116,19 @@ export const PerfilPage: React.FC = () => {
       const { storage, db } = await import('../../../lib/firebase');
       const { doc, setDoc } = await import('firebase/firestore');
 
+      const targetId = firebaseUser?.uid || authUser?.id || client?.id;
+      if (!targetId) {
+        throw new Error('No se pudo identificar una sesión de cliente activa.');
+      }
+
       // 1. Prepare Storage path and metadata
       // Normalize extension to .jpg if it's jpeg or other compatible
-      const fileExt = file.type === 'image/png' ? 'png' : 'jpg';
+      const fileExt = file.type === 'image/png' ? 'png' : (file.type === 'image/webp' ? 'webp' : 'jpg');
       const storagePath = `clientes/${targetId}/foto_perfil.${fileExt}`;
       const storageRef = ref(storage, storagePath);
       
-      // Force content type to match rules (only jpeg and png are allowed in storage.rules)
-      const contentType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      // Allow correct content types
+      const contentType = file.type;
       const metadata = { contentType };
 
       // 2. Upload to Firebase Storage
@@ -153,12 +158,32 @@ export const PerfilPage: React.FC = () => {
         fotografia: downloadUrl, // Sync with both potential field names
         updatedAt: new Date().toISOString()
       }, { merge: true });
+
+      // Also sync with users collection for global profile consistency
+      try {
+        const userRef = doc(db, 'users', targetId);
+        await setDoc(userRef, {
+          fotografia: downloadUrl,
+          photo: downloadUrl,
+          fechaActualizacion: new Date().toISOString()
+        }, { merge: true });
+      } catch (userErr) {
+        console.warn('Error syncing client photo with users collection:', userErr);
+      }
       
       showToast('Foto Actualizada', 'Tu fotografía de socio VIP se ha guardado exitosamente.', 'success');
     } catch (error: any) {
       console.error('Error updating client photo:', error);
       let msg = 'No se pudo guardar la foto.';
-      if (error.code === 'storage/unauthorized') msg = 'Error de permisos en el servidor.';
+      if (error.code === 'storage/unauthorized') {
+        msg = 'Error de permisos en Storage (no autorizado).';
+      } else if (error.code === 'permission-denied') {
+        msg = 'Error de permisos en Firestore (reglas denegadas).';
+      } else if (error.message && error.message.includes('not-found')) {
+        msg = 'Error: Documento de cliente no encontrado en la base de datos.';
+      } else {
+        msg = error.message || 'Error desconocido al guardar.';
+      }
       showToast('Error al guardar', msg, 'error');
     }
   };

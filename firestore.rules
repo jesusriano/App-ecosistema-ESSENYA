@@ -75,7 +75,8 @@ service cloud.firestore {
              data.name is string && data.name.size() <= 200 &&
              data.email is string && data.email.size() <= 150 &&
              data.membershipTier is string && data.membershipTier in ['Platino', 'Gold', 'Diamond', 'Black Diamond', 'Imperial VIP'] &&
-             data.keys().size() <= 25;
+             (!data.keys().hasAny(['photo', 'fotografia']) || data.get('photo', data.get('fotografia', '')) is string) &&
+             data.keys().size() <= 40;
     }
 
     function isValidSensitiveInfo(data) {
@@ -98,7 +99,7 @@ service cloud.firestore {
                (!data.keys().hasAny(['estado']) || (data.estado is string && data.estado in ['pendiente', 'activo', 'inactivo', 'bloqueado', 'rechazado', 'disponible', 'en_servicio', 'en_camino', 'desconectado'])) &&
                (!data.keys().hasAny(['status']) || (data.status is string && data.status in ['pendiente', 'activo', 'inactivo', 'bloqueado', 'rechazado', 'disponible', 'en_servicio', 'en_camino', 'desconectado']))
              ) : true) &&
-             data.keys().size() <= 60;
+             data.keys().size() <= 100;
     }
 
     function isValidBooking(data) {

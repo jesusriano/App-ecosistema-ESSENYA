@@ -257,7 +257,12 @@ export const PerfilPage: React.FC = () => {
         }, 'image/jpeg', 0.92);
       });
 
-      const storagePath = `terapeutas/${activeTherapist.id}/perfil/foto-perfil.jpg`;
+      const targetId = authUser?.id || activeTherapist.id;
+      if (!targetId || targetId.includes('demo')) {
+        throw new Error('No se pudo identificar una sesión de terapeuta válida.');
+      }
+
+      const storagePath = `terapeutas/${targetId}/perfil/foto-perfil.jpg`;
       const storageRef = ref(storage, storagePath);
       const metadata = { contentType: 'image/jpeg' };
       const uploadTask = uploadBytesResumable(storageRef, blob, metadata);
@@ -274,19 +279,26 @@ export const PerfilPage: React.FC = () => {
       const downloadUrl = await getDownloadURL(storageRef);
       setFotografia(downloadUrl);
 
-      const res = await updateSelfProfile(activeTherapist.id, {
+      const res = await updateSelfProfile(targetId, {
         fotografia: downloadUrl,
+        photo: downloadUrl, // Ensure both field names are synced
         fotoPerfilStoragePath: storagePath
       });
 
       if (res.success) {
         showToast('success', 'Fotografía recortada y actualizada con éxito en Firebase Storage.');
       } else {
-        showToast('error', res.error || 'Error al guardar la fotografía.');
+        const errorMsg = res.error || '';
+        let friendlyMsg = 'Error al guardar la fotografía.';
+        if (errorMsg.includes('permission-denied')) friendlyMsg = 'Permiso denegado en Firestore (verifica tus reglas).';
+        else if (errorMsg.includes('not-found')) friendlyMsg = 'Documento de terapeuta no encontrado en la base de datos.';
+        showToast('error', friendlyMsg + (errorMsg ? ` (${errorMsg})` : ''));
       }
     } catch (error: any) {
       console.error('Error cropping/uploading photo:', error);
-      showToast('error', 'Error al procesar la imagen: ' + (error.message || ''));
+      let friendlyMsg = 'Error al procesar la imagen.';
+      if (error.code === 'storage/unauthorized') friendlyMsg = 'Permiso denegado en Firebase Storage.';
+      showToast('error', friendlyMsg + ': ' + (error.message || ''));
     } finally {
       setPendingImageFile(null);
       setCropPreviewUrl(null);
