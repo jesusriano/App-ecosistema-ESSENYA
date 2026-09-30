@@ -13,6 +13,7 @@ import { ThemeToggle } from './shared/components/ThemeToggle';
 import { Header } from './shared/components/Header';
 import { PortalType } from './shared/types';
 import { Capacitor } from '@capacitor/core';
+import { PushNotifications } from '@capacitor/push-notifications';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { subscribeToPushNotifications, isPushSupported } from './shared/services/pushService';
@@ -69,30 +70,87 @@ function MainAppContent() {
 
   const activeProfile = getUser('cliente') || getUser('terapeuta') || getUser('administrador');
 
-  // Initialize Capacitor Native Push Notifications via nativePushService
+  // Initialize Capacitor Native Push Notifications
   React.useEffect(() => {
-    if (!Capacitor.isNativePlatform() || !firebaseUser?.uid) return;
+    if (!Capacitor.isNativePlatform()) return;
 
-    import('./shared/services/nativePushService').then(({ registerNativePushToken }) => {
-      registerNativePushToken(firebaseUser.uid, activeProfile?.rol || 'cliente', {
-        onNotificationReceived: (notification) => {
-          console.log('[App] Push nativo recibido:', notification);
+    let registrationListener: any;
+    let errorListener: any;
+    let receivedListener: any;
+    let actionListener: any;
+
+    const setupPush = async () => {
+      try {
+        const permStatus = await PushNotifications.checkPermissions();
+        let status = permStatus.receive;
+
+        if (status === 'prompt') {
+          const requestStatus = await PushNotifications.requestPermissions();
+          status = requestStatus.receive;
+        }
+
+        if (status !== 'granted') return;
+
+        registrationListener = await PushNotifications.addListener('registration', async (token) => {
+          if (firebaseUser?.uid) {
+            try {
+              const userRef = doc(db, 'users', firebaseUser.uid);
+              await setDoc(userRef, {
+                pushToken: token.value,
+                fcmToken: token.value,
+                devicePlatform: Capacitor.getPlatform(),
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+
+              if (activeProfile?.rol === 'terapeuta') {
+                await setDoc(doc(db, 'terapeutas', firebaseUser.uid), {
+                  pushToken: token.value,
+                  fcmToken: token.value,
+                  updatedAt: new Date().toISOString()
+                }, { merge: true });
+              } else if (activeProfile?.rol === 'cliente') {
+                await setDoc(doc(db, 'clientes', firebaseUser.uid), {
+                  pushToken: token.value,
+                  fcmToken: token.value,
+                  updatedAt: new Date().toISOString()
+                }, { merge: true });
+              }
+            } catch (err) {
+              console.warn('Error saving native push token:', err);
+            }
+          }
+        });
+
+        errorListener = await PushNotifications.addListener('registrationError', (error) => {
+          console.error('Error on native push registration:', error);
+        });
+
+        receivedListener = await PushNotifications.addListener('pushNotificationReceived', (notification) => {
+          console.log('Push notification received:', notification);
           handleIncomingPush(notification);
-        },
-        onActionPerformed: (action) => {
-          console.log('[App] Acción de push realizada:', action);
+        });
+
+        actionListener = await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+          console.log('Push notification action performed:', action);
           const bookingId = action.notification?.data?.bookingId;
           if (bookingId) {
             navigate(`/terapeuta/servicios?bookingId=${bookingId}`);
           }
-        }
-      });
-    });
+        });
+
+        await PushNotifications.register();
+      } catch (e) {
+        console.warn('Native push notifications not supported:', e);
+      }
+    };
+
+    setupPush();
 
     return () => {
-      import('./shared/services/nativePushService').then(({ removeNativePushListeners }) => {
-        removeNativePushListeners().catch(() => {});
-      });
+      if (registrationListener) registrationListener.remove();
+      if (errorListener) errorListener.remove();
+      if (receivedListener) receivedListener.remove();
+      if (actionListener) actionListener.remove();
     };
   }, [firebaseUser?.uid, activeProfile?.rol, handleIncomingPush, navigate]);
 

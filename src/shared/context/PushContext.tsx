@@ -203,18 +203,6 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
 
   const enablePush = useCallback(async (targetUserId?: string) => {
     const activeUid = targetUserId || userId || 'anonymous';
-    const { isNativePlatform, registerNativePushToken } = await import('../services/nativePushService');
-    
-    if (isNativePlatform() && activeUid && activeUid !== 'anonymous') {
-      const nativeRes = await registerNativePushToken(activeUid);
-      setSubscribed(nativeRes.success);
-      if (nativeRes.success) {
-        setPermission('granted');
-        if (soundEnabled) playNotificationSound(soundPreset, volume);
-      }
-      return nativeRes;
-    }
-
     const res = await subscribeToPushNotifications(activeUid);
     setPermission(getNotificationPermission());
     if (res.success) {
