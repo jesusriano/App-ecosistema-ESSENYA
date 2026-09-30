@@ -38,6 +38,7 @@ export interface TherapistFullProfile {
   correo: string;
   telefono: string;
   fotografia: string;
+  photo?: string;
   fechaNacimiento?: string;
   direccion?: string;
   

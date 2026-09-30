@@ -182,7 +182,7 @@ service cloud.firestore {
       );
       allow update: if (isOwner(userId) || isAdmin()) && isValidId(userId) && (
         (isOwner(userId) && incoming().rol == existing().rol && 
-         incoming().diff(existing()).affectedKeys().hasOnly(['nombre', 'apellidos', 'telefono', 'ultimoAcceso', 'fechaActualizacion', 'mustChangePassword'])) ||
+         incoming().diff(existing()).affectedKeys().hasOnly(['nombre', 'apellidos', 'telefono', 'ultimoAcceso', 'fechaActualizacion', 'mustChangePassword', 'photo', 'fotografia'])) ||
         isAdmin()
       );
     }
