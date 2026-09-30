@@ -108,7 +108,29 @@ export const PerfilPage: React.FC = () => {
   const [telefono, setTelefono] = useState(activeTherapist.telefono);
   const [fechaNacimiento, setFechaNacimiento] = useState(activeTherapist.fechaNacimiento || '1990-04-12');
   const [direccion, setDireccion] = useState(activeTherapist.direccion || '');
-  const [fotografia, setFotografia] = useState(activeTherapist.fotografia);
+  const [fotografia, setFotografia] = useState(activeTherapist.fotografia || activeTherapist.photo || '');
+
+  // Keep form state synced when therapist profile loads asynchronously from Firestore
+  React.useEffect(() => {
+    const photoUrl = activeTherapist.fotografia || activeTherapist.photo;
+    if (photoUrl) {
+      setFotografia(photoUrl);
+    }
+    if (activeTherapist.nombre) setNombre(activeTherapist.nombre);
+    if (activeTherapist.apellidos) setApellidos(activeTherapist.apellidos);
+    if (activeTherapist.telefono) setTelefono(activeTherapist.telefono);
+    if (activeTherapist.fechaNacimiento) setFechaNacimiento(activeTherapist.fechaNacimiento);
+    if (activeTherapist.direccion) setDireccion(activeTherapist.direccion);
+  }, [
+    activeTherapist.id, 
+    activeTherapist.fotografia, 
+    activeTherapist.photo, 
+    activeTherapist.nombre, 
+    activeTherapist.apellidos, 
+    activeTherapist.telefono, 
+    activeTherapist.fechaNacimiento, 
+    activeTherapist.direccion
+  ]);
 
   const [experienciaAnos, setExperienciaAnos] = useState(activeTherapist.experienciaAnos || 1);
   const [disponibilidad, setDisponibilidad] = useState(activeTherapist.disponibilidad || 'Lunes a Sábado, 08:00 - 20:00');

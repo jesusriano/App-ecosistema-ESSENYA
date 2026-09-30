@@ -40,8 +40,15 @@ export const PerfilPage: React.FC = () => {
   const displayPhone = authUser?.telefono || client?.phone || '+52 55 1234 5678';
 
   const [clientPhoto, setClientPhoto] = useState<string>(() => {
-    return client?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
+    return client?.photo || client?.fotografia || authUser?.fotografia || authUser?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
   });
+
+  React.useEffect(() => {
+    const photoUrl = client?.photo || client?.fotografia || authUser?.fotografia || authUser?.photo;
+    if (photoUrl) {
+      setClientPhoto(photoUrl);
+    }
+  }, [client?.photo, client?.fotografia, authUser?.fotografia, authUser?.photo]);
 
   const [streetInput, setStreetInput] = useState<string>(client?.street || '');
   const [interiorInput, setInteriorInput] = useState<string>(client?.interior || '');

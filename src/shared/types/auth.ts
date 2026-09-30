@@ -90,6 +90,7 @@ export interface UserAuthProfile {
   correoVerificado: boolean;
   rol: UserRole;
   fotografia?: string;
+  photo?: string;
   biografia?: string;
   fechaActualizacion: string; // ISO date string
   mustChangePassword?: boolean; // First login password reset flag

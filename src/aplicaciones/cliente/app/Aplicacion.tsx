@@ -216,15 +216,16 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
   // Client Photo State
   const [clientPhoto, setClientPhoto] = useState<string>(() => {
-    return client?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
+    return client?.photo || (client as any)?.fotografia || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400';
   });
 
   // Keep state in sync with client prop if it changes
   useEffect(() => {
-    if (client?.photo) {
-      setClientPhoto(client.photo);
+    const photoUrl = client?.photo || (client as any)?.fotografia;
+    if (photoUrl) {
+      setClientPhoto(photoUrl);
     }
-  }, [client?.photo]);
+  }, [client?.photo, (client as any)?.fotografia]);
 
   // Sync geolocation to address
   React.useEffect(() => {
@@ -244,38 +245,63 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
   const handleClientPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    const targetId = client?.id || auth.currentUser?.uid;
+    if (!file || !targetId) return;
 
-    if (file.size > 8 * 1024 * 1024) {
-      showToast('Error de tamaño', 'La imagen supera el límite de 8MB.', 'error');
+    // Validate size (< 2MB) and format (JPEG/PNG)
+    const { validateProfilePhoto } = await import('../../../shared/utils/fileValidation');
+    const validation = validateProfilePhoto(file);
+    if (!validation.isValid) {
+      showToast('Archivo no válido', validation.error || 'Verifica el tamaño y tipo de imagen.', 'error');
       return;
     }
 
-    if (!file.type.startsWith('image/')) {
-      showToast('Formato inválido', 'Por favor selecciona un archivo de imagen válido (JPG, PNG, WebP).', 'error');
-      return;
-    }
+    showToast('Subiendo fotografía', 'Guardando tu imagen en el servidor de Storage seguro...', 'info');
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const dataUrl = event.target?.result as string;
-      if (dataUrl && client?.id) {
-        try {
-          setClientPhoto(dataUrl);
-          // Persist to Firestore directly (100% Secure)
-          const { doc, updateDoc } = await import('firebase/firestore');
-          const { db } = await import('../../../lib/firebase');
-          const clientRef = doc(db, 'clientes', client.id);
-          await updateDoc(clientRef, { photo: dataUrl });
-          
-          showToast('Foto de Perfil Actualizada', 'Tu fotografía de socio VIP se ha guardado exitosamente en el servidor.', 'success');
-        } catch (error) {
-          console.error('Error updating photo in Firestore:', error);
-          showToast('Error al guardar foto', 'No se pudo guardar la foto en el servidor.', 'error');
-        }
+    try {
+      const { ref, uploadBytesResumable, getDownloadURL } = await import('firebase/storage');
+      const { storage, db } = await import('../../../lib/firebase');
+      const { doc, setDoc } = await import('firebase/firestore');
+
+      const fileExt = file.type === 'image/png' ? 'png' : 'jpg';
+      const storagePath = `clientes/${targetId}/foto_perfil.${fileExt}`;
+      const storageRef = ref(storage, storagePath);
+      const metadata = { contentType: file.type };
+
+      const uploadTask = uploadBytesResumable(storageRef, file, metadata);
+      
+      await new Promise<void>((resolve, reject) => {
+        uploadTask.on('state_changed', null, (err) => reject(err), () => resolve());
+      });
+
+      const downloadUrl = await getDownloadURL(storageRef);
+      setClientPhoto(downloadUrl);
+
+      // Save download URL to Firestore (clientes and users)
+      const clientRef = doc(db, 'clientes', targetId);
+      await setDoc(clientRef, {
+        id: targetId,
+        photo: downloadUrl,
+        fotografia: downloadUrl,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      try {
+        const userRef = doc(db, 'users', targetId);
+        await setDoc(userRef, {
+          photo: downloadUrl,
+          fotografia: downloadUrl,
+          fechaActualizacion: new Date().toISOString()
+        }, { merge: true });
+      } catch (uErr) {
+        console.warn('Error syncing photo with users collection:', uErr);
       }
-    };
-    reader.readAsDataURL(file);
+
+      showToast('Foto de Perfil Actualizada', 'Tu fotografía de socio VIP se ha guardado exitosamente.', 'success');
+    } catch (error: any) {
+      console.error('Error uploading photo in Aplicacion:', error);
+      showToast('Error al guardar foto', error?.message || 'No se pudo guardar la foto en Storage/Firestore.', 'error');
+    }
   };
 
   // Payment Method Selection State

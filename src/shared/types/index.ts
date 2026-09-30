@@ -84,6 +84,7 @@ export interface ClientUser {
   postalCode?: string;
   cityZone: string;
   photo: string;
+  fotografia?: string;
   rewardsPoints: number;
   isBlocked?: boolean;
   specialNotes?: string;
