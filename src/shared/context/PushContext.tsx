@@ -14,6 +14,7 @@ import { InAppNotificationItem, NotificationEventType } from '../types/notificat
 import { getFirebaseRegistrationToken } from '../utils/getFirebaseRegistrationToken';
 import { getMessagingService, auth } from '../../lib/firebase';
 import { onMessage } from 'firebase/messaging';
+import { useToast } from './ToastContext';
 
 interface PushContextType {
   supported: boolean;
@@ -43,6 +44,7 @@ interface PushContextType {
 const PushContext = createContext<PushContextType | undefined>(undefined);
 
 export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string }> = ({ children, userId }) => {
+  const { showToast } = useToast();
   const [supported, setSupported] = useState<boolean>(false);
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [subscribed, setSubscribed] = useState<boolean>(false);
@@ -141,6 +143,50 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
             const body = payload.notification?.body || payload.data?.body || 'Tienes una nueva solicitud de masaje.';
             const eventType = (payload.data?.type as any) || 'NEW_BOOKING';
 
+            // 1. Notificación visual en primer plano: invocar Toast dentro de ESSENYA
+            try {
+              showToast(title, body, 'gold');
+            } catch (toastErr) {
+              console.warn('[FCM-Foreground] Error al mostrar Toast:', toastErr);
+            }
+
+            // 2. Notificación visual del navegador (o solicitar permiso si está en default)
+            if (typeof window !== 'undefined' && 'Notification' in window) {
+              if (Notification.permission === 'granted') {
+                try {
+                  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.ready.then((reg) => {
+                      reg.showNotification(title, {
+                        body,
+                        icon: payload.notification?.icon || '/icons/icon-192.png',
+                        badge: '/icons/badge-72.png',
+                        tag: payload.data?.bookingId ? `booking-${payload.data.bookingId}` : 'essenya-foreground-alert'
+                      }).catch(() => {
+                        new Notification(title, {
+                          body,
+                          icon: payload.notification?.icon || '/icons/icon-192.png'
+                        });
+                      });
+                    }).catch(() => {
+                      new Notification(title, {
+                        body,
+                        icon: payload.notification?.icon || '/icons/icon-192.png'
+                      });
+                    });
+                  } else {
+                    new Notification(title, {
+                      body,
+                      icon: payload.notification?.icon || '/icons/icon-192.png'
+                    });
+                  }
+                } catch (notifErr) {
+                  console.warn('[FCM-Foreground] Error mostrando notificación nativa del navegador:', notifErr);
+                }
+              } else if (Notification.permission === 'default') {
+                Notification.requestPermission().catch(() => {});
+              }
+            }
+
             // Reproducir sonido de alerta si está habilitado
             if (soundEnabled) {
               playNotificationSound('bell', volume);
@@ -171,7 +217,7 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
         }
       };
     }
-  }, [soundEnabled, soundPreset, volume, userId]);
+  }, [soundEnabled, soundPreset, volume, userId, showToast]);
 
   const setSoundPreset = useCallback((preset: SoundPreset) => {
     setSoundPresetState(preset);
