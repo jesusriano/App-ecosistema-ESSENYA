@@ -248,7 +248,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     const targetId = client?.id || auth.currentUser?.uid;
     if (!file || !targetId) return;
 
-    // Validate size (< 2MB) and format (JPEG/PNG)
+    // Validate size (< 20MB) and format (JPEG/PNG/WebP)
     const { validateProfilePhoto } = await import('../../../shared/utils/fileValidation');
     const validation = validateProfilePhoto(file);
     if (!validation.isValid) {

@@ -148,10 +148,9 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
     const nameLower = file.name.toLowerCase();
     let ext: 'pdf' | 'jpg' | 'png' = 'pdf';
     if (nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) ext = 'jpg';
-    else if (nameLower.endsWith('.png')) ext = 'png';
+    else if (nameLower.endsWith('.png') || nameLower.endsWith('.webp')) ext = 'png';
     else {
-      // If validateProfilePhoto passed but it's not jpg/png (unlikely given ALLOWED_TYPES)
-      showToast('error', 'Formato no permitido. Utiliza JPG o PNG.');
+      showToast('error', 'Formato no permitido. Utiliza JPG, PNG o WebP.');
       return;
     }
 
@@ -655,7 +654,7 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
                 <div className="border-2 border-dashed border-[#E5DFD3] dark:border-[#333333] rounded-2xl p-4 text-center hover:border-[#C9A55B] transition-all bg-[#FAF8F5] dark:bg-[#1A1A1A]">
                   <input
                     type="file"
-                    accept="image/jpeg,image/png"
+                    accept="image/jpeg,image/png,image/webp"
                     onChange={handleFileSelection}
                     className="hidden"
                     id="docFileInput"
@@ -663,7 +662,7 @@ export const DocumentVerificationSection: React.FC<DocumentVerificationSectionPr
                   <label htmlFor="docFileInput" className="cursor-pointer space-y-1 block">
                     <Upload className="w-6 h-6 text-[#C9A55B] mx-auto" />
                     <p className="font-bold text-xs text-[#1C1917] dark:text-white">Haz clic para examinar o arrastra tu archivo</p>
-                    <p className="text-[10px] text-[#888888]">Formatos permitidos: JPG, PNG (Máx 2MB por auditoría)</p>
+                    <p className="text-[10px] text-[#888888]">Formatos permitidos: JPG, PNG, WebP (Máx 20MB)</p>
                   </label>
                 </div>
               </div>

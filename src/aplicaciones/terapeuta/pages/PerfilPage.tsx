@@ -381,7 +381,7 @@ export const PerfilPage: React.FC = () => {
               <input
                 id="therapist-header-photo-input"
                 type="file"
-                accept="image/png, image/jpeg"
+                accept="image/png, image/jpeg, image/webp"
                 onChange={handleFileSelectForCrop}
                 className="hidden"
               />
@@ -525,7 +525,7 @@ export const PerfilPage: React.FC = () => {
                     <Camera className="w-3.5 h-3.5 text-[#C9A55B]" />
                     <span>Fotografía de Perfil Profesional</span>
                   </label>
-                  <span className="text-[10px] text-[#888888]">JPG, PNG, WebP (Máx. 8MB)</span>
+                  <span className="text-[10px] text-[#888888]">JPG, PNG, WebP (Máx. 20MB)</span>
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center gap-4">
@@ -550,7 +550,7 @@ export const PerfilPage: React.FC = () => {
                       <input
                         id="form-photo-upload-input"
                         type="file"
-                        accept="image/png, image/jpeg"
+                        accept="image/png, image/jpeg, image/webp"
                         onChange={handleFileSelectForCrop}
                         className="hidden"
                       />

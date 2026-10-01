@@ -1,15 +1,15 @@
 /**
  * Validates a file for profile photo upload.
- * Limits: Max 2MB, Type: image/jpeg or image/png.
+ * Limits: Max 20MB, Type: image/jpeg, image/png, image/webp.
  */
 export interface FileValidationResult {
   isValid: boolean;
   error?: string;
 }
 
-export function validateProfilePhoto(file: File): FileValidationResult {
-  const MAX_SIZE = 2 * 1024 * 1024; // 2MB
-  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/jpg'];
+export function validateProfilePhoto(file: File, maxMb = 20): FileValidationResult {
+  const MAX_SIZE = maxMb * 1024 * 1024; // 20MB
+  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
 
   if (!file) {
     return { isValid: false, error: 'No se seleccionó ningún archivo.' };
@@ -18,14 +18,17 @@ export function validateProfilePhoto(file: File): FileValidationResult {
   if (file.size > MAX_SIZE) {
     return { 
       isValid: false, 
-      error: `La imagen supera el límite de 2MB solicitado por la auditoría (Tamaño actual: ${(file.size / (1024 * 1024)).toFixed(2)}MB).` 
+      error: `La imagen supera el límite de ${maxMb}MB (Tamaño actual: ${(file.size / (1024 * 1024)).toFixed(2)}MB). Por favor selecciona una foto de menor peso.` 
     };
   }
 
-  if (!ALLOWED_TYPES.includes(file.type)) {
+  const isTypeAllowed = ALLOWED_TYPES.includes(file.type?.toLowerCase()) || 
+    /\.(jpe?g|png|webp)$/i.test(file.name);
+
+  if (!isTypeAllowed) {
     return { 
       isValid: false, 
-      error: 'Formato no permitido. Solo se aceptan imágenes JPEG y PNG por seguridad.' 
+      error: 'Formato no permitido. Solo se aceptan imágenes JPEG, PNG o WebP.' 
     };
   }
 

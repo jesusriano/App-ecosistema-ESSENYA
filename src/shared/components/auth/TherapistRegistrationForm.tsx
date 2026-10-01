@@ -569,7 +569,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
               </label>
               <input
                 type="file"
-                accept="image/jpeg,image/png"
+                accept="image/jpeg,image/png,image/webp"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) {
@@ -770,7 +770,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
                 <p className="text-xs font-bold text-[#1C1917] dark:text-white">Carga de Documentos Oficiales (INE / Certificados) *</p>
               </div>
               <p className="text-[10px] text-[#6B655F] dark:text-[#AAAAAA]">
-                Sube tu identificación oficial (INE por ambos lados) y diplomas o constancias de masoterapia (PDF, JPG o PNG hasta 15MB).
+                Sube tu identificación oficial (INE por ambos lados) y diplomas o constancias de masoterapia (PDF, JPG, PNG o WebP hasta 20MB).
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
@@ -778,7 +778,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
                   <label className="text-[10px] font-semibold text-[#6B655F] dark:text-[#AAAAAA]">Identificación Oficial (INE / Pasaporte)</label>
                   <input
                     type="file"
-                    accept="image/jpeg,image/png"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
@@ -810,7 +810,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
                   <label className="text-[10px] font-semibold text-[#6B655F] dark:text-[#AAAAAA]">Certificado o Diploma de Masoterapia</label>
                   <input
                     type="file"
-                    accept="image/jpeg,image/png"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
