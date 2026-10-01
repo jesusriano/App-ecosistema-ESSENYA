@@ -12,7 +12,7 @@ import {
   getPendingSubscriptions,
   flushPendingSubscriptions
 } from '../services/pushService';
-import { vapidKey } from '../../lib/firebase';
+import { vapidKey, auth } from '../../lib/firebase';
 
 export interface PushSettingsPanelProps {
   userId?: string;
@@ -193,10 +193,11 @@ export const PushSettingsPanel: React.FC<PushSettingsPanelProps> = ({
         ? 'Prueba del sistema de alertas para administradores.'
         : 'Tu masajista ha confirmado la cita.';
 
-      // UID logic consistent with Card
-      const targetUid = (userId === 'admin' || !userId || userId === 'anonymous') ? undefined : userId;
+      // UID logic: prioritize authenticated Firebase Auth UID for Push delivery
+      const isProfilePlaceholder = userId === 'ther-1' || userId === 'ther-default' || userId === 'admin' || userId === 'anonymous' || !userId;
+      const pushRecipientUid = auth.currentUser?.uid || (isProfilePlaceholder ? undefined : userId);
 
-      const res = await testPush(targetUid, title, body);
+      const res = await testPush(pushRecipientUid, title, body);
       if (res.success) {
         if (res.sentCount === 0) {
           setMessage({ 

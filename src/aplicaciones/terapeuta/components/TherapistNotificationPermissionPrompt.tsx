@@ -208,16 +208,17 @@ export const TherapistNotificationPermissionPrompt: React.FC<TherapistNotificati
       }
 
       // Direct Firestore fallback for seamless device linking
-      if (therapistId) {
+      const pushRecipientUid = auth.currentUser?.uid || therapistId;
+      if (pushRecipientUid) {
         try {
           const { updateDoc, doc } = await import('firebase/firestore');
           const { db } = await import('../../../lib/firebase');
-          await updateDoc(doc(db, 'terapeutas', therapistId), {
+          await updateDoc(doc(db, 'terapeutas', pushRecipientUid), {
             fcmToken: currentFcmToken || null,
             pushSubscribed: true,
             fcmUpdatedAt: new Date().toISOString()
           }).catch(() => {});
-          await updateDoc(doc(db, 'users', therapistId), {
+          await updateDoc(doc(db, 'users', pushRecipientUid), {
             fcmToken: currentFcmToken || null,
             pushSubscribed: true,
             fcmUpdatedAt: new Date().toISOString()
@@ -230,7 +231,7 @@ export const TherapistNotificationPermissionPrompt: React.FC<TherapistNotificati
 
       // Enable push context
       if (pushContext) {
-        await pushContext.enablePush(therapistId).catch(() => {});
+        await pushContext.enablePush(pushRecipientUid).catch(() => {});
       }
 
       setSubStep('completed');
@@ -247,8 +248,9 @@ export const TherapistNotificationPermissionPrompt: React.FC<TherapistNotificati
     setTestLoading(true);
     try {
       if (pushContext) {
+        const pushRecipientUid = auth.currentUser?.uid || therapistId;
         const result = await pushContext.testPush(
-          therapistId,
+          pushRecipientUid,
           '👑 Alerta de Servicio VIP',
           '¡Felicitaciones! Tu dispositivo está correctamente enlazado para recibir reservas de alto valor en tiempo real.',
           'urgent'

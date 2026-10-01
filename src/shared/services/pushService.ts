@@ -614,11 +614,14 @@ export async function sendTestPushNotification(userId?: string, title?: string, 
       headers['Authorization'] = `Bearer ${token}`;
     }
 
+    const isProfilePlaceholder = userId === 'ther-1' || userId === 'ther-default' || userId === 'admin' || userId === 'anonymous';
+    const pushRecipientUid = (!isProfilePlaceholder && userId) ? userId : (auth.currentUser?.uid || userId);
+
     const res = await fetch('/api/push/send', {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        userId: userId || auth.currentUser?.uid,
+        userId: pushRecipientUid,
         title: title || 'Prueba de Notificación ESSENYA',
         body: body || 'Notificación push nativa operando en tiempo real con sonido.',
         url: '/',

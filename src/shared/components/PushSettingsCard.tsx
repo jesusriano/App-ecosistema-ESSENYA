@@ -3,6 +3,7 @@ import { usePush } from '../context/PushContext';
 import { SoundPreset } from '../services/pushService';
 import { Bell, Volume2, VolumeX, CheckCircle2, AlertTriangle, Send, Play, Sparkles, RefreshCw } from 'lucide-react';
 import { PushSubscriptionButton } from './PushSubscriptionButton';
+import { auth } from '../../lib/firebase';
 
 interface PushSettingsCardProps {
   userId?: string;
@@ -70,10 +71,11 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
         body = 'Tu sesión ha concluido. Gracias por confiar en ESSENYA.';
       }
 
-      // If userId is missing or placeholder 'admin', try to use context's internal real UID if possible
-      const targetUid = (userId === 'admin' || !userId) ? undefined : userId;
+      // UID logic: prioritize authenticated Firebase Auth UID for Push delivery
+      const isProfilePlaceholder = userId === 'ther-1' || userId === 'ther-default' || userId === 'admin' || !userId;
+      const pushRecipientUid = auth.currentUser?.uid || (isProfilePlaceholder ? undefined : userId);
 
-      const res = await testPush(targetUid, title, body, soundPreset);
+      const res = await testPush(pushRecipientUid, title, body, soundPreset);
       if (res.success) {
         if (res.sentCount === 0) {
           setMessage({ 

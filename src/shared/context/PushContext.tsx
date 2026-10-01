@@ -12,7 +12,7 @@ import {
 } from '../services/pushService';
 import { InAppNotificationItem, NotificationEventType } from '../types/notifications';
 import { getFirebaseRegistrationToken } from '../utils/getFirebaseRegistrationToken';
-import { getMessagingService } from '../../lib/firebase';
+import { getMessagingService, auth } from '../../lib/firebase';
 import { onMessage } from 'firebase/messaging';
 
 interface PushContextType {
@@ -226,9 +226,15 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
     const presetToUse = preset || soundPreset;
     if (soundEnabled) playNotificationSound(presetToUse, volume);
     
+    // Resolve canonical Push Recipient: prioritize authenticated Firebase Auth UID over catalog profile IDs
+    const isProfilePlaceholder = targetUserId === 'ther-1' || targetUserId === 'ther-default' || targetUserId === 'anonymous';
+    const pushRecipientUid = (!isProfilePlaceholder && targetUserId)
+      ? targetUserId
+      : (auth.currentUser?.uid || userId || targetUserId || 'anonymous');
+
     // Also add to in-app notification center for complete sync test
     addInAppNotification({
-      userId: targetUserId || userId || 'anonymous',
+      userId: pushRecipientUid,
       title: title || 'Prueba de Notificación ESSENYA',
       description: body || 'Notificación push nativa con sonido operativo en tiempo real.',
       eventType: 'reservation.created',
@@ -236,7 +242,7 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
       url: '/'
     });
 
-    return await sendTestPushNotification(targetUserId || userId, title, body, presetToUse);
+    return await sendTestPushNotification(pushRecipientUid, title, body, presetToUse);
   }, [userId, soundEnabled, soundPreset, volume]);
 
   const addInAppNotification = useCallback((item: Omit<InAppNotificationItem, 'id' | 'timestamp' | 'read'>) => {

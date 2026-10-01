@@ -357,8 +357,10 @@ export async function getEligibleTherapistCandidates(
     // Filter by maxEtaMinutes of the current level
     if (route.etaMinutes <= maxEtaMinutes) {
       const name = tData.name || tData.nombre || [tData.nombre, tData.apellidos].filter(Boolean).join(' ') || 'Terapeuta Certificada';
+      const pushRecipientUid = tData.firebaseAuthUid || tData.authUid || tData.userId || tId;
       candidates.push({
         therapistId: tId,
+        pushRecipientUid,
         therapistName: name,
         therapistPhone: tData.phone || tData.telefono || '',
         therapistPhoto: tData.photo || tData.fotografia || '',
@@ -591,7 +593,7 @@ export async function stepDispatchEngine(
     });
 
     // Envío unificado al terapeuta (Prioriza FCM; si no tiene token, usa WebPush como fallback; exactamente 1 notificación lógica)
-    sendPushNotificationToUser(db, cand.therapistId, {
+    sendPushNotificationToUser(db, (cand as any).pushRecipientUid || cand.therapistId, {
       title: '🔔 Masaje solicitado',
       body: `${booking.serviceName || 'Masaje a Domicilio'} en ${booking.cityZone || 'tu zona'} (${booking.time || 'Ahora'} - ETA ${cand.etaMinutes} min)`,
       url: `/terapeuta/servicios?bookingId=${bookingId}`,
