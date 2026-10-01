@@ -329,12 +329,20 @@ export async function sendStandardWebPushToUser(
       } catch (err: any) {
         const status = err?.statusCode;
         const msg = String(err?.message || '');
-        console.warn(`[WebPush] Failed delivering to ${doc.id} (user: ${userId}):`, status, msg);
-        // Clean up stale, invalid, expired, or forbidden endpoints (HTTP 4xx or unexpected response code)
-        if ((status >= 400 && status < 500) || msg.includes('unexpected response code') || status === 410 || status === 404 || status === 401 || status === 403 || status === 400) {
-          console.log(`[WebPush] Eliminando suscripción obsoleta ${doc.id} para usuario ${userId} (HTTP ${status || '4xx'})`);
+        const isStale = (status >= 400 && status < 500) || 
+          msg.includes('unexpected response code') || 
+          status === 410 || 
+          status === 404 || 
+          status === 401 || 
+          status === 403 || 
+          status === 400;
+
+        // Clean up stale, invalid, expired, or forbidden endpoints silently as standard maintenance
+        if (isStale) {
+          console.log(`[WebPush] Suscripción caducada/incompatible eliminada: ${doc.id} (user: ${userId}, HTTP ${status || '4xx'})`);
           await doc.ref.delete().catch(() => {});
         } else {
+          console.warn(`[WebPush] Error temporal de entrega para ${doc.id} (user: ${userId}):`, status, msg);
           errors.push({ docId: doc.id, error: msg || 'Error de entrega WebPush' });
         }
       }

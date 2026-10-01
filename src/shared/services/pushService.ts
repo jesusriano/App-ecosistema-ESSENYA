@@ -57,7 +57,7 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 }
 
 export function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const DEFAULT_VALID_KEY = "BHEx7m8uEh5G66_S_vknnlbzdyDQ93X4xuNbqcr-KuS5p_r0ycVGo_7bt6HAYCkABoQTFNvspi4pSOb2Nm4gNl8";
+  const DEFAULT_VALID_KEY = vapidKey || "BDEoPYVIWr6y69eA98bjgPGLyKJSxhut4tp_rr0AuZOBlRoe9zY92NwmKSpKCKWI2nJY45ET5Z_YJkETbaxu6PE";
   
   // 1. Sanitize the string
   let cleanString = String(base64String || '').trim();

@@ -246,18 +246,52 @@ export const sanitizeTherapist = (raw: any): TherapistFullProfile => {
   } as TherapistFullProfile;
 };
 
-// Initial professional therapists dataset (starts clean for production)
-const INITIAL_THERAPISTS: TherapistFullProfile[] = [];
+// Local storage cache key for instant Stale-While-Revalidate loading (< 10ms)
+const THERAPISTS_CACHE_KEY = 'essenya_cached_therapists';
+
+const loadCachedTherapists = (): TherapistFullProfile[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(THERAPISTS_CACHE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map(sanitizeTherapist);
+      }
+    }
+  } catch {}
+  return [];
+};
 
 export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [therapists, setTherapists] = useState<TherapistFullProfile[]>(INITIAL_THERAPISTS);
+  const [therapists, setTherapists] = useState<TherapistFullProfile[]>(loadCachedTherapists);
 
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
 
-  const [loading, setLoading] = useState(false);
+  // If we have cached therapists, don't show a blocking spinner (immediate UI presence)
+  const [loading, setLoading] = useState<boolean>(() => therapists.length === 0);
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
   const [sensitiveInfo, setSensitiveInfo] = useState<Record<string, any>>({});
   const { firebaseUser, sessions } = useAuth();
+
+  // Helper to update therapists both in state and in local fast cache
+  const updateTherapistsState = useCallback((newList: TherapistFullProfile[]) => {
+    setTherapists(newList);
+    if (typeof window !== 'undefined' && newList.length > 0) {
+      try {
+        localStorage.setItem(THERAPISTS_CACHE_KEY, JSON.stringify(newList));
+      } catch {}
+    }
+  }, []);
+
+  // Synchronize any state mutation to local cache automatically
+  useEffect(() => {
+    if (typeof window !== 'undefined' && therapists.length > 0) {
+      try {
+        localStorage.setItem(THERAPISTS_CACHE_KEY, JSON.stringify(therapists));
+      } catch {}
+    }
+  }, [therapists]);
 
   // Diagnostic tracking module for document and profile persistence life-cycles
   const logPersistenceDiagnostic = (operation: string, therapistId: string, stage: string, details: any, error?: any) => {
@@ -277,7 +311,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
-  // Helper to fetch therapists from backend API (guarantees administrative visibility)
+  // Helper to fetch therapists from backend API (guarantees administrative visibility with speed)
   const fetchTherapistsFromBackend = useCallback(async () => {
     console.log('[TherapistContext] Fetching therapists from backend API /api/admin/therapists...');
     try {
@@ -288,7 +322,6 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       const res = await fetch('/api/admin/therapists', { headers });
       if (res.ok) {
         const data = await res.json();
-        console.log('[TherapistContext] Backend response for therapists:', data);
         if (data.success && Array.isArray(data.therapists)) {
           const loaded: TherapistFullProfile[] = data.therapists
             .map((raw: any) => {
@@ -301,7 +334,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
             })
             .filter((t): t is TherapistFullProfile => t !== null);
           console.log('[TherapistContext] Successfully sanitized and loaded therapists from backend:', loaded.length);
-          setTherapists(loaded);
+          updateTherapistsState(loaded);
           setFirestoreError(null);
         } else {
           console.warn('[TherapistContext] Backend response did not contain valid therapists array:', data);
@@ -314,7 +347,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [updateTherapistsState]);
 
   // Firestore Realtime Subscription for Therapists
   useEffect(() => {
@@ -326,14 +359,22 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     const isTherapistSession = !!sessions.terapeuta;
 
     if (!isAdminSession && !isTherapistSession && !firebaseUser) {
-      setTherapists([]);
+      if (therapists.length === 0) {
+        setTherapists([]);
+      }
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    if (therapists.length === 0) {
+      setLoading(true);
+    }
 
     if (isAdminSession) {
+      // 1. Fetch immediately from backend API in parallel for high speed
+      fetchTherapistsFromBackend();
+
+      // 2. Also listen in real-time via Firestore if authenticated
       if (firebaseUser) {
         const unsubscribe = onSnapshot(collection(db, 'terapeutas'), (snapshot) => {
           setFirestoreError(null);
@@ -354,7 +395,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
                 }
               })
               .filter((t): t is TherapistFullProfile => t !== null);
-            setTherapists(loaded);
+            updateTherapistsState(loaded);
           }
         }, (err) => {
           setLoading(false);
@@ -362,8 +403,6 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
           fetchTherapistsFromBackend();
         });
         return () => unsubscribe();
-      } else {
-        fetchTherapistsFromBackend();
       }
     } else if (isTherapistSession) {
       // Subscribe ONLY to their own therapist document

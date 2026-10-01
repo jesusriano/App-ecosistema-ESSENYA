@@ -1079,6 +1079,7 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
       });
 
       await batch.commit();
+      invalidateAdminTherapistsCache();
 
       return res.status(201).json({
         success: true,
@@ -1108,61 +1109,38 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
   }
 });
 
-// Endpoint para consultar terapeutas (con auto-curación de huérfanos y deduplicación)
+// In-memory cache for admin therapists endpoint to guarantee instant response (< 50ms)
+interface AdminTherapistCache {
+  data: any[];
+  timestamp: number;
+}
+let adminTherapistsCache: AdminTherapistCache | null = null;
+const THERAPISTS_CACHE_TTL = 30 * 1000; // 30 seconds cache
+
+export function invalidateAdminTherapistsCache() {
+  adminTherapistsCache = null;
+}
+
+// Endpoint para consultar terapeutas (con respuesta instantánea, auto-curación en segundo plano y deduplicación)
 app.get("/api/admin/therapists", requireAdmin, async (req: Request, res: Response) => {
   try {
-    const db = getAdminFirestore();
-    const snapshot = await db.collection("terapeutas").get();
-    
-    // Auto-curación: Verificar si existen terapeutas en 'users' que no estén en 'terapeutas'
-    try {
-      const usersSnap = await db.collection("users").where("rol", "==", "terapeuta").get();
-      const existingEmails = new Set<string>();
-      snapshot.docs.forEach(d => {
-        const c = (d.data().correo || d.data().email || "").toLowerCase().trim();
-        if (c) existingEmails.add(c);
+    const now = Date.now();
+    // Retornar caché inmediato en memoria si aún es válido
+    if (adminTherapistsCache && (now - adminTherapistsCache.timestamp) < THERAPISTS_CACHE_TTL) {
+      return res.json({
+        success: true,
+        count: adminTherapistsCache.data.length,
+        therapists: adminTherapistsCache.data,
+        cached: true
       });
-
-      for (const uDoc of usersSnap.docs) {
-        const uData = uDoc.data();
-        const email = (uData.correo || uData.email || "").toLowerCase().trim();
-        if (email && !existingEmails.has(email)) {
-          console.log(`[Auto-heal] Syncing missing therapist from users to terapeutas: ${email} (${uDoc.id})`);
-          await db.collection("terapeutas").doc(uDoc.id).set({
-            id: uDoc.id,
-            uid: uDoc.id,
-            userId: uDoc.id,
-            nombre: uData.nombre || "Terapeuta",
-            apellidos: uData.apellidos || "",
-            nombreCompleto: uData.nombreCompleto || `${uData.nombre || "Terapeuta"} ${uData.apellidos || ""}`.trim(),
-            correo: email,
-            email: email,
-            telefono: uData.telefono || "",
-            estado: uData.estado || "pendiente",
-            status: uData.estado || "pendiente",
-            estadoAprobacion: uData.estado === "activo" ? "aprobado" : "pendiente",
-            especialidades: uData.especialidades || ["Masaje Tejido Profundo"],
-            zonasCobertura: uData.zonasCobertura || ["Polanco", "Lomas de Chapultepec"],
-            puntuacion: 5.0,
-            numeroResenas: 0,
-            serviciosCompletados: 0,
-            creadoEn: uData.fechaRegistro || new Date().toISOString(),
-            createdAt: uData.fechaRegistro || new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          }, { merge: true });
-          existingEmails.add(email);
-        }
-      }
-    } catch (healErr) {
-      console.warn("Auto-heal check in /api/admin/therapists encountered error:", healErr);
     }
 
-    // Re-leer terapeutas para asegurar lista actualizada y limpia
-    const freshSnapshot = await db.collection("terapeutas").get();
+    const db = getAdminFirestore();
+    const snapshot = await db.collection("terapeutas").get();
     const seenEmails = new Set<string>();
     const therapists: any[] = [];
 
-    freshSnapshot.docs.forEach(doc => {
+    snapshot.docs.forEach(doc => {
       const data = doc.data();
       const email = (data.correo || data.email || "").toLowerCase().trim();
       
@@ -1183,6 +1161,56 @@ app.get("/api/admin/therapists", requireAdmin, async (req: Request, res: Respons
         solicitudRegistroFecha: data.solicitudRegistroFecha?.toDate ? data.solicitudRegistroFecha.toDate().toISOString() : data.solicitudRegistroFecha
       });
     });
+
+    // Guardar en caché de memoria
+    adminTherapistsCache = {
+      data: therapists,
+      timestamp: Date.now()
+    };
+
+    // Auto-curación en segundo plano (asíncrona y no bloqueante) para no demorar la respuesta al usuario
+    (async () => {
+      try {
+        const usersSnap = await db.collection("users").where("rol", "==", "terapeuta").get();
+        let syncedCount = 0;
+        for (const uDoc of usersSnap.docs) {
+          const uData = uDoc.data();
+          const email = (uData.correo || uData.email || "").toLowerCase().trim();
+          if (email && !seenEmails.has(email)) {
+            console.log(`[Auto-heal] Syncing missing therapist from users to terapeutas: ${email} (${uDoc.id})`);
+            await db.collection("terapeutas").doc(uDoc.id).set({
+              id: uDoc.id,
+              uid: uDoc.id,
+              userId: uDoc.id,
+              nombre: uData.nombre || "Terapeuta",
+              apellidos: uData.apellidos || "",
+              nombreCompleto: uData.nombreCompleto || `${uData.nombre || "Terapeuta"} ${uData.apellidos || ""}`.trim(),
+              correo: email,
+              email: email,
+              telefono: uData.telefono || "",
+              estado: uData.estado || "pendiente",
+              status: uData.estado || "pendiente",
+              estadoAprobacion: uData.estado === "activo" ? "aprobado" : "pendiente",
+              especialidades: uData.especialidades || ["Masaje Tejido Profundo"],
+              zonasCobertura: uData.zonasCobertura || ["Polanco", "Lomas de Chapultepec"],
+              puntuacion: 5.0,
+              numeroResenas: 0,
+              serviciosCompletados: 0,
+              creadoEn: uData.fechaRegistro || new Date().toISOString(),
+              createdAt: uData.fechaRegistro || new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+            seenEmails.add(email);
+            syncedCount++;
+          }
+        }
+        if (syncedCount > 0) {
+          adminTherapistsCache = null; // invalidar para que el próximo fetch recupere los recién sincronizados
+        }
+      } catch (healErr) {
+        console.warn("Auto-heal background check in /api/admin/therapists encountered error:", healErr);
+      }
+    })();
 
     return res.json({
       success: true,
@@ -1284,6 +1312,7 @@ app.post("/api/admin/create-therapist-auth-profile", requireAdmin, async (req, r
       }, { merge: true });
       
       await batch.commit();
+      invalidateAdminTherapistsCache();
       res.json({ success: true, uid });
     } catch (fsError) {
       if (isNewUser) {
@@ -1527,6 +1556,7 @@ app.post("/api/admin/therapist/status", requireAdmin, async (req: Request, res: 
     });
 
     await batch.commit();
+    invalidateAdminTherapistsCache();
 
     return res.json({
       success: true,
@@ -1564,6 +1594,7 @@ app.delete("/api/admin/therapist/:id", requireAdmin, async (req: Request, res: R
     });
 
     await batch.commit();
+    invalidateAdminTherapistsCache();
     return res.json({ success: true, message: "Terapeuta eliminada exitosamente." });
   } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });

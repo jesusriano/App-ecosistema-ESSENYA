@@ -114,20 +114,83 @@ self.addEventListener('push', (event) => {
     ]
   };
 
+  /**
+   * Muestra la notificación con degradación progresiva (multi-tier fallback),
+   * asegurando la visualización del título y mensaje en cualquier plataforma (iOS, Safari, Android, Windows, Mac).
+   */
+  async function showNotificationRobust(title, options) {
+    const safeTitle = title || '🔔 ESSENYA';
+    const safeBody = options.body || 'Tienes una nueva actualización en tu panel.';
+
+    // Nivel 1: Opciones enriquecidas completas (para navegadores de escritorio y Android modernos)
+    try {
+      await self.registration.showNotification(safeTitle, options);
+      console.log('[ServiceWorker] Notificación mostrada exitosamente con opciones completas.');
+      return;
+    } catch (errTier1) {
+      console.warn('[ServiceWorker] Falló opción completa (posible incompatibilidad de actions/requireInteraction). Degradando...', errTier1);
+    }
+
+    // Nivel 2: Opciones estándar sin 'actions' ni 'requireInteraction' (evita TypeErrors en Safari / iOS PWA)
+    try {
+      const tier2Options = {
+        body: safeBody,
+        icon: options.icon || '/icons/icon-192.png',
+        badge: options.badge || '/icons/icon-192.png',
+        tag: options.tag,
+        data: options.data,
+        vibrate: options.vibrate
+      };
+      await self.registration.showNotification(safeTitle, tier2Options);
+      console.log('[ServiceWorker] Notificación mostrada con opciones estándar (Nivel 2).');
+      return;
+    } catch (errTier2) {
+      console.warn('[ServiceWorker] Falló Nivel 2. Degradando a opciones esenciales...', errTier2);
+    }
+
+    // Nivel 3: Opciones esenciales (cuerpo, icono y URL para redirección al tocar)
+    try {
+      const tier3Options = {
+        body: safeBody,
+        icon: options.icon || '/icons/icon-192.png',
+        data: { url: options.data?.url || '/' }
+      };
+      await self.registration.showNotification(safeTitle, tier3Options);
+      console.log('[ServiceWorker] Notificación mostrada con opciones esenciales (Nivel 3).');
+      return;
+    } catch (errTier3) {
+      console.warn('[ServiceWorker] Falló Nivel 3. Intentando fallback ultra-mínimo de solo texto...', errTier3);
+    }
+
+    // Nivel 4: Fallback absoluto universal (estrictamente título y cuerpo, garantizando visualización)
+    try {
+      await self.registration.showNotification(safeTitle, {
+        body: safeBody
+      });
+      console.log('[ServiceWorker] Notificación mostrada en modo ultra-mínimo (solo texto).');
+    } catch (finalErr) {
+      console.error('[ServiceWorker] Error crítico: No fue posible mostrar la notificación en ninguna variante:', finalErr);
+    }
+  }
+
   // Enforce user visible notifications requirement (W3C Push API specification)
   event.waitUntil(
     (async () => {
-      // 1. Show the OS system-level native notification
-      await self.registration.showNotification(data.title, notificationOptions);
+      // 1. Show the OS system-level native notification with resilient fallback
+      await showNotificationRobust(data.title, notificationOptions);
 
       // 2. Broadcast message internally to all active tabs for instant React UI sync/sound playback
-      const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      for (const client of windowClients) {
-        client.postMessage({
-          type: 'PUSH_NOTIFICATION_RECEIVED',
-          payload: data,
-          sound: soundFile
-        });
+      try {
+        const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        for (const client of windowClients) {
+          client.postMessage({
+            type: 'PUSH_NOTIFICATION_RECEIVED',
+            payload: data,
+            sound: soundFile
+          });
+        }
+      } catch (broadcastErr) {
+        console.warn('[ServiceWorker] No se pudo notificar a pestañas activas:', broadcastErr);
       }
     })()
   );
