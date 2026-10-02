@@ -668,7 +668,6 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       resenasCount: 0,
       serviciosCompletados: 0,
       biografia: data.biografia || data.certificacionesInfo || 'Terapeuta profesional certificada ESSENYA.',
-      bio: data.biografia || data.certificacionesInfo || 'Terapeuta profesional certificada ESSENYA.',
       vehiculo: data.vehiculo,
       fechaAlta: new Date().toISOString(),
       ultimoAcceso: 'Nunca',

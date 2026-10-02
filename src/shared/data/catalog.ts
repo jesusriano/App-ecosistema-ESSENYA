@@ -4,7 +4,7 @@ import imgDeepTissue from '../../assets/images/deep_tissue_essenya_1789423125038
 import imgSports from '../../assets/images/sports_massage_essenya_1789423135431.jpg';
 import imgPrenatal from '../../assets/images/prenatal_massage_essenya_1789423145499.jpg';
 import imgCouples from '../../assets/images/couples_massage_essenya_1789423155702.jpg';
-import imgTension from '../../assets/images/tension_release_essenya_1789423167792.jpg';
+import imgTension from '../../assets/images/tension_release_shiatsu_chair.jpg';
 
 export * from './pricing';
 export * from './scheduling';

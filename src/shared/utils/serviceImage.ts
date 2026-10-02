@@ -3,7 +3,7 @@ import imgDeepTissue from '../../assets/images/deep_tissue_essenya_1789423125038
 import imgPrenatal from '../../assets/images/prenatal_massage_essenya_1789423145499.jpg';
 import imgCouples from '../../assets/images/couples_massage_essenya_1789423155702.jpg';
 import imgRelaxing from '../../assets/images/regenerated_image_1790367912901.png';
-import imgTension from '../../assets/images/tension_release_essenya_1789423167792.jpg';
+import imgTension from '../../assets/images/tension_release_shiatsu_chair.jpg';
 import imgFourHands from '../../assets/images/four_hands_massage_1785522559896.jpg';
 
 export const STATIC_SERVICE_IMAGES: Record<string, string> = {

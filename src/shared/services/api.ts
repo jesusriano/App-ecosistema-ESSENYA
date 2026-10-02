@@ -73,3 +73,25 @@ export async function fetchPostCareProtocol(data: {
   return response.json();
 }
 
+export async function generateOrEditServiceImage(data: {
+  prompt: string;
+  base64Image?: string;
+  aspectRatio?: '16:9' | '4:3' | '1:1';
+}): Promise<{ success: boolean; imageUrl?: string; error?: string; isQuota?: boolean }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch('/api/gemini/generate-or-edit-image', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+  });
+  const resData = await response.json().catch(() => ({ success: false, error: 'Error de conexión con el servidor' }));
+  if (!response.ok || !resData.success) {
+    return {
+      success: false,
+      error: resData.error || `HTTP error ${response.status}`,
+      isQuota: resData.isQuota || response.status === 402,
+    };
+  }
+  return resData;
+}
+

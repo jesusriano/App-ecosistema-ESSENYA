@@ -1999,6 +1999,92 @@ Devuelve un JSON estricto con:
     }
   });
 
+// Endpoint de creación y edición de imágenes con Gemini Imagen / Nano Banana
+app.post("/api/gemini/generate-or-edit-image", async (req, res) => {
+  try {
+    const { prompt, base64Image, aspectRatio = "16:9" } = req.body || {};
+    if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
+      return res.status(400).json({ success: false, error: "El prompt descriptivo es requerido." });
+    }
+
+    const ai = await getGeminiClient();
+    const cleanPrompt = sanitizePromptInput(prompt.trim(), 1000);
+
+    let contents: any;
+    if (base64Image && typeof base64Image === "string" && base64Image.length > 50) {
+      let mimeType = "image/jpeg";
+      let cleanData = base64Image;
+      if (base64Image.startsWith("data:")) {
+        const match = base64Image.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          mimeType = match[1];
+          cleanData = match[2];
+        }
+      }
+      contents = {
+        parts: [
+          {
+            inlineData: {
+              data: cleanData,
+              mimeType: mimeType,
+            },
+          },
+          {
+            text: cleanPrompt,
+          },
+        ],
+      };
+    } else {
+      contents = {
+        parts: [
+          {
+            text: cleanPrompt,
+          },
+        ],
+      };
+    }
+
+    // Call generateContent with gemini-3.1-flash-lite-image (nano banana lite) or gemini-3.1-flash-image
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-flash-lite-image",
+      contents,
+      config: {
+        imageConfig: {
+          aspectRatio: (aspectRatio === "1:1" || aspectRatio === "4:3" || aspectRatio === "16:9") ? aspectRatio : "16:9",
+        },
+      },
+    });
+
+    let generatedImageUrl = "";
+    if (response.candidates?.[0]?.content?.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          const mime = part.inlineData.mimeType || "image/png";
+          generatedImageUrl = `data:${mime};base64,${part.inlineData.data}`;
+          break;
+        }
+      }
+    }
+
+    if (!generatedImageUrl) {
+      return res.status(500).json({ success: false, error: "El modelo no generó una imagen en la respuesta." });
+    }
+
+    return res.json({ success: true, imageUrl: generatedImageUrl });
+  } catch (error: any) {
+    const errorMsg = String(error?.message || error || "");
+    console.error("Gemini Image API Error:", errorMsg);
+    const isQuota = error?.status === 402 || errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("prepayment credits") || errorMsg.includes("quota");
+    return res.status(isQuota ? 402 : 500).json({
+      success: false,
+      isQuota,
+      error: isQuota
+        ? "Tu proyecto en Google AI Studio requiere créditos de prepago activos para generar o editar imágenes con Gemini. Por favor verifica tus créditos en Google AI Studio."
+        : `Error al procesar la imagen: ${errorMsg.slice(0, 200)}`
+    });
+  }
+});
+
 
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
