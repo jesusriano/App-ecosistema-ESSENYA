@@ -550,9 +550,24 @@ app.post("/api/auth/sync-claims", requireAuth, async (req: Request, res: Respons
       isAdmin = true;
       permissions = ["admin:all", "admin:access", "therapist:access", "client:access"];
     } else {
-      // Check if user is Therapist in Firestore
+      // Check if user is Therapist in Firestore (by UID in terapeutas, role in users, or email)
       const therapistDoc = await db.collection("terapeutas").doc(uid).get();
-      if (therapistDoc.exists) {
+      let isTherapist = therapistDoc.exists;
+
+      if (!isTherapist) {
+        const userDoc = await db.collection("users").doc(uid).get();
+        if (userDoc.exists) {
+          const uRole = String(userDoc.data()?.rol || userDoc.data()?.role || "").toLowerCase();
+          if (uRole === "terapeuta") isTherapist = true;
+        }
+      }
+
+      if (!isTherapist && email) {
+        const qEmail = await db.collection("terapeutas").where("correo", "==", email).limit(1).get();
+        if (!qEmail.empty) isTherapist = true;
+      }
+
+      if (isTherapist) {
         detectedRole = "terapeuta";
         permissions = ["therapist:access", "therapist:services", "client:access"];
       } else {
@@ -1303,12 +1318,45 @@ app.post("/api/admin/create-therapist-auth-profile", requireAdmin, async (req, r
     const db = getAdminFirestore();
     
     try {
+      const nowIso = new Date().toISOString();
       const batch = db.batch();
       batch.set(getAdminFirestore().collection("users").doc(uid), {
-        uid, email, role: "terapeuta", isActive: true, createdAt: adminFirestore.FieldValue.serverTimestamp()
+        uid,
+        id: uid,
+        email,
+        correo: email,
+        nombre: displayName || "Terapeuta",
+        nombreCompleto: displayName || "Terapeuta",
+        role: "terapeuta",
+        rol: "terapeuta",
+        estado: "activo",
+        isActive: true,
+        fechaRegistro: nowIso,
+        createdAt: adminFirestore.FieldValue.serverTimestamp(),
+        updatedAt: nowIso
       }, { merge: true });
       batch.set(getAdminFirestore().collection("terapeutas").doc(uid), {
-        uid, correo: email, nombreCompleto: displayName, estadoAprobacion: "pendiente", estadoVerificacion: "no_verificado"
+        id: uid,
+        uid,
+        userId: uid,
+        correo: email,
+        email,
+        nombre: displayName || "Terapeuta",
+        nombreCompleto: displayName || "Terapeuta",
+        rol: "terapeuta",
+        role: "terapeuta",
+        estado: "activo",
+        status: "activo",
+        estadoAprobacion: "aprobado",
+        estadoVerificacion: "verificado",
+        puntuacion: 5.0,
+        numeroResenas: 0,
+        serviciosCompletados: 0,
+        especialidades: ["Masaje Holístico", "Masaje Tejido Profundo"],
+        zonasCobertura: ["Polanco", "Lomas de Chapultepec"],
+        creadoEn: adminFirestore.FieldValue.serverTimestamp(),
+        createdAt: nowIso,
+        updatedAt: nowIso
       }, { merge: true });
       
       await batch.commit();
@@ -1558,6 +1606,14 @@ app.post("/api/admin/therapist/status", requireAdmin, async (req: Request, res: 
     await batch.commit();
     invalidateAdminTherapistsCache();
 
+    if (targetUid && status === "activo") {
+      try {
+        await auth.setCustomUserClaims(targetUid, { role: "terapeuta", rol: "terapeuta", therapist: true });
+      } catch (claimErr) {
+        console.warn("Could not set custom user claims on therapist approval:", claimErr);
+      }
+    }
+
     return res.json({
       success: true,
       therapistId: targetUid,
@@ -1568,6 +1624,139 @@ app.post("/api/admin/therapist/status", requireAdmin, async (req: Request, res: 
   } catch (error: any) {
     console.error("Error en /api/admin/therapist/status:", error);
     return res.status(500).json({ success: false, error: error.message || "Error interno al actualizar estado." });
+  }
+});
+
+// Endpoint integral para actualizar todos los datos de una terapeuta por Administración
+app.post("/api/admin/therapist/update", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id, updates } = req.body || {};
+    if (!id || !updates || typeof updates !== "object") {
+      return res.status(400).json({ success: false, error: "Se requiere 'id' y el objeto 'updates'." });
+    }
+
+    const db = getAdminFirestore();
+    const thDocRef = db.collection("terapeutas").doc(id);
+    const thSnap = await thDocRef.get();
+
+    if (!thSnap.exists) {
+      return res.status(404).json({ success: false, error: `No se encontró terapeuta con ID ${id}.` });
+    }
+
+    const currentData = thSnap.data() || {};
+    const nowIso = new Date().toISOString();
+    const batch = db.batch();
+
+    // 1. Limpieza y preparación de campos para 'terapeutas'
+    const cleanUpdates: Record<string, any> = {};
+    for (const [key, val] of Object.entries(updates)) {
+      if (val !== undefined) {
+        cleanUpdates[key] = val;
+      }
+    }
+
+    // Nombre completo derivado si cambió nombre o apellidos
+    const finalNombre = cleanUpdates.nombre !== undefined ? cleanUpdates.nombre : currentData.nombre || "";
+    const finalApellidos = cleanUpdates.apellidos !== undefined ? cleanUpdates.apellidos : currentData.apellidos || "";
+    const finalNombreCompleto = `${finalNombre} ${finalApellidos}`.trim();
+    cleanUpdates.nombreCompleto = finalNombreCompleto;
+    cleanUpdates.fechaActualizacion = nowIso;
+    cleanUpdates.updatedAt = nowIso;
+
+    batch.set(thDocRef, cleanUpdates, { merge: true });
+
+    // 2. Sincronización en colección 'users'
+    const userRef = db.collection("users").doc(id);
+    const userUpdates: Record<string, any> = {
+      nombre: finalNombre,
+      apellidos: finalApellidos,
+      nombreCompleto: finalNombreCompleto,
+      fechaActualizacion: nowIso,
+      updatedAt: nowIso
+    };
+    if (cleanUpdates.correo) {
+      userUpdates.correo = cleanUpdates.correo;
+      userUpdates.email = cleanUpdates.correo;
+    }
+    if (cleanUpdates.telefono) {
+      userUpdates.telefono = cleanUpdates.telefono;
+    }
+    if (cleanUpdates.fotografia) {
+      userUpdates.fotografia = cleanUpdates.fotografia;
+      userUpdates.photo = cleanUpdates.fotografia;
+    }
+    if (cleanUpdates.estado) {
+      userUpdates.estado = cleanUpdates.estado;
+      userUpdates.isActive = cleanUpdates.estado === "activo";
+    }
+    batch.set(userRef, userUpdates, { merge: true });
+
+    // 3. Sincronización de datos bancarios / sensibles en subcolección privada
+    const sensitiveRef = thDocRef.collection("private_info").doc("sensitive");
+    const sensitiveData: Record<string, any> = { updatedAt: nowIso };
+    if (cleanUpdates.curp !== undefined) sensitiveData.curp = cleanUpdates.curp;
+    if (cleanUpdates.ineNumber !== undefined) sensitiveData.ineNumber = cleanUpdates.ineNumber;
+    if (cleanUpdates.cuentaBancariaCLABE !== undefined) sensitiveData.cuentaBancariaCLABE = cleanUpdates.cuentaBancariaCLABE;
+    if (cleanUpdates.banco !== undefined) sensitiveData.banco = cleanUpdates.banco;
+    if (cleanUpdates.numeroCuenta !== undefined) sensitiveData.numeroCuenta = cleanUpdates.numeroCuenta;
+    if (cleanUpdates.titularCuenta !== undefined) sensitiveData.titularCuenta = cleanUpdates.titularCuenta;
+
+    batch.set(sensitiveRef, sensitiveData, { merge: true });
+
+    // 4. Sincronización en directorio público 'terapeutas_publicos'
+    const publicRef = db.collection("terapeutas_publicos").doc(id);
+    const resolvedStatus = cleanUpdates.estado || currentData.estado || "activo";
+    if (resolvedStatus === "activo") {
+      batch.set(publicRef, {
+        id,
+        name: finalNombreCompleto,
+        nombre: finalNombreCompleto,
+        photo: cleanUpdates.fotografia || currentData.fotografia || "",
+        fotografia: cleanUpdates.fotografia || currentData.fotografia || "",
+        phone: cleanUpdates.telefono || currentData.telefono || "",
+        telefono: cleanUpdates.telefono || currentData.telefono || "",
+        specialties: cleanUpdates.especialidades || currentData.especialidades || ["Masaje Tejido Profundo"],
+        especialidades: cleanUpdates.especialidades || currentData.especialidades || ["Masaje Tejido Profundo"],
+        coverageZones: cleanUpdates.zonasCobertura || currentData.zonasCobertura || ["Polanco", "Lomas de Chapultepec"],
+        zonasCobertura: cleanUpdates.zonasCobertura || currentData.zonasCobertura || ["Polanco", "Lomas de Chapultepec"],
+        bio: cleanUpdates.biografia || cleanUpdates.certificacionesInfo || currentData.biografia || "Terapeuta certificada ESSENYA.",
+        biografia: cleanUpdates.biografia || cleanUpdates.certificacionesInfo || currentData.biografia || "Terapeuta certificada ESSENYA.",
+        status: "disponible",
+        estado: "activo",
+        updatedAt: nowIso
+      }, { merge: true });
+    }
+
+    // 5. Auditoría
+    const adminEmail = (req as any).user?.email || "admin@essenya.mx";
+    const auditRef = db.collection("audit_logs").doc();
+    batch.set(auditRef, {
+      actorId: (req as any).user?.uid || "admin",
+      actorEmail: adminEmail,
+      actorRole: "administrador",
+      action: "ACTUALIZACION_EXPEDIENTE_TERAPEUTA",
+      details: `Administración actualizó el expediente completo de la terapeuta ${finalNombreCompleto} (ID: ${id}).`,
+      timestamp: adminFirestore.FieldValue.serverTimestamp(),
+      createdAt: nowIso,
+      ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown"
+    });
+
+    await batch.commit();
+    invalidateAdminTherapistsCache();
+
+    return res.json({
+      success: true,
+      message: "Expediente de terapeuta actualizado y sincronizado correctamente en todas las colecciones.",
+      therapist: {
+        ...currentData,
+        ...cleanUpdates,
+        id,
+        nombreCompleto: finalNombreCompleto
+      }
+    });
+  } catch (error: any) {
+    console.error("Error en /api/admin/therapist/update:", error);
+    return res.status(500).json({ success: false, error: error.message || "Error al actualizar expediente." });
   }
 });
 

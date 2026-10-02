@@ -61,42 +61,35 @@ export const PerfilPage: React.FC = () => {
   const { therapists, updateSelfProfile, uploadDocument, replaceDocument, deleteDocument } = useTherapistContext();
 
   // Find active profile or fallback
-  const activeTherapist: TherapistFullProfile = therapists.find(t => t.id === authUser?.id || t.correo === authUser?.correo) || {
-    id: authUser?.id || 'demo-therapist-123',
-    nombre: authUser?.nombre || 'Valeria',
-    apellidos: authUser?.apellidos || 'Mendoza',
-    correo: authUser?.correo || 'terapeuta@essenya.com',
+  const activeTherapist: TherapistFullProfile = therapists.find(t => 
+    t.id === authUser?.id || 
+    t.id === authUser?.uid ||
+    (authUser?.correo && (t.correo || '').toLowerCase() === authUser.correo.toLowerCase()) ||
+    (authUser?.correo && ((t as any).email || '').toLowerCase() === authUser.correo.toLowerCase())
+  ) || {
+    id: authUser?.id || authUser?.uid || 'demo-therapist-123',
+    nombre: authUser?.nombre || 'Terapeuta',
+    apellidos: authUser?.apellidos || '',
+    correo: authUser?.correo || 'terapeuta@essenya.mx',
     telefono: authUser?.telefono || '+52 55 4839 2019',
-    fotografia: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
-    fechaNacimiento: '1990-04-12',
-    direccion: 'Campos Elíseos 204, Polanco, CDMX',
-    especialidades: ['Masaje Tejido Profundo', 'Descontracturante VIP', 'Aromaterapia Real'],
-    experienciaAnos: 8,
-    idiomas: ['Español', 'Inglés'],
-    disponibilidad: 'Lunes a Sábado, 08:00 - 20:00',
-    zonasCobertura: ['Polanco', 'Lomas de Chapultepec', 'Santa Fe'],
-    vehiculo: 'Auto Ejecutivo Volvo XC60',
-    estado: 'activo',
+    fotografia: authUser?.fotografia || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
+    fechaNacimiento: (authUser as any)?.fechaNacimiento || '1990-04-12',
+    direccion: (authUser as any)?.direccion || 'Campos Elíseos 204, Polanco, CDMX',
+    especialidades: (authUser as any)?.especialidades || ['Masaje Tejido Profundo', 'Descontracturante VIP', 'Aromaterapia Real'],
+    experienciaAnos: (authUser as any)?.experienciaAnos || 8,
+    idiomas: (authUser as any)?.idiomas || ['Español', 'Inglés'],
+    disponibilidad: (authUser as any)?.disponibilidad || 'Lunes a Sábado, 08:00 - 20:00',
+    zonasCobertura: (authUser as any)?.zonasCobertura || ['Polanco', 'Lomas de Chapultepec', 'Santa Fe'],
+    vehiculo: (authUser as any)?.vehiculo || 'Auto Ejecutivo',
+    estado: (authUser?.estado as any) || 'activo',
     mustChangePassword: false,
-    puntuacion: 4.95,
-    resenasCount: 142,
-    serviciosCompletados: 388,
-    fechaAlta: new Date().toISOString(),
+    puntuacion: (authUser as any)?.puntuacion || 5.0,
+    resenasCount: (authUser as any)?.resenasCount || 0,
+    serviciosCompletados: (authUser as any)?.serviciosCompletados || 0,
+    fechaAlta: (authUser as any)?.fechaAlta || authUser?.fechaRegistro || new Date().toISOString(),
     ultimoAcceso: new Date().toISOString(),
     fechaActualizacion: new Date().toISOString(),
-    documentos: [
-      {
-        id: 'doc-1',
-        nombreDocumento: 'Cédula Profesional Terapia Física',
-        tipo: 'licencia',
-        institucion: 'SEP / Instituto Nacional de Rehabilitación',
-        fechaEmision: '2018-06-15',
-        fileUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&q=80&w=600',
-        fileType: 'jpg',
-        estado: 'aprobado',
-        fechaSubida: '2025-11-02T10:00:00.000Z'
-      }
-    ]
+    documentos: (authUser as any)?.documentos || []
   };
 
   const [activeTab, setActiveTab] = useState<'personal' | 'profesional' | 'documentos'>('personal');

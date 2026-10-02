@@ -100,12 +100,19 @@ export class ErrorBoundary extends Component<Props, State> {
             </button>
             <button
               onClick={() => {
-                window.location.href = '/admin/dashboard';
+                const path = typeof window !== 'undefined' ? window.location.pathname : '';
+                if (path.startsWith('/terapeuta')) {
+                  window.location.href = '/terapeuta';
+                } else if (path.startsWith('/admin')) {
+                  window.location.href = '/admin';
+                } else {
+                  window.location.href = '/cliente';
+                }
               }}
               className="px-4 py-2.5 rounded-xl bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] font-semibold text-xs flex items-center gap-2 hover:bg-[var(--bg-active)] transition-all cursor-pointer"
             >
               <Home className="w-4 h-4 text-[#C9A55B]" />
-              <span>Ir al Dashboard</span>
+              <span>Ir al Inicio</span>
             </button>
           </div>
         </div>

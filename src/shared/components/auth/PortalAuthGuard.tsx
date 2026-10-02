@@ -33,6 +33,7 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
     sendPasswordReset, 
     logout, 
     completeFirstLoginPasswordChange,
+    updateUserProfile,
     isAuthReady,
     verifyPortalClaim,
     hasPortalClaim
@@ -77,9 +78,9 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
   // Lockout banner countdown
   const [lockoutTimer, setLockoutTimer] = useState<number>(0);
 
-  // 1. Resolve active user session across ALL roles (Priority: Administrador > Terapeuta > Cliente)
-  const activeProfile = sessions.administrador || sessions.terapeuta || sessions.cliente;
-  const currentUser = activeProfile;
+  // 1. Resolve active user session strictly for THIS portal role
+  // Prioritize the role expected by the current portal to avoid cross-session contamination
+  const currentUser = sessions[role] || (role === 'cliente' ? (sessions.terapeuta || sessions.administrador) : null);
 
   // Role names in Spanish for display
   const roleDisplayNames: Record<UserRole, string> = {
@@ -103,11 +104,16 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
         ? 'cliente' 
         : null;
 
-  // Cross-portal session notice: Do not forcibly redirect; allow user to login or switch accounts freely
-
-  // Strict role redirection effect: ensure automatic redirection (Admin -> /admin, Terapeutas -> /terapeuta, Clientes -> /cliente) occurs before any restricted screen render
+  // Strict role redirection effect: only redirect if an authenticated profile belongs to another portal
   useEffect(() => {
     if (!isAuthReady) return;
+
+    // Prevent therapist from entering or staying on the admin portal
+    if (role === 'administrador' && sessions.terapeuta && !sessions.administrador) {
+      navigate('/terapeuta', { replace: true });
+      return;
+    }
+
     if (currentUser && currentUser.rol && currentUser.rol !== role) {
       const targetPath = rolePaths[currentUser.rol as UserRole];
       if (targetPath && location.pathname !== targetPath) {
@@ -117,7 +123,7 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
         return () => clearTimeout(timer);
       }
     }
-  }, [isAuthReady, currentUser, role, location.pathname, navigate]);
+  }, [isAuthReady, currentUser, role, location.pathname, sessions.terapeuta, sessions.administrador, navigate]);
 
   // Explicit client-side Claim Verification effect
   useEffect(() => {
@@ -126,6 +132,18 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
     if (!isAuthReady) return;
 
     if (currentUser) {
+      // Terapeutas válidas con sesión activa acceden directamente sin bloqueo por verificación de claims
+      if (role === 'terapeuta' && (currentUser.rol === 'terapeuta' || (currentUser as any).role === 'terapeuta')) {
+        setClaimStatus('authorized');
+        setClaimResult({
+          authorized: true,
+          claimFound: true,
+          role: 'terapeuta',
+          source: 'token_claims'
+        });
+        return;
+      }
+
       setClaimStatus('verifying');
       verifyPortalClaim(role, { forceRefresh: false })
         .then((result) => {
@@ -420,7 +438,13 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
 
     // Check if therapist is approved with unacknowledged notice, pending approval, or rejected
     if (role === 'terapeuta') {
-      const therapistStatus = currentUser.estado || currentUser.therapistProfile?.estado;
+      const isApproved = currentUser.estado === 'activo' || 
+        (currentUser as any).status === 'activo' || 
+        (currentUser as any).estadoAprobacion === 'aprobado' || 
+        (currentUser as any).isActive === true ||
+        currentUser.therapistProfile?.estado === 'activo';
+
+      const therapistStatus = isApproved ? 'activo' : (currentUser.estado || currentUser.therapistProfile?.estado || 'pendiente');
 
       // Acceptance Celebration Notice
       if (therapistStatus === 'activo' && currentUser.notificacionAprobacion === true) {
@@ -466,6 +490,7 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
                         await updateDoc(doc(db, 'users', uid), { notificacionAprobacion: false }).catch(() => {});
                       } catch {}
                     }
+                    await updateUserProfile('terapeuta', { notificacionAprobacion: false }).catch(() => {});
                     navigate('/terapeuta', { replace: true });
                   }}
                   className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-[#C9A55B] via-[#DFBF7A] to-[#806020] text-black font-extrabold text-sm hover:brightness-110 transition-all shadow-xl shadow-[#C9A55B]/20 flex items-center justify-center gap-2 cursor-pointer"

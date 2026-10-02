@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useTherapistContext, sanitizeTherapist } from '../../../shared/context/TherapistContext';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
-import { TherapistFullProfile, TherapistDocument, DocumentStatus } from '../../../shared/types/auth';
+import { TherapistFullProfile, TherapistDocument, DocumentStatus, AccountStatus } from '../../../shared/types/auth';
 import { ErrorBoundary } from '../../../shared/components/ErrorBoundary';
 
 const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80';
@@ -111,6 +111,52 @@ export const TerapeutasPage: React.FC = () => {
   const [newEspecialidades, setNewEspecialidades] = useState<string[]>(['Masaje Tejido Profundo']);
   const [newZonas, setNewZonas] = useState<string[]>(['Polanco', 'Lomas de Chapultepec']);
   const [newTempPass, setNewTempPass] = useState(`Essenya${Math.floor(1000 + Math.random() * 9000)}!`);
+  const [showCreateAdvanced, setShowCreateAdvanced] = useState(false);
+  const [newFotografia, setNewFotografia] = useState('');
+  const [newFechaNacimiento, setNewFechaNacimiento] = useState('');
+  const [newDireccion, setNewDireccion] = useState('');
+  const [newCurp, setNewCurp] = useState('');
+  const [newIneNumber, setNewIneNumber] = useState('');
+  const [newBanco, setNewBanco] = useState('');
+  const [newClabe, setNewClabe] = useState('');
+  const [newNumeroCuenta, setNewNumeroCuenta] = useState('');
+  const [newTitularCuenta, setNewTitularCuenta] = useState('');
+  const [newCertificacionesInfo, setNewCertificacionesInfo] = useState('');
+  const [newExperienciaAnos, setNewExperienciaAnos] = useState(3);
+  const [newDisponibilidad, setNewDisponibilidad] = useState('Lunes a Sábado, 09:00 - 19:00');
+  const [newContactoNombre, setNewContactoNombre] = useState('');
+  const [newContactoParentesco, setNewContactoParentesco] = useState('');
+  const [newContactoTelefono, setNewContactoTelefono] = useState('');
+  const [newBiografia, setNewBiografia] = useState('');
+
+  // Edit Form State
+  const [editId, setEditId] = useState('');
+  const [editNombre, setEditNombre] = useState('');
+  const [editApellidos, setEditApellidos] = useState('');
+  const [editCorreo, setEditCorreo] = useState('');
+  const [editTelefono, setEditTelefono] = useState('');
+  const [editFotografia, setEditFotografia] = useState('');
+  const [editFechaNacimiento, setEditFechaNacimiento] = useState('');
+  const [editDireccion, setEditDireccion] = useState('');
+  const [editCurp, setEditCurp] = useState('');
+  const [editIneNumber, setEditIneNumber] = useState('');
+  const [editCertificacionesInfo, setEditCertificacionesInfo] = useState('');
+  const [editBanco, setEditBanco] = useState('');
+  const [editCuentaBancariaCLABE, setEditCuentaBancariaCLABE] = useState('');
+  const [editNumeroCuenta, setEditNumeroCuenta] = useState('');
+  const [editTitularCuenta, setEditTitularCuenta] = useState('');
+  const [editContactoEmergenciaNombre, setEditContactoEmergenciaNombre] = useState('');
+  const [editContactoEmergenciaParentesco, setEditContactoEmergenciaParentesco] = useState('');
+  const [editContactoEmergenciaTelefono, setEditContactoEmergenciaTelefono] = useState('');
+  const [editEspecialidades, setEditEspecialidades] = useState<string[]>([]);
+  const [editZonas, setEditZonas] = useState<string[]>([]);
+  const [editExperienciaAnos, setEditExperienciaAnos] = useState<number>(3);
+  const [editDisponibilidad, setEditDisponibilidad] = useState('');
+  const [editBiografia, setEditBiografia] = useState('');
+  const [editEstado, setEditEstado] = useState<AccountStatus>('activo');
+  const [editVehiculo, setEditVehiculo] = useState('');
+  const [editIdiomas, setEditIdiomas] = useState('Español');
+  const [editTab, setEditTab] = useState<'personal' | 'bancario' | 'profesional'>('personal');
 
   // Feedback Toast
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -165,6 +211,108 @@ export const TerapeutasPage: React.FC = () => {
     }
   };
 
+  // Toggle helpers for edit form
+  const toggleEditSpecialty = (spec: string) => {
+    if (editEspecialidades.includes(spec)) {
+      setEditEspecialidades(editEspecialidades.filter(s => s !== spec));
+    } else {
+      setEditEspecialidades([...editEspecialidades, spec]);
+    }
+  };
+
+  const toggleEditZone = (zone: string) => {
+    if (editZonas.includes(zone)) {
+      setEditZonas(editZonas.filter(z => z !== zone));
+    } else {
+      setEditZonas([...editZonas, zone]);
+    }
+  };
+
+  // Handle Open Edit Modal
+  const handleOpenEditModal = (t: TherapistFullProfile) => {
+    if (t && t.id) {
+      loadSensitiveInfo(t.id);
+    }
+    const sens = (t && t.id ? sensitiveInfo[t.id] : null) || {};
+    setEditId(t.id);
+    setEditNombre(t.nombre || '');
+    setEditApellidos(t.apellidos || '');
+    setEditCorreo(t.correo || '');
+    setEditTelefono(t.telefono || '');
+    setEditFotografia(t.fotografia || (t as any).photo || '');
+    setEditFechaNacimiento(t.fechaNacimiento || '');
+    setEditDireccion(t.direccion || '');
+    setEditCurp(t.curp || sens.curp || '');
+    setEditIneNumber(t.ineNumber || sens.ineNumber || '');
+    setEditCertificacionesInfo(t.certificacionesInfo || '');
+    setEditBanco((t as any).banco || (sens as any).banco || '');
+    setEditCuentaBancariaCLABE(t.cuentaBancariaCLABE || sens.cuentaBancariaCLABE || '');
+    setEditNumeroCuenta((t as any).numeroCuenta || (sens as any).numeroCuenta || '');
+    setEditTitularCuenta((t as any).titularCuenta || (sens as any).titularCuenta || '');
+    setEditContactoEmergenciaNombre(t.contactoEmergencia?.nombre || '');
+    setEditContactoEmergenciaParentesco(t.contactoEmergencia?.parentesco || 'Familiar');
+    setEditContactoEmergenciaTelefono(t.contactoEmergencia?.telefono || '');
+    setEditEspecialidades(Array.isArray(t.especialidades) ? t.especialidades : []);
+    setEditZonas(Array.isArray(t.zonasCobertura) ? t.zonasCobertura : []);
+    setEditExperienciaAnos(t.experienciaAnos || 3);
+    setEditDisponibilidad(t.disponibilidad || 'Lunes a Sábado, 09:00 - 19:00');
+    setEditBiografia((t as any).biografia || (t as any).bio || '');
+    setEditEstado(t.estado || 'activo');
+    setEditVehiculo((t as any).vehiculo || '');
+    setEditIdiomas(Array.isArray((t as any).idiomas) ? (t as any).idiomas.join(', ') : 'Español');
+    setEditTab('personal');
+    setShowEditModal(t);
+  };
+
+  // Handle Save Edit Submit
+  const handleSaveEditTherapist = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editId) return;
+    setIsSubmitting(true);
+
+    const payload: Partial<TherapistFullProfile> = {
+      nombre: editNombre.trim(),
+      apellidos: editApellidos.trim(),
+      nombreCompleto: `${editNombre.trim()} ${editApellidos.trim()}`,
+      correo: editCorreo.trim().toLowerCase(),
+      telefono: editTelefono.trim(),
+      fotografia: editFotografia.trim(),
+      fechaNacimiento: editFechaNacimiento || undefined,
+      direccion: editDireccion.trim() || undefined,
+      curp: editCurp.trim().toUpperCase() || undefined,
+      ineNumber: editIneNumber.trim() || undefined,
+      certificacionesInfo: editCertificacionesInfo.trim() || undefined,
+      banco: editBanco.trim() || undefined,
+      cuentaBancariaCLABE: editCuentaBancariaCLABE.trim() || undefined,
+      numeroCuenta: editNumeroCuenta.trim() || undefined,
+      titularCuenta: editTitularCuenta.trim() || undefined,
+      contactoEmergencia: {
+        nombre: editContactoEmergenciaNombre.trim(),
+        parentesco: editContactoEmergenciaParentesco.trim() || 'Familiar',
+        telefono: editContactoEmergenciaTelefono.trim()
+      },
+      especialidades: editEspecialidades,
+      zonasCobertura: editZonas,
+      experienciaAnos: Number(editExperienciaAnos) || 0,
+      disponibilidad: editDisponibilidad.trim() || undefined,
+      biografia: editBiografia.trim() || undefined,
+      estado: editEstado,
+      status: editEstado,
+      vehiculo: editVehiculo.trim() || undefined,
+      idiomas: editIdiomas.split(',').map(s => s.trim()).filter(Boolean)
+    } as any;
+
+    const res = await updateTherapist(editId, payload);
+    setIsSubmitting(false);
+
+    if (res.success) {
+      showToast('success', 'Expediente completo de la terapeuta guardado exitosamente.');
+      setShowEditModal(null);
+    } else {
+      showToast('error', res.error || 'Error al guardar los cambios en el expediente.');
+    }
+  };
+
   // Handle Create Submit
   const handleCreateTherapist = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,7 +325,26 @@ export const TerapeutasPage: React.FC = () => {
       telefono: newTelefono.trim(),
       especialidades: Array.isArray(newEspecialidades) ? newEspecialidades : [],
       zonasCobertura: Array.isArray(newZonas) ? newZonas : [],
-      tempPassword: newTempPass
+      tempPassword: newTempPass,
+      fotografia: newFotografia.trim() || undefined,
+      fechaNacimiento: newFechaNacimiento.trim() || undefined,
+      direccion: newDireccion.trim() || undefined,
+      curp: newCurp.trim().toUpperCase() || undefined,
+      ineNumber: newIneNumber.trim() || undefined,
+      certificacionesInfo: newCertificacionesInfo.trim() || undefined,
+      cuentaBancariaCLABE: newClabe.trim() || undefined,
+      banco: newBanco.trim() || undefined,
+      numeroCuenta: newNumeroCuenta.trim() || undefined,
+      titularCuenta: newTitularCuenta.trim() || undefined,
+      contactoEmergencia: newContactoNombre ? {
+        nombre: newContactoNombre.trim(),
+        parentesco: newContactoParentesco.trim() || 'Familiar',
+        telefono: newContactoTelefono.trim()
+      } : undefined,
+      experienciaAnos: Number(newExperienciaAnos) || 3,
+      disponibilidad: newDisponibilidad.trim() || undefined,
+      biografia: newBiografia.trim() || undefined,
+      estado: 'activo'
     });
 
     setIsSubmitting(false);
@@ -194,6 +361,18 @@ export const TerapeutasPage: React.FC = () => {
       setNewApellidos('');
       setNewCorreo('');
       setNewTelefono('');
+      setNewFotografia('');
+      setNewFechaNacimiento('');
+      setNewDireccion('');
+      setNewCurp('');
+      setNewIneNumber('');
+      setNewBanco('');
+      setNewClabe('');
+      setNewNumeroCuenta('');
+      setNewTitularCuenta('');
+      setNewCertificacionesInfo('');
+      setNewBiografia('');
+      setNewContactoNombre('');
       setNewTempPass(`Essenya${Math.floor(1000 + Math.random() * 9000)}!`);
     } else {
       showToast('error', res.error || 'No se pudo crear la cuenta.');
@@ -689,6 +868,14 @@ export const TerapeutasPage: React.FC = () => {
                             </div>
 
                             <button
+                              onClick={() => handleOpenEditModal(t)}
+                              className="w-full py-1.5 bg-[#C9A55B]/15 hover:bg-[#C9A55B]/25 border border-[#C9A55B]/40 text-[#806020] dark:text-[#C9A55B] font-bold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer text-[11px]"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-[#C9A55B]" />
+                              <span>Editar Expediente</span>
+                            </button>
+
+                            <button
                               onClick={() => handleOpenDocModal(t)}
                               className="w-full py-1.5 bg-[var(--bg-subcard)] hover:bg-[var(--bg-active)] border border-[var(--border-color)] text-[var(--text-primary)] font-semibold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer text-[11px]"
                             >
@@ -708,6 +895,14 @@ export const TerapeutasPage: React.FC = () => {
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => handleOpenEditModal(t)}
+                          className="col-span-2 w-full py-2 bg-[#C9A55B]/15 hover:bg-[#C9A55B]/25 border border-[#C9A55B]/40 text-[#806020] dark:text-[#C9A55B] font-bold rounded-xl transition-all flex items-center justify-center space-x-1.5 cursor-pointer text-xs shadow-xs"
+                        >
+                          <Edit3 className="w-4 h-4 text-[#C9A55B]" />
+                          <span>Editar Expediente Completo</span>
+                        </button>
+
                         <button
                           onClick={() => handleOpenDocModal(t)}
                           className="w-full py-2 bg-[var(--bg-subcard)] hover:bg-[var(--bg-active)] border border-[var(--border-color)] text-[var(--text-primary)] font-semibold rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer"
@@ -898,6 +1093,108 @@ export const TerapeutasPage: React.FC = () => {
                     );
                   })}
                 </div>
+              </div>
+
+              {/* Optional Advanced Data Accordion */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateAdvanced(!showCreateAdvanced)}
+                  className="w-full py-2 px-3 bg-[var(--bg-subcard)] hover:bg-[var(--bg-active)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-xl text-xs font-semibold flex items-center justify-between transition-all cursor-pointer"
+                >
+                  <span className="flex items-center gap-1.5 text-[#C9A55B]">
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Datos Adicionales Opcionales (Bancarios, CURP, Dirección...)</span>
+                  </span>
+                  <span className="text-[10px] text-[var(--text-muted)] font-mono">
+                    {showCreateAdvanced ? 'Ocultar ▲' : 'Completar ▼'}
+                  </span>
+                </button>
+
+                {showCreateAdvanced && (
+                  <div className="mt-3 p-3.5 bg-[var(--bg-subcard)] rounded-2xl border border-[var(--border-color)] space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-[var(--text-muted)] uppercase font-bold">CURP</label>
+                        <input
+                          type="text"
+                          maxLength={18}
+                          value={newCurp}
+                          onChange={(e) => setNewCurp(e.target.value.toUpperCase())}
+                          placeholder="CURP (18 dígitos)"
+                          className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--text-primary)] font-mono uppercase focus:outline-none focus:border-[#C9A55B]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-[var(--text-muted)] uppercase font-bold">Folio INE</label>
+                        <input
+                          type="text"
+                          value={newIneNumber}
+                          onChange={(e) => setNewIneNumber(e.target.value)}
+                          placeholder="Número de INE"
+                          className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-[var(--text-muted)] uppercase font-bold">Banco</label>
+                        <input
+                          type="text"
+                          value={newBanco}
+                          onChange={(e) => setNewBanco(e.target.value)}
+                          placeholder="Ej. BBVA, Santander"
+                          className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-[var(--text-muted)] uppercase font-bold">CLABE Interbancaria</label>
+                        <input
+                          type="text"
+                          maxLength={18}
+                          value={newClabe}
+                          onChange={(e) => setNewClabe(e.target.value)}
+                          placeholder="18 dígitos"
+                          className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-[#C9A55B]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-[var(--text-muted)] uppercase font-bold">Titular Cuenta</label>
+                        <input
+                          type="text"
+                          value={newTitularCuenta}
+                          onChange={(e) => setNewTitularCuenta(e.target.value)}
+                          placeholder="Nombre del titular"
+                          className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-[var(--text-muted)] uppercase font-bold">Número Cuenta</label>
+                        <input
+                          type="text"
+                          value={newNumeroCuenta}
+                          onChange={(e) => setNewNumeroCuenta(e.target.value)}
+                          placeholder="Número de cuenta"
+                          className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                        />
+                      </div>
+
+                      <div className="space-y-1 sm:col-span-2">
+                        <label className="text-[10px] text-[var(--text-muted)] uppercase font-bold">Dirección</label>
+                        <input
+                          type="text"
+                          value={newDireccion}
+                          onChange={(e) => setNewDireccion(e.target.value)}
+                          placeholder="Calle, Colonia, Ciudad"
+                          className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="pt-2 flex justify-end space-x-3">
@@ -1286,6 +1583,450 @@ export const TerapeutasPage: React.FC = () => {
           </div>
         );
       })()}
+
+      {/* EDIT THERAPIST COMPLETE PROFILE MODAL */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 md:p-8 max-w-3xl w-full space-y-5 shadow-2xl relative my-8 max-h-[92vh] flex flex-col">
+            {/* Header */}
+            <div className="flex justify-between items-start border-b border-[var(--border-color)] pb-4">
+              <div className="space-y-1">
+                <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-[#C9A55B]/15 text-[#806020] dark:text-[#C9A55B] text-[10px] font-bold uppercase tracking-wider">
+                  <Edit3 className="w-3 h-3" />
+                  <span>Edición Oficial de Expediente</span>
+                </div>
+                <h2 className="text-xl font-serif font-bold text-[var(--text-primary)]">
+                  {showEditModal.nombre || 'Terapeuta'} {showEditModal.apellidos || ''}
+                </h2>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Actualización integral de datos personales, fiscales, bancarios y configuración profesional.
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowEditModal(null)}
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-lg font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Navigation Tabs */}
+            <div className="flex p-1 bg-[var(--bg-subcard)] rounded-2xl border border-[var(--border-color)] text-xs font-semibold shrink-0">
+              <button
+                type="button"
+                onClick={() => setEditTab('personal')}
+                className={`flex-1 py-2 rounded-xl transition-all text-center ${
+                  editTab === 'personal'
+                    ? 'bg-[var(--bg-card)] text-[#C9A55B] shadow-xs font-bold'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                1. Datos Personales & Contacto
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditTab('bancario')}
+                className={`flex-1 py-2 rounded-xl transition-all text-center ${
+                  editTab === 'bancario'
+                    ? 'bg-[var(--bg-card)] text-[#C9A55B] shadow-xs font-bold'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                2. Datos Bancarios & Emergencia
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditTab('profesional')}
+                className={`flex-1 py-2 rounded-xl transition-all text-center ${
+                  editTab === 'profesional'
+                    ? 'bg-[var(--bg-card)] text-[#C9A55B] shadow-xs font-bold'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                3. Perfil Profesional & Cobertura
+              </button>
+            </div>
+
+            {/* Edit Form Body */}
+            <form onSubmit={handleSaveEditTherapist} className="flex-1 overflow-y-auto space-y-4 pr-1">
+              {/* TAB 1: DATOS PERSONALES */}
+              {editTab === 'personal' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Nombre *</label>
+                      <input
+                        type="text"
+                        required
+                        value={editNombre}
+                        onChange={(e) => setEditNombre(e.target.value)}
+                        placeholder="Nombre(s)"
+                        className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Apellidos *</label>
+                      <input
+                        type="text"
+                        required
+                        value={editApellidos}
+                        onChange={(e) => setEditApellidos(e.target.value)}
+                        placeholder="Apellidos"
+                        className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Correo Electrónico *</label>
+                      <input
+                        type="email"
+                        required
+                        value={editCorreo}
+                        onChange={(e) => setEditCorreo(e.target.value)}
+                        placeholder="correo@ejemplo.com"
+                        className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Teléfono Móvil *</label>
+                      <input
+                        type="tel"
+                        required
+                        value={editTelefono}
+                        onChange={(e) => setEditTelefono(e.target.value)}
+                        placeholder="+52 55 1234 5678"
+                        className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">CURP (18 dígitos)</label>
+                      <input
+                        type="text"
+                        maxLength={18}
+                        value={editCurp}
+                        onChange={(e) => setEditCurp(e.target.value.toUpperCase())}
+                        placeholder="AAAA000000XXXXXX00"
+                        className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] font-mono uppercase focus:outline-none focus:border-[#C9A55B]"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Folio / Número INE</label>
+                      <input
+                        type="text"
+                        value={editIneNumber}
+                        onChange={(e) => setEditIneNumber(e.target.value)}
+                        placeholder="Folio de credencial electoral"
+                        className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Fecha de Nacimiento</label>
+                      <input
+                        type="date"
+                        value={editFechaNacimiento}
+                        onChange={(e) => setEditFechaNacimiento(e.target.value)}
+                        className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">URL Fotografía de Perfil</label>
+                      <input
+                        type="url"
+                        value={editFotografia}
+                        onChange={(e) => setEditFotografia(e.target.value)}
+                        placeholder="https://... o data:image/..."
+                        className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Dirección / Residencia</label>
+                    <input
+                      type="text"
+                      value={editDireccion}
+                      onChange={(e) => setEditDireccion(e.target.value)}
+                      placeholder="Calle, Número, Colonia, Alcaldía/Municipio, Código Postal"
+                      className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Biografía / Presentación Profesional</label>
+                    <textarea
+                      rows={2}
+                      value={editBiografia}
+                      onChange={(e) => setEditBiografia(e.target.value)}
+                      placeholder="Breve reseña sobre experiencia y enfoque terapéutico..."
+                      className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl p-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: DATOS BANCARIOS & EMERGENCIA */}
+              {editTab === 'bancario' && (
+                <div className="space-y-4">
+                  <div className="p-3.5 bg-[var(--bg-subcard)] rounded-2xl border border-[var(--border-color)] space-y-3">
+                    <h3 className="text-xs font-bold text-[#C9A55B] uppercase tracking-wider flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Información Bancaria para Liquidación de Honorarios</span>
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Institución Bancaria</label>
+                        <input
+                          type="text"
+                          value={editBanco}
+                          onChange={(e) => setEditBanco(e.target.value)}
+                          placeholder="Ej. BBVA, Santander, Banorte, Citibanamex"
+                          className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">CLABE Interbancaria (18 dígitos)</label>
+                        <input
+                          type="text"
+                          maxLength={18}
+                          value={editCuentaBancariaCLABE}
+                          onChange={(e) => setEditCuentaBancariaCLABE(e.target.value)}
+                          placeholder="012345678901234567"
+                          className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Número de Cuenta</label>
+                        <input
+                          type="text"
+                          value={editNumeroCuenta}
+                          onChange={(e) => setEditNumeroCuenta(e.target.value)}
+                          placeholder="Número de cuenta de débito"
+                          className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Nombre del Titular de la Cuenta</label>
+                        <input
+                          type="text"
+                          value={editTitularCuenta}
+                          onChange={(e) => setEditTitularCuenta(e.target.value)}
+                          placeholder="Nombre exacto según estado de cuenta"
+                          className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 bg-[var(--bg-subcard)] rounded-2xl border border-[var(--border-color)] space-y-3">
+                    <h3 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-[#C9A55B]" />
+                      <span>Contacto de Emergencia Oficial</span>
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Nombre del Contacto</label>
+                        <input
+                          type="text"
+                          value={editContactoEmergenciaNombre}
+                          onChange={(e) => setEditContactoEmergenciaNombre(e.target.value)}
+                          placeholder="Nombre y Apellidos"
+                          className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Parentesco</label>
+                        <input
+                          type="text"
+                          value={editContactoEmergenciaParentesco}
+                          onChange={(e) => setEditContactoEmergenciaParentesco(e.target.value)}
+                          placeholder="Ej. Cónyuge, Madre, Hermano/a"
+                          className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Teléfono de Emergencia</label>
+                        <input
+                          type="tel"
+                          value={editContactoEmergenciaTelefono}
+                          onChange={(e) => setEditContactoEmergenciaTelefono(e.target.value)}
+                          placeholder="+52 55 0000 0000"
+                          className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: PERFIL PROFESIONAL & OPERACIÓN */}
+              {editTab === 'profesional' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Estado de la Cuenta *</label>
+                      <select
+                        value={editEstado}
+                        onChange={(e) => setEditEstado(e.target.value as AccountStatus)}
+                        className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] font-bold focus:outline-none focus:border-[#C9A55B]"
+                      >
+                        <option value="activo">Activo (Habilitada en Plataforma)</option>
+                        <option value="pendiente">Pendiente de Aprobación</option>
+                        <option value="inactivo">Inactivo / Pausada</option>
+                        <option value="bloqueado">Suspendido / Bloqueado</option>
+                        <option value="rechazado">Rechazado</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Años de Experiencia</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={40}
+                        value={editExperienciaAnos}
+                        onChange={(e) => setEditExperienciaAnos(Number(e.target.value))}
+                        className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Vehículo de Traslado</label>
+                      <input
+                        type="text"
+                        value={editVehiculo}
+                        onChange={(e) => setEditVehiculo(e.target.value)}
+                        placeholder="Ej. Auto Ejecutivo Volvo XC60"
+                        className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Disponibilidad / Horarios</label>
+                      <input
+                        type="text"
+                        value={editDisponibilidad}
+                        onChange={(e) => setEditDisponibilidad(e.target.value)}
+                        placeholder="Ej. Lunes a Sábado, 09:00 - 19:00"
+                        className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Idiomas (separados por coma)</label>
+                      <input
+                        type="text"
+                        value={editIdiomas}
+                        onChange={(e) => setEditIdiomas(e.target.value)}
+                        placeholder="Español, Inglés"
+                        className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Certificaciones Oficiales / Resumen</label>
+                    <input
+                      type="text"
+                      value={editCertificacionesInfo}
+                      onChange={(e) => setEditCertificacionesInfo(e.target.value)}
+                      placeholder="Cédula Profesional, Certificado SEP-CONOCER, Escuela de Masoterapia..."
+                      className="w-full bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#C9A55B]"
+                    />
+                  </div>
+
+                  {/* Specialties Select */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Especialidades Habilitadas</label>
+                      <span className="text-[10px] text-[#C9A55B] font-semibold">{editEspecialidades.length} seleccionadas</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2.5 bg-[var(--bg-subcard)] rounded-xl border border-[var(--border-color)]">
+                      {AVAILABLE_SPECIALTIES.map(spec => {
+                        const isSelected = editEspecialidades.includes(spec);
+                        return (
+                          <button
+                            key={spec}
+                            type="button"
+                            onClick={() => toggleEditSpecialty(spec)}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-[#C9A55B]/20 border-[#C9A55B] text-[#C9A55B]'
+                                : 'bg-[var(--bg-card)] border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                            }`}
+                          >
+                            {spec}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Zones Select */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[11px] text-[var(--text-muted)] uppercase font-bold">Zonas de Cobertura Activas</label>
+                      <span className="text-[10px] text-emerald-500 font-semibold">{editZonas.length} zonas</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2.5 bg-[var(--bg-subcard)] rounded-xl border border-[var(--border-color)]">
+                      {AVAILABLE_ZONES.map(zone => {
+                        const isSelected = editZonas.includes(zone);
+                        return (
+                          <button
+                            key={zone}
+                            type="button"
+                            onClick={() => toggleEditZone(zone)}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-emerald-500/20 border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                                : 'bg-[var(--bg-card)] border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                            }`}
+                          >
+                            {zone}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="pt-3 border-t border-[var(--border-color)] flex justify-end space-x-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(null)}
+                  className="px-4 py-2 bg-[var(--bg-subcard)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs rounded-xl hover:bg-[var(--bg-active)] cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <LuxuryButton
+                  type="submit"
+                  disabled={isSubmitting}
+                  variant="gold"
+                  className="px-6 py-2 text-xs font-bold"
+                >
+                  {isSubmitting ? 'Guardando Expediente...' : 'Guardar Todos los Cambios'}
+                </LuxuryButton>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* DELETE CONFIRMATION MODAL */}
       {showDeleteConfirm && (

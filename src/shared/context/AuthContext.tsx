@@ -11,7 +11,7 @@ import {
   setPersistence,
   browserLocalPersistence
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, query, collection, where, limit, getDocs } from 'firebase/firestore';
 import { auth, db } from '../../lib/firebase';
 import { UserAuthProfile, UserRole, AccountStatus, PortalClaimVerificationResult } from '../types/auth';
 import { 
@@ -199,47 +199,81 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           
           if (docSnap.exists()) {
             profile = docSnap.data() as UserAuthProfile;
-          } else {
-             // Fallback for AuthStateChange
-             const therapistDoc = await getDoc(doc(db, 'terapeutas', firebaseUser.uid));
-             if (therapistDoc.exists()) {
-               const tData = therapistDoc.data();
-               profile = {
-                  id: firebaseUser.uid,
-                  uid: firebaseUser.uid,
-                  nombre: tData.nombre || '',
-                  apellidos: tData.apellidos || '',
-                  correo: tData.email || '',
-                  telefono: tData.telefono || '',
-                  rol: 'terapeuta',
-                  estado: tData.estado || 'activo',
-                  fechaRegistro: tData.fechaAlta || new Date().toISOString(),
-                  ultimoAcceso: new Date().toISOString(),
-                  correoVerificado: firebaseUser.emailVerified || false,
-                  fechaActualizacion: new Date().toISOString()
-               };
-             } else {
-               const clientDoc = await getDoc(doc(db, 'clientes', firebaseUser.uid));
-               if (clientDoc.exists()) {
-                 const cData = clientDoc.data();
-                 profile = {
-                    id: firebaseUser.uid,
-                    uid: firebaseUser.uid,
-                    nombre: cData.nombre || '',
-                    apellidos: cData.apellidos || '',
-                    correo: cData.email || '',
-                    telefono: cData.telefono || '',
-                    rol: 'cliente',
-                    estado: cData.estado || 'activo',
-                    fechaRegistro: cData.createdAt || new Date().toISOString(),
-                    ultimoAcceso: new Date().toISOString(),
-                    correoVerificado: firebaseUser.emailVerified || false,
-                    fechaActualizacion: new Date().toISOString()
-                 };
-               }
-             }
+            profile.rol = (profile.rol || (profile as any).role || '').toLowerCase() as UserRole;
           }
-          
+
+          // Check if user is a therapist via Token Claims or 'terapeutas' collection
+          const isTherapistByClaim = tokenClaims.rol === 'terapeuta' || tokenClaims.role === 'terapeuta' || tokenClaims.therapist === true;
+          let therapistDoc = null;
+          try {
+            const thSnap = await getDoc(doc(db, 'terapeutas', firebaseUser.uid));
+            if (thSnap.exists()) {
+              therapistDoc = thSnap;
+            }
+          } catch {}
+
+          if (isTherapistByClaim || therapistDoc || profile?.rol === 'terapeuta' || (profile as any)?.role === 'terapeuta') {
+            const tData = therapistDoc ? therapistDoc.data() : (await getDoc(doc(db, 'terapeutas', firebaseUser.uid)).catch(() => null))?.data() || {};
+            const resolvedEstado = tData.estado || (tData.estadoAprobacion === 'aprobado' ? 'activo' : profile?.estado) || 'activo';
+            
+            profile = {
+              id: firebaseUser.uid,
+              uid: firebaseUser.uid,
+              nombre: profile?.nombre || tData.nombre || firebaseUser.displayName?.split(' ')[0] || 'Terapeuta',
+              apellidos: profile?.apellidos || tData.apellidos || firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
+              correo: profile?.correo || tData.correo || tData.email || firebaseUser.email || '',
+              telefono: profile?.telefono || tData.telefono || '',
+              fotografia: profile?.fotografia || tData.fotografia || tData.photo || '',
+              ...tData,
+              ...(profile || {}),
+              rol: 'terapeuta',
+              role: 'terapeuta',
+              estado: resolvedEstado,
+              status: resolvedEstado,
+              fechaRegistro: profile?.fechaRegistro || tData.creadoEn || tData.fechaAlta || new Date().toISOString(),
+              ultimoAcceso: new Date().toISOString(),
+              correoVerificado: firebaseUser.emailVerified || false,
+              fechaActualizacion: new Date().toISOString()
+            };
+
+            // Keep 'users' doc aligned with rol: terapeuta
+            if (!docSnap.exists() || docSnap.data()?.rol !== 'terapeuta') {
+              setDoc(userDocRef, {
+                uid: firebaseUser.uid,
+                id: firebaseUser.uid,
+                correo: firebaseUser.email || profile.correo,
+                email: firebaseUser.email || profile.correo,
+                nombre: profile.nombre,
+                apellidos: profile.apellidos,
+                rol: 'terapeuta',
+                role: 'terapeuta',
+                estado: resolvedEstado,
+                isActive: resolvedEstado === 'activo',
+                fechaActualizacion: new Date().toISOString()
+              }, { merge: true }).catch(() => {});
+            }
+          } else if (!profile) {
+            // Client fallback
+            const clientDoc = await getDoc(doc(db, 'clientes', firebaseUser.uid)).catch(() => null);
+            if (clientDoc && clientDoc.exists()) {
+              const cData = clientDoc.data();
+              profile = {
+                id: firebaseUser.uid,
+                uid: firebaseUser.uid,
+                nombre: cData.nombre || '',
+                apellidos: cData.apellidos || '',
+                correo: cData.email || cData.correo || firebaseUser.email || '',
+                telefono: cData.telefono || '',
+                rol: 'cliente',
+                estado: cData.estado || 'activo',
+                fechaRegistro: cData.createdAt || new Date().toISOString(),
+                ultimoAcceso: new Date().toISOString(),
+                correoVerificado: firebaseUser.emailVerified || false,
+                fechaActualizacion: new Date().toISOString()
+              };
+            }
+          }
+
           if (profile) {
             profile.customClaims = tokenClaims;
             profile.idToken = idToken || undefined;
@@ -250,7 +284,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               ? ['therapist:access', 'therapist:services', 'client:access']
               : ['client:access', 'client:bookings'];
 
-            const role = profile.rol;
+            const role = (profile.rol || (profile as any).role || 'cliente').toLowerCase() as UserRole;
+            profile.rol = role;
             setSessions(prev => ({ ...prev, [role]: profile }));
           }
 
@@ -262,9 +297,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               if (r) {
                 setSessions(prev => {
                   const current = prev[r];
-                  if (current && (current.estado !== liveData.estado || current.membershipTier !== liveData.membershipTier)) {
-                    const merged = { ...current, ...liveData, customClaims: tokenClaims, idToken: idToken || undefined };
-                    return { ...prev, [r]: merged };
+                  if (current) {
+                    // For therapists, do not demote to 'pendiente' if already active in current
+                    const nextEstado = (r === 'terapeuta' && current.estado === 'activo' && liveData.estado === 'pendiente')
+                      ? 'activo'
+                      : (liveData.estado || current.estado);
+
+                    if (current.estado !== nextEstado || current.membershipTier !== liveData.membershipTier) {
+                      const merged = { ...current, ...liveData, estado: nextEstado, customClaims: tokenClaims, idToken: idToken || undefined };
+                      return { ...prev, [r]: merged };
+                    }
                   }
                   return prev;
                 });
@@ -276,7 +318,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           // Also listen to terapeutas doc if role is terapeuta
           let unsubLiveTherapist = () => {};
-          if (profile.rol === 'terapeuta') {
+          if (profile && profile.rol === 'terapeuta') {
             unsubLiveTherapist = onSnapshot(doc(db, 'terapeutas', firebaseUser.uid), (tSnap) => {
               if (tSnap.exists()) {
                 const tData = tSnap.data();
@@ -414,12 +456,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } else if (role === 'terapeuta') {
           const therapistData = {
             id: uid,
+            uid,
             userId: uid,
             nombre: nombre.trim(),
             apellidos: apellidos.trim(),
+            nombreCompleto: `${nombre.trim()} ${apellidos.trim()}`,
             correo: correo.trim().toLowerCase(),
+            email: correo.trim().toLowerCase(),
             telefono: telefono.trim(),
+            rol: 'terapeuta',
+            role: 'terapeuta',
             estado: 'pendiente',
+            status: 'pendiente',
+            estadoAprobacion: 'pendiente',
+            estadoVerificacion: 'no_verificado',
             especialidades: ['Masaje Holístico'],
             zonasCobertura: ['Polanco', 'Lomas de Chapultepec'],
             puntuacion: 5.0,
@@ -611,6 +661,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       if (docSnap.exists()) {
         userProfile = docSnap.data() as UserAuthProfile;
+        userProfile.rol = (userProfile.rol || (userProfile as any).role || '').toLowerCase() as UserRole;
       } else {
         // Fallback: Check if they exist in role-specific collections (in case created manually)
         if (role === 'terapeuta') {
@@ -622,14 +673,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               uid,
               nombre: tData.nombre || '',
               apellidos: tData.apellidos || '',
-              correo: tData.email || '',
+              correo: tData.correo || tData.email || trimmedEmail,
               telefono: tData.telefono || '',
+              fotografia: tData.fotografia || tData.photo || '',
               rol: 'terapeuta',
               estado: tData.estado || 'activo',
               fechaRegistro: tData.fechaAlta || new Date().toISOString(),
               ultimoAcceso: new Date().toISOString(),
               correoVerificado: false,
-              fechaActualizacion: new Date().toISOString()
+              fechaActualizacion: new Date().toISOString(),
+              ...tData
             };
           }
         } else if (role === 'cliente') {
@@ -652,6 +705,91 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             };
           }
         }
+      }
+
+      // If user is logging in as a therapist, verify claims and therapist collection
+      const isTherapistByClaim = tokenClaims.rol === 'terapeuta' || tokenClaims.role === 'terapeuta' || tokenClaims.therapist === true;
+      let thDoc = null;
+      if (role === 'terapeuta' || isTherapistByClaim || userProfile?.rol === 'terapeuta') {
+        try {
+          const checkDoc = await getDoc(doc(db, 'terapeutas', uid));
+          if (checkDoc.exists()) {
+            thDoc = checkDoc;
+          } else if (trimmedEmail) {
+            const qEmail = query(collection(db, 'terapeutas'), where('email', '==', trimmedEmail), limit(1));
+            const snapEmail = await getDocs(qEmail);
+            if (!snapEmail.empty) {
+              thDoc = snapEmail.docs[0];
+            } else {
+              const qCorreo = query(collection(db, 'terapeutas'), where('correo', '==', trimmedEmail), limit(1));
+              const snapCorreo = await getDocs(qCorreo);
+              if (!snapCorreo.empty) {
+                thDoc = snapCorreo.docs[0];
+              }
+            }
+          }
+        } catch (thErr) {
+          console.warn('Note checking therapist doc during login:', thErr);
+        }
+      }
+
+      if (role === 'terapeuta' && (isTherapistByClaim || thDoc || userProfile?.rol === 'terapeuta' || (userProfile as any)?.role === 'terapeuta')) {
+        const tData = thDoc ? thDoc.data() : (await getDoc(doc(db, 'terapeutas', uid)).catch(() => null))?.data() || {};
+        const resolvedEstado = tData.estado || (tData.estadoAprobacion === 'aprobado' ? 'activo' : userProfile?.estado) || 'activo';
+
+        userProfile = {
+          id: uid,
+          uid,
+          nombre: userProfile?.nombre || tData.nombre || userCredential.user.displayName?.split(' ')[0] || 'Terapeuta',
+          apellidos: userProfile?.apellidos || tData.apellidos || userCredential.user.displayName?.split(' ').slice(1).join(' ') || '',
+          correo: userProfile?.correo || tData.correo || tData.email || trimmedEmail,
+          telefono: userProfile?.telefono || tData.telefono || '',
+          fotografia: userProfile?.fotografia || tData.fotografia || tData.photo || '',
+          ...tData,
+          ...(userProfile || {}),
+          rol: 'terapeuta',
+          role: 'terapeuta',
+          estado: resolvedEstado,
+          status: resolvedEstado,
+          fechaRegistro: userProfile?.fechaRegistro || tData.creadoEn || tData.fechaAlta || new Date().toISOString(),
+          ultimoAcceso: new Date().toISOString(),
+          correoVerificado: userCredential.user.emailVerified || false,
+          fechaActualizacion: new Date().toISOString()
+        } as UserAuthProfile;
+
+        // Auto-heal users doc if missing or misconfigured
+        setDoc(doc(db, 'users', uid), {
+          uid,
+          id: uid,
+          correo: trimmedEmail,
+          email: trimmedEmail,
+          nombre: userProfile.nombre,
+          apellidos: userProfile.apellidos,
+          rol: 'terapeuta',
+          role: 'terapeuta',
+          estado: resolvedEstado,
+          isActive: resolvedEstado === 'activo',
+          fechaActualizacion: new Date().toISOString()
+        }, { merge: true }).catch(() => {});
+
+        // If therapist document was indexed under a different ID, sync to primary uid
+        if (thDoc && thDoc.id !== uid) {
+          setDoc(doc(db, 'terapeutas', uid), {
+            ...tData,
+            id: uid,
+            uid,
+            userId: uid,
+            correo: trimmedEmail,
+            email: trimmedEmail,
+            rol: 'terapeuta',
+            role: 'terapeuta',
+            estado: resolvedEstado,
+            status: resolvedEstado,
+            fechaActualizacion: new Date().toISOString()
+          }, { merge: true }).catch(() => {});
+        }
+      } else if (userProfile && (userProfile.rol === 'terapeuta' || (userProfile as any).role === 'terapeuta')) {
+        userProfile.rol = 'terapeuta';
       }
 
       if (!userProfile) {
@@ -683,6 +821,50 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           } catch (e) {
             console.warn('Auto-create client profile warning:', e);
           }
+        } else if (role === 'terapeuta') {
+          const autoName = userCredential.user.displayName || trimmedEmail.split('@')[0];
+          userProfile = {
+            id: uid,
+            uid,
+            nombre: autoName,
+            apellidos: '',
+            correo: trimmedEmail,
+            telefono: '',
+            rol: 'terapeuta',
+            estado: 'activo',
+            fechaRegistro: new Date().toISOString(),
+            ultimoAcceso: new Date().toISOString(),
+            correoVerificado: userCredential.user.emailVerified,
+            fechaActualizacion: new Date().toISOString()
+          } as UserAuthProfile;
+          try {
+            await setDoc(doc(db, 'users', uid), userProfile, { merge: true });
+            await setDoc(doc(db, 'terapeutas', uid), {
+              id: uid,
+              uid,
+              userId: uid,
+              nombre: autoName,
+              apellidos: '',
+              nombreCompleto: autoName,
+              correo: trimmedEmail,
+              email: trimmedEmail,
+              telefono: '',
+              rol: 'terapeuta',
+              role: 'terapeuta',
+              estado: 'activo',
+              status: 'activo',
+              estadoAprobacion: 'aprobado',
+              estadoVerificacion: 'verificado',
+              especialidades: ['Masaje Tejido Profundo', 'Masaje Holístico'],
+              zonasCobertura: ['Polanco', 'Lomas de Chapultepec'],
+              puntuacion: 5.0,
+              resenasCount: 0,
+              serviciosCompletados: 0,
+              fechaAlta: new Date().toISOString()
+            }, { merge: true });
+          } catch (e) {
+            console.warn('Auto-create therapist profile warning:', e);
+          }
         } else {
           await signOut(auth);
           setLoading(false);
@@ -691,7 +873,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       // STRICT ROLE VALIDATION: Verify role against requested portal (bypassed for cliente portal so any user can enter)
-      if (role !== 'cliente' && userProfile.rol !== role) {
+      const resolvedRole = (userProfile.rol || (userProfile as any).role || '').toLowerCase();
+      userProfile.rol = resolvedRole as UserRole;
+      if (role !== 'cliente' && resolvedRole !== role) {
         await signOut(auth);
         setLoading(false);
         const roleNames: Record<UserRole, string> = {
@@ -701,7 +885,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
         return { 
           success: false, 
-          error: `Esta cuenta está registrada como ${roleNames[userProfile.rol as UserRole] || userProfile.rol}. No tienes permiso para acceder al portal de ${roleNames[role]}.` 
+          error: `Esta cuenta está registrada como ${roleNames[resolvedRole as UserRole] || resolvedRole}. No tienes permiso para acceder al portal de ${roleNames[role]}.` 
         };
       }
 

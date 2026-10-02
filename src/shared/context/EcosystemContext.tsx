@@ -129,7 +129,12 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Derive activeTherapist dynamically from logged-in therapist session
   const activeTherapist: Therapist = useMemo(() => {
     if (authTherapist) {
-      const match = therapists.find(t => t.id === authTherapist.id || t.id === authTherapist.uid);
+      const match = therapists.find(t => 
+        t.id === authTherapist.id || 
+        t.id === authTherapist.uid ||
+        (authTherapist.correo && (t.email || '').toLowerCase() === authTherapist.correo.toLowerCase()) ||
+        ((authTherapist as any).email && (t.email || '').toLowerCase() === (authTherapist as any).email.toLowerCase())
+      );
       if (match) return match;
       return {
         id: authTherapist.id || authTherapist.uid || firebaseUser?.uid || 'ther-1',

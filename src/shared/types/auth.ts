@@ -33,10 +33,14 @@ export interface EmergencyContact {
 
 export interface TherapistFullProfile {
   id: string; // Match Auth UID
+  uid?: string;
   nombre: string;
   apellidos: string;
+  nombreCompleto?: string;
   correo: string;
+  email?: string;
   telefono: string;
+  phone?: string;
   fotografia: string;
   photo?: string;
   fechaNacimiento?: string;
@@ -66,6 +70,11 @@ export interface TherapistFullProfile {
   
   // Status & Security
   estado: AccountStatus;
+  status?: string;
+  estadoAprobacion?: string;
+  estadoVerificacion?: string;
+  rol?: string;
+  role?: string;
   mustChangePassword?: boolean; // Force change on first login
   documentos: TherapistDocument[];
   puntuacion: number;

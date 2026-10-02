@@ -41,10 +41,16 @@ interface TherapistContextType {
     ineNumber?: string;
     certificacionesInfo?: string;
     cuentaBancariaCLABE?: string;
+    banco?: string;
+    numeroCuenta?: string;
+    titularCuenta?: string;
     contactoEmergencia?: { nombre: string; parentesco: string; telefono: string };
     experienciaAnos?: number;
     disponibilidad?: string;
     estado?: AccountStatus;
+    biografia?: string;
+    vehiculo?: string;
+    idiomas?: string[];
   }) => Promise<{ success: boolean; tempPassword?: string; error?: string }>;
   
   updateTherapist: (id: string, updates: Partial<TherapistFullProfile>) => Promise<{ success: boolean; error?: string }>;
@@ -416,7 +422,25 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         setFirestoreError(null);
         setLoading(false);
         if (!docSnap.exists()) {
-          setTherapists([]);
+          if (sessions.terapeuta) {
+            const fallbackProfile = sanitizeTherapist({
+              id: therapistId,
+              uid: therapistId,
+              nombre: sessions.terapeuta.nombre || 'Terapeuta',
+              apellidos: sessions.terapeuta.apellidos || '',
+              nombreCompleto: `${sessions.terapeuta.nombre || 'Terapeuta'} ${sessions.terapeuta.apellidos || ''}`.trim(),
+              correo: sessions.terapeuta.correo || (sessions.terapeuta as any).email || '',
+              email: sessions.terapeuta.correo || (sessions.terapeuta as any).email || '',
+              telefono: sessions.terapeuta.telefono || '',
+              estado: sessions.terapeuta.estado || 'activo',
+              status: sessions.terapeuta.estado || 'activo',
+              rol: 'terapeuta',
+              role: 'terapeuta'
+            });
+            setTherapists([fallbackProfile]);
+          } else {
+            setTherapists([]);
+          }
         } else {
           try {
             const profile = sanitizeTherapist({
@@ -469,9 +493,23 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       const snap = await getDoc(privateInfoRef);
       if (snap.exists() && snap.data() && Object.keys(snap.data() || {}).length > 0) {
         console.log('[TherapistContext] Sensitive info successfully found in private_info/sensitive for ID:', id, snap.data());
+        let fullData = { ...snap.data() };
+        // If master doc has banking data not in subcollection, merge it
+        if (!fullData.banco || !fullData.numeroCuenta || !fullData.titularCuenta) {
+          const tSnap = await getDoc(doc(db, 'terapeutas', id)).catch(() => null);
+          if (tSnap && tSnap.exists()) {
+            const tData = tSnap.data() || {};
+            fullData = {
+              banco: tData.banco || '',
+              numeroCuenta: tData.numeroCuenta || '',
+              titularCuenta: tData.titularCuenta || '',
+              ...fullData
+            };
+          }
+        }
         setSensitiveInfo(prev => ({
           ...prev,
-          [id]: snap.data()
+          [id]: fullData
         }));
       } else {
         console.log('[TherapistContext] private_info/sensitive not found for ID:', id, '. Checking master doc fallback...');
@@ -525,10 +563,16 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     ineNumber?: string;
     certificacionesInfo?: string;
     cuentaBancariaCLABE?: string;
+    banco?: string;
+    numeroCuenta?: string;
+    titularCuenta?: string;
     contactoEmergencia?: { nombre: string; parentesco: string; telefono: string };
     experienciaAnos?: number;
     disponibilidad?: string;
     estado?: AccountStatus;
+    biografia?: string;
+    vehiculo?: string;
+    idiomas?: string[];
   }): Promise<{ success: boolean; tempPassword?: string; error?: string }> => {
     const { nombre, apellidos, correo, telefono, especialidades, zonasCobertura } = data;
 
@@ -591,27 +635,41 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       id: finalId,
       nombre: nombre.trim(),
       apellidos: apellidos.trim(),
+      nombreCompleto: `${nombre.trim()} ${apellidos.trim()}`,
       correo: trimmedEmail,
+      email: trimmedEmail,
       telefono: telefono.trim(),
+      phone: telefono.trim(),
       fotografia: data.fotografia || '',
+      photo: data.fotografia || '',
       fechaNacimiento: data.fechaNacimiento,
       direccion: data.direccion,
       curp: data.curp,
       ineNumber: data.ineNumber,
       certificacionesInfo: data.certificacionesInfo,
       cuentaBancariaCLABE: data.cuentaBancariaCLABE,
+      banco: data.banco,
+      numeroCuenta: data.numeroCuenta,
+      titularCuenta: data.titularCuenta,
       contactoEmergencia: data.contactoEmergencia,
       especialidades: especialidades.length ? especialidades : ['Masaje Holístico'],
       experienciaAnos: data.experienciaAnos || 3,
-      idiomas: ['Español'],
+      idiomas: data.idiomas && data.idiomas.length ? data.idiomas : ['Español'],
       disponibilidad: data.disponibilidad || 'Lunes a Sábado, 09:00 - 19:00',
       zonasCobertura: zonasCobertura.length ? zonasCobertura : ['Polanco'],
       estado: initialStatus,
+      status: initialStatus,
+      estadoAprobacion: initialStatus === 'activo' ? 'aprobado' : 'pendiente',
+      estadoVerificacion: initialStatus === 'activo' ? 'verificado' : 'no_verificado',
+      rol: 'terapeuta',
       mustChangePassword: !data.id, // Only require password change if created by administrator
       documentos: [], // Start empty for real uploads only
       puntuacion: 5.0,
       resenasCount: 0,
       serviciosCompletados: 0,
+      biografia: data.biografia || data.certificacionesInfo || 'Terapeuta profesional certificada ESSENYA.',
+      bio: data.biografia || data.certificacionesInfo || 'Terapeuta profesional certificada ESSENYA.',
+      vehiculo: data.vehiculo,
       fechaAlta: new Date().toISOString(),
       ultimoAcceso: 'Nunca',
       fechaActualizacion: new Date().toISOString()
@@ -621,15 +679,22 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
     try {
       const userPayload = {
         id: finalId,
-        nombre,
-        apellidos,
+        uid: finalId,
+        nombre: nombre.trim(),
+        apellidos: apellidos.trim(),
+        nombreCompleto: `${nombre.trim()} ${apellidos.trim()}`,
         correo: trimmedEmail,
-        telefono,
+        email: trimmedEmail,
+        telefono: telefono.trim(),
+        fotografia: data.fotografia || '',
+        photo: data.fotografia || '',
         estado: initialStatus,
+        isActive: initialStatus === 'activo',
         fechaRegistro: new Date().toISOString(),
         ultimoAcceso: 'Nunca',
         correoVerificado: true,
         rol: 'terapeuta',
+        role: 'terapeuta',
         fechaActualizacion: new Date().toISOString(),
         mustChangePassword: !data.id
       };
@@ -642,8 +707,25 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
         curp: data.curp || null,
         ineNumber: data.ineNumber || null,
         cuentaBancariaCLABE: data.cuentaBancariaCLABE || null,
+        banco: data.banco || null,
+        numeroCuenta: data.numeroCuenta || null,
+        titularCuenta: data.titularCuenta || null,
         updatedAt: new Date().toISOString()
-      });
+      }, { merge: true });
+
+      if (data.banco || data.cuentaBancariaCLABE || data.curp) {
+        setSensitiveInfo(prev => ({
+          ...prev,
+          [finalId]: {
+            curp: data.curp || '',
+            ineNumber: data.ineNumber || '',
+            cuentaBancariaCLABE: data.cuentaBancariaCLABE || '',
+            banco: data.banco || '',
+            numeroCuenta: data.numeroCuenta || '',
+            titularCuenta: data.titularCuenta || ''
+          }
+        }));
+      }
       
       if (initialStatus === 'activo') {
         const publicPayload = {
@@ -666,8 +748,8 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
           zonasCobertura,
           completedServicesCount: 0,
           serviciosCompletados: 0,
-          bio: data.certificacionesInfo || 'Terapeuta certificada ESSENYA.',
-          biografia: data.certificacionesInfo || 'Terapeuta certificada ESSENYA.',
+          bio: data.biografia || data.certificacionesInfo || 'Terapeuta certificada ESSENYA.',
+          biografia: data.biografia || data.certificacionesInfo || 'Terapeuta certificada ESSENYA.',
           updatedAt: new Date().toISOString()
         };
         try {
@@ -698,10 +780,35 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       return { success: false, error: 'Terapeuta no encontrada.' };
     }
 
-    updatedName = `${updates.nombre || target.nombre} ${updates.apellidos || target.apellidos}`;
+    updatedName = `${updates.nombre || target.nombre} ${updates.apellidos || target.apellidos}`.trim();
 
+    // 1. Intentar actualizar vía backend API si disponible para sincronización atómica con log de auditoría
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (token) {
+        const apiRes = await fetch('/api/admin/therapist/update', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ id, updates })
+        });
+        if (apiRes.ok) {
+          const apiJson = await apiRes.json();
+          if (apiJson.success) {
+            console.log('[TherapistContext] updateTherapist: Backend update succeeded');
+          }
+        }
+      }
+    } catch (apiErr) {
+      console.warn('[TherapistContext] Backend updateTherapist fallback to direct Firestore:', apiErr);
+    }
+
+    // 2. Actualización directa en Firestore
     const updatePayload = {
       ...updates,
+      nombreCompleto: updatedName,
       fechaActualizacion: new Date().toISOString()
     };
 
@@ -710,13 +817,16 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.log('[TherapistContext] updateTherapist: Master document successfully updated in Firestore for ID:', id);
 
       // Update sensitive info if provided
-      if (updates.curp || updates.ineNumber || updates.cuentaBancariaCLABE) {
+      if (updates.curp || updates.ineNumber || updates.cuentaBancariaCLABE || (updates as any).banco || (updates as any).numeroCuenta || (updates as any).titularCuenta) {
         console.log('[TherapistContext] updateTherapist: Updating sensitive info subcollection for ID:', id);
         const privateInfoRef = doc(db, 'terapeutas', id, 'private_info', 'sensitive');
         const sensitiveUpdates: any = {};
-        if (updates.curp) sensitiveUpdates.curp = updates.curp;
-        if (updates.ineNumber) sensitiveUpdates.ineNumber = updates.ineNumber;
-        if (updates.cuentaBancariaCLABE) sensitiveUpdates.cuentaBancariaCLABE = updates.cuentaBancariaCLABE;
+        if (updates.curp !== undefined) sensitiveUpdates.curp = updates.curp;
+        if (updates.ineNumber !== undefined) sensitiveUpdates.ineNumber = updates.ineNumber;
+        if (updates.cuentaBancariaCLABE !== undefined) sensitiveUpdates.cuentaBancariaCLABE = updates.cuentaBancariaCLABE;
+        if ((updates as any).banco !== undefined) sensitiveUpdates.banco = (updates as any).banco;
+        if ((updates as any).numeroCuenta !== undefined) sensitiveUpdates.numeroCuenta = (updates as any).numeroCuenta;
+        if ((updates as any).titularCuenta !== undefined) sensitiveUpdates.titularCuenta = (updates as any).titularCuenta;
         sensitiveUpdates.updatedAt = new Date().toISOString();
         
         await setDoc(privateInfoRef, sensitiveUpdates, { merge: true });
@@ -729,9 +839,26 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
 
       try {
-        await updateDoc(doc(db, 'users', id), cleanForFirestore({
+        const userUpdates: any = {
+          nombreCompleto: updatedName,
           fechaActualizacion: new Date().toISOString()
-        }));
+        };
+        if (updates.nombre) userUpdates.nombre = updates.nombre;
+        if (updates.apellidos) userUpdates.apellidos = updates.apellidos;
+        if (updates.telefono) userUpdates.telefono = updates.telefono;
+        if (updates.correo) {
+          userUpdates.correo = updates.correo;
+          userUpdates.email = updates.correo;
+        }
+        if (updates.fotografia) {
+          userUpdates.fotografia = updates.fotografia;
+          userUpdates.photo = updates.fotografia;
+        }
+        if (updates.estado) {
+          userUpdates.estado = updates.estado;
+          userUpdates.isActive = updates.estado === 'activo';
+        }
+        await updateDoc(doc(db, 'users', id), cleanForFirestore(userUpdates));
       } catch (userErr) {
         console.warn('[TherapistContext] updateTherapist: Error updating users collection:', userErr);
       }
@@ -741,6 +868,7 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
           return {
             ...t,
             ...updates,
+            nombreCompleto: updatedName,
             fechaActualizacion: new Date().toISOString()
           };
         }
@@ -976,6 +1104,8 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
       try {
         await updateDoc(doc(db, 'users', id), cleanForFirestore({
           estado: status,
+          rol: 'terapeuta',
+          role: 'terapeuta',
           isActive: status === 'activo',
           fechaActualizacion: new Date().toISOString(),
           ...(status === 'activo' ? {
