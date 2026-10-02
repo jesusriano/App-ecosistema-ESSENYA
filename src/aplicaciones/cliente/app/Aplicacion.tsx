@@ -18,7 +18,7 @@ import {
   MessageSquare, FileText, Star, Award, ShieldCheck, ChevronRight, 
   Bot, AlertCircle, RefreshCw, Send, X, Heart, Droplets, Music, Sliders,
   AlertTriangle, CreditCard, Building2, Check, CheckCheck, Copy, Users, UserCheck, Banknote, Camera, Upload,
-  LocateFixed, Crown, Gem, Shield, Gift, Wallet, Lock
+  LocateFixed, Crown, Gem, Shield, Gift, Wallet, Lock, ExternalLink
 } from 'lucide-react';
 import { PanicModal } from '../../../shared/components/PanicModal';
 import { BookingChatDrawer } from '../../../shared/components/BookingChatDrawer';
@@ -319,6 +319,91 @@ export const ClientApp: React.FC<ClientAppProps> = ({
   const [paymentMethodType, setPaymentMethodType] = useState<'transferencia' | 'stripe'>('stripe');
   const [clabeCopied, setClabeCopied] = useState<boolean>(false);
 
+  // Stripe Checkout Test Modal State
+  const [stripeModal, setStripeModal] = useState<{
+    isOpen: boolean;
+    bookingId: string;
+    bookingCode: string;
+    serviceName: string;
+    total: number;
+    checkoutUrl: string;
+    sessionId?: string;
+    verifying?: boolean;
+  } | null>(null);
+
+  const [copiedTestCard, setCopiedTestCard] = useState<string | null>(null);
+
+  const handleCopyCardNumber = (cardNum: string) => {
+    navigator.clipboard.writeText(cardNum.replace(/\s+/g, ''));
+    setCopiedTestCard(cardNum);
+    setTimeout(() => setCopiedTestCard(null), 2000);
+  };
+
+  const triggerStripeCheckoutForBooking = async (b: Booking) => {
+    try {
+      showToast('Conectando con Stripe TEST', 'Generando sesión segura de Checkout...', 'info');
+      const targetBookingId = b.id;
+      const res = await fetch('/api/create-stripe-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: targetBookingId,
+          serviceName: b.serviceName,
+          total: b.total,
+          customerEmail: client?.email || '',
+          successUrl: `${window.location.origin}/cliente?payment=success&bookingId=${targetBookingId}&session_id={CHECKOUT_SESSION_ID}`,
+          cancelUrl: `${window.location.origin}/cliente?payment=cancelled&bookingId=${targetBookingId}`
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.url) {
+        setStripeModal({
+          isOpen: true,
+          bookingId: targetBookingId,
+          bookingCode: b.code,
+          serviceName: b.serviceName,
+          total: b.total,
+          checkoutUrl: data.url,
+          sessionId: data.sessionId
+        });
+        window.open(data.url, '_blank');
+      } else {
+        showToast('Error de Pasarela', data.error || 'No se pudo generar la sesión de pago.', 'error');
+      }
+    } catch (err: any) {
+      showToast('Error de Conexión', err.message || 'Error al conectar con Stripe.', 'error');
+    }
+  };
+
+  const handleManualVerifyPayment = async (bookingId: string, sessionId?: string) => {
+    if (!stripeModal) return;
+    setStripeModal(prev => prev ? { ...prev, verifying: true } : null);
+    try {
+      if (auth.authStateReady) await auth.authStateReady();
+      const token = await auth.currentUser?.getIdToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/bookings/confirm-stripe-payment', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ bookingId, sessionId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('¡Pago Acreditado con Éxito!', 'La reserva ha sido marcada como pagada y enviada a despacho automático.', 'success');
+        setStripeModal(null);
+        setActiveTab('tracking');
+      } else {
+        showToast('Validación en Proceso', data.error || 'El pago aún no se ha acreditado en Stripe. Si acabas de pagar, espera unos segundos e intenta de nuevo.', 'info');
+      }
+    } catch (err: any) {
+      showToast('Error al Verificar', err.message || 'No fue posible consultar el estado del pago.', 'error');
+    } finally {
+      setStripeModal(prev => prev ? { ...prev, verifying: false } : null);
+    }
+  };
+
   useEffect(() => {
     verifyStripeFrontendConfig();
   }, []);
@@ -617,6 +702,8 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     try {
       const finalized = await onNewBooking(newBk);
       const finalizedBooking = finalized as Booking | undefined;
+      const actualBookingId = finalizedBooking?.id || newBk.id;
+      const actualBookingCode = finalizedBooking?.code || newBk.code;
 
       if (paymentMethodType === 'stripe' && totalPrice > 0) {
         try {
@@ -624,38 +711,35 @@ export const ClientApp: React.FC<ClientAppProps> = ({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              bookingId: newBk.id,
+              bookingId: actualBookingId,
               serviceName: newBk.serviceName,
               total: totalPrice,
               customerEmail: client?.email || '',
-              successUrl: `${window.location.origin}/cliente?payment=success&bookingId=${newBk.id}&session_id={CHECKOUT_SESSION_ID}`,
-              cancelUrl: `${window.location.origin}/cliente?payment=cancelled&bookingId=${newBk.id}`
+              successUrl: `${window.location.origin}/cliente?payment=success&bookingId=${actualBookingId}&session_id={CHECKOUT_SESSION_ID}`,
+              cancelUrl: `${window.location.origin}/cliente?payment=cancelled&bookingId=${actualBookingId}`
             })
           });
           const data = await res.json();
           if (data.success && data.url) {
-            // Check if running inside an iframe preview
-            const isInIframe = window.self !== window.top;
-            if (isInIframe) {
-              // Open Stripe in new tab to bypass X-Frame-Options SAMEORIGIN restriction
-              const popup = window.open(data.url, '_blank');
-              if (!popup) {
-                try {
-                  window.top!.location.href = data.url;
-                } catch {
-                  window.location.href = data.url;
-                }
-              } else {
-                showToast(
-                  'Pasarela Stripe Abierta',
-                  'Se ha abierto la pasarela cifrada de Stripe en una nueva pestaña para completar tu pago.',
-                  'info'
-                );
-              }
-            } else {
-              window.location.href = data.url;
+            setStripeModal({
+              isOpen: true,
+              bookingId: actualBookingId,
+              bookingCode: actualBookingCode,
+              serviceName: newBk.serviceName,
+              total: totalPrice,
+              checkoutUrl: data.url,
+              sessionId: data.sessionId
+            });
+
+            // Open Stripe Checkout in new tab for seamless user experience
+            const popup = window.open(data.url, '_blank');
+            if (popup) {
+              showToast(
+                'Pasarela Stripe TEST Abierta',
+                'Se abrió la pasarela segura de Stripe TEST en una pestaña nueva.',
+                'info'
+              );
             }
-            return;
           } else if (!data.success) {
             showToast('Error en Pasarela Stripe', data.error || 'No fue posible generar la sesión de pago con Stripe.', 'error');
           }
@@ -673,13 +757,9 @@ export const ClientApp: React.FC<ClientAppProps> = ({
         );
       }
 
-      
-
-      
-
       showToast(
-        'Reserva Confirmada',
-        `Su código es ${newBk.code}. La solicitud ha sido registrada en tiempo real en la Central de Operaciones.`,
+        'Reserva Registrada',
+        `Código ${actualBookingCode}. ${paymentMethodType === 'stripe' ? 'Completa el pago con Stripe TEST para iniciar despacho.' : 'En espera de validación de pago.'}`,
         'gold'
       );
       
@@ -2209,6 +2289,37 @@ export const ClientApp: React.FC<ClientAppProps> = ({
               </div>
             </div>
 
+            {/* Stripe TEST Payment Pending Call-To-Action Banner */}
+            {(activeBooking.dispatchState === 'en_espera_pago' || activeBooking.paymentStatus !== 'pagado') && (
+              <div className="bg-gradient-to-r from-amber-500/10 via-[#C9A55B]/20 to-amber-500/10 border-2 border-[#C9A55B] p-6 rounded-2xl shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-in fade-in">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#C9A55B] text-black">
+                      MODO STRIPE TEST ACTIVO
+                    </span>
+                    <span className="font-bold text-sm sm:text-base text-[#1C1917] dark:text-white">
+                      Pago Pendiente de Acreditación (${activeBooking.total.toLocaleString()} MXN)
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#78716C] dark:text-[#A8A29E] max-w-xl">
+                    Esta reserva está en espera de validación de pago. Haz clic en el botón para abrir la pasarela de prueba de Stripe TEST y completar la simulación con tarjeta.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => triggerStripeCheckoutForBooking(activeBooking)}
+                    className="w-full sm:w-auto px-5 py-3 bg-[#635BFF] hover:bg-[#534BE5] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    <span>Pagar con Tarjeta (Stripe TEST)</span>
+                    <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Stepper Status Bar */}
             <div className="bg-white dark:bg-[#141414] p-6 rounded-2xl border border-[#E5DFD3] dark:border-[#C9A55B]/20 space-y-4 shadow-sm">
               <h4 className="text-xs uppercase text-[#6B655F] dark:text-[#AAAAAA] tracking-wider font-semibold">Estado de Progreso en Tiempo Real</h4>
@@ -2724,6 +2835,17 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                           </div>
                         )}
 
+                        {(bk.paymentStatus !== 'pagado' || bk.dispatchState === 'en_espera_pago') && bk.state !== 'cancelado' && (
+                          <button
+                            type="button"
+                            onClick={() => triggerStripeCheckoutForBooking(bk)}
+                            className="flex items-center space-x-1.5 bg-[#635BFF] hover:bg-[#534BE5] text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                            <span>Pagar (Stripe TEST)</span>
+                          </button>
+                        )}
+
                         {bk.state === 'cancelado' && (
                           <span className="px-2.5 py-1 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-lg text-xs font-bold">
                             Cancelada
@@ -3051,6 +3173,124 @@ export const ClientApp: React.FC<ClientAppProps> = ({
         userName={client?.name || 'Cliente VIP'}
         userLocation={client?.address || 'Polanco VIP, Ciudad de México'}
       />
+
+      {/* Stripe TEST Checkout Gateway Modal */}
+      {stripeModal && stripeModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[#FAF8F5] dark:bg-[#121212] border-2 border-[#C9A55B] rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 relative overflow-hidden text-left">
+            {/* Top Accent Strip */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#D8B76C] via-[#C9A55B] to-[#806020]" />
+
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#C9A55B] text-black uppercase">
+                    Modo Stripe TEST
+                  </span>
+                  <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                    Cero cargos reales
+                  </span>
+                </div>
+                <h3 className="text-xl font-serif font-bold text-[#1C1917] dark:text-white">
+                  Pasarela Stripe TEST Preparada
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStripeModal(null)}
+                className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Booking Details Card */}
+            <div className="bg-white dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#333333] p-4 rounded-2xl space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-[#6B655F] dark:text-[#AAAAAA]">Reserva:</span>
+                <span className="font-mono font-bold text-[#806020] dark:text-[#C9A55B]">{stripeModal.bookingCode}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#6B655F] dark:text-[#AAAAAA]">Servicio:</span>
+                <span className="font-semibold text-[#1C1917] dark:text-white truncate max-w-[200px]">{stripeModal.serviceName}</span>
+              </div>
+              <div className="flex justify-between items-baseline pt-2 border-t border-[#E5DFD3] dark:border-[#262626]">
+                <span className="font-bold text-sm text-[#1C1917] dark:text-white">Total a Pagar (TEST):</span>
+                <span className="font-mono font-bold text-lg text-[#806020] dark:text-[#C9A55B]">
+                  ${stripeModal.total.toLocaleString()} MXN
+                </span>
+              </div>
+            </div>
+
+            {/* Primary Action: Open Checkout */}
+            <div className="space-y-3">
+              <a
+                href={stripeModal.checkoutUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-4 px-6 bg-gradient-to-r from-[#635BFF] via-[#5851EA] to-[#4F46E5] hover:opacity-95 text-white font-bold text-sm tracking-wider uppercase rounded-2xl shadow-xl shadow-indigo-500/25 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.99] text-center"
+              >
+                <CreditCard className="w-5 h-5" />
+                <span>Abrir Checkout de Stripe TEST</span>
+                <ExternalLink className="w-4 h-4 ml-1" />
+              </a>
+
+              <button
+                type="button"
+                disabled={stripeModal.verifying}
+                onClick={() => handleManualVerifyPayment(stripeModal.bookingId, stripeModal.sessionId)}
+                className="w-full py-3 px-4 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {stripeModal.verifying ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Verificando con Stripe y Firestore...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    <span>Ya pagué en Stripe (Verificar y Pasar a Despacho)</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Official Test Cards Reference */}
+            <div className="bg-[#FAF8F5] dark:bg-[#0A0A0C] border border-[#E5DFD3] dark:border-[#222227] p-3.5 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-bold text-[#806020] dark:text-[#C9A55B]">
+                <span>Tarjetas Oficiales Stripe TEST:</span>
+                <span className="text-[10px] text-slate-500 font-mono">Haz clic para copiar</span>
+              </div>
+
+              <div className="space-y-1.5 text-[11px] font-mono">
+                {[
+                  { label: 'Pago Aprobado', number: '4242 4242 4242 4242', color: 'text-emerald-500' },
+                  { label: 'Autenticación 3D Secure', number: '4000 0027 6000 3184', color: 'text-amber-500' },
+                  { label: 'Fondos Insuficientes', number: '4000 0000 0000 9995', color: 'text-rose-500' }
+                ].map((tc) => (
+                  <div
+                    key={tc.number}
+                    onClick={() => handleCopyCardNumber(tc.number)}
+                    className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-[#161618] border border-[#E5DFD3] dark:border-[#2B2B30] hover:border-[#C9A55B] cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${tc.color === 'text-emerald-500' ? 'bg-emerald-500' : tc.color === 'text-amber-500' ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                      <span className="text-slate-400 text-[10px]">{tc.label}:</span>
+                      <span className="font-bold text-[#1C1917] dark:text-white">{tc.number}</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400">
+                      {copiedTestCard === tc.number ? '✓ Copiado' : 'Copiar'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-500 text-center pt-1 font-mono">
+                Cualquier fecha futura (ej. 12/30) • CVC: 123 • CP: 06700
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Botón de soporte integrado en el encabezado superior */}
     </div>

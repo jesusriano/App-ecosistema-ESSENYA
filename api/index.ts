@@ -3418,14 +3418,23 @@ app.post("/api/bookings/confirm-stripe-payment", async (req: Request, res: Respo
     if (!bookingId) return res.status(400).json({ success: false, error: "bookingId es requerido" });
 
     const db = getAdminFirestore();
-    const bookingRef = db.collection('reservas').doc(bookingId);
-    const bookingSnap = await bookingRef.get();
+    let bookingRef = db.collection('reservas').doc(bookingId);
+    let bookingSnap = await bookingRef.get();
+
+    if (!bookingSnap.exists) {
+      const codeQuery = await db.collection('reservas').where('code', '==', bookingId).limit(1).get();
+      if (!codeQuery.empty) {
+        bookingRef = codeQuery.docs[0].ref;
+        bookingSnap = codeQuery.docs[0];
+      }
+    }
 
     if (!bookingSnap.exists) {
       return res.status(404).json({ success: false, error: "Reserva no encontrada" });
     }
 
     const bData = bookingSnap.data()!;
+    const realBookingId = bookingRef.id;
     let isAuthorized = false;
     let stripePaymentIntent: string | undefined = undefined;
 
@@ -3434,7 +3443,8 @@ app.post("/api/bookings/confirm-stripe-payment", async (req: Request, res: Respo
       try {
         const stripe = stripeService.getStripeInstance();
         const session = await stripe.checkout.sessions.retrieve(sessionId);
-        if (session && (session.metadata?.bookingId === bookingId || session.client_reference_id === bookingId)) {
+        const metaId = session.metadata?.bookingId || session.client_reference_id;
+        if (session && (metaId === bookingId || metaId === realBookingId || metaId === bData.code)) {
           if (session.payment_status === 'paid' || session.status === 'complete') {
             isAuthorized = true;
             stripePaymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
@@ -4087,6 +4097,20 @@ app.post("/api/push/send", requireAuth, async (req: Request, res: Response) => {
     console.error("Error en /api/push/send:", err);
     res.status(500).json({ success: false, error: err.message });
   }
+});
+
+// Stripe Checkout Configuration & Mode Check Endpoint
+app.get("/api/stripe/config", (req: Request, res: Response) => {
+  const mode = stripeService.getStripeMode();
+  const isTest = stripeService.isTestMode();
+  res.json({
+    success: true,
+    mode,
+    isTestMode: isTest,
+    currency: "mxn",
+    account: "acct_1UJJ9S6M9XbRucu3",
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Stripe Checkout Integration Endpoint

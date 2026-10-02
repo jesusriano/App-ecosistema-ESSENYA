@@ -33,6 +33,20 @@ export class StripeService {
   }
 
   /**
+   * Determina de forma determinista si la integración opera en modo TEST o LIVE
+   */
+  getStripeMode(): 'test' | 'live' {
+    if (process.env.STRIPE_MODE === 'test') return 'test';
+    if (process.env.STRIPE_MODE === 'live') return 'live';
+    const key = process.env.STRIPE_SECRET_KEY || this.currentKey || '';
+    return key.startsWith('sk_test_') ? 'test' : 'live';
+  }
+
+  isTestMode(): boolean {
+    return this.getStripeMode() === 'test';
+  }
+
+  /**
    * Crea una sesión de Stripe Checkout para cobro con tarjeta
    */
   async createCheckoutSession(params: {
@@ -43,14 +57,23 @@ export class StripeService {
     customerEmail?: string;
     successUrl: string;
     cancelUrl: string;
-  }): Promise<{ success: boolean; url: string; sessionId: string }> {
+  }): Promise<{ success: boolean; url: string; sessionId: string; mode: 'test' | 'live' }> {
     const { bookingId, serviceName, total, priceId, customerEmail, successUrl, cancelUrl } = params;
 
     if (!total && !priceId) {
       throw new Error("Faltan datos requeridos de la reserva (total o priceId).");
     }
 
+    const mode = this.getStripeMode();
     const stripe = this.getStripeInstance();
+
+    // Medida de seguridad estricta: si se solicitó STRIPE_MODE=test pero la clave no es de test, abortar
+    if (process.env.STRIPE_MODE === 'test' && !this.currentKey.startsWith('sk_test_')) {
+      throw new Error("SEGURIDAD: STRIPE_MODE está en 'test' pero la clave configurada no es una clave de prueba (sk_test_). Operación bloqueada.");
+    }
+
+    console.log(`[Stripe Checkout] Creando sesión de Checkout en MODO ${mode.toUpperCase()} para reserva: ${bookingId}, Monto: $${total} MXN`);
+
     const sessionParams: any = {
       mode: 'payment',
       ui_mode: 'hosted_page',
@@ -69,7 +92,7 @@ export class StripeService {
                 currency: 'mxn',
                 product_data: {
                   name: `ESSENYA — ${serviceName || 'Servicio de Masaje VIP'}`,
-                  description: `Reserva y Servicio de Masaje a Domicilio (${bookingId || 'VIP'})`
+                  description: `Reserva y Servicio de Masaje a Domicilio (${bookingId || 'VIP'}) [${mode.toUpperCase()}]`
                 },
                 unit_amount: Math.round(Number(total) * 100),
               },
@@ -85,6 +108,7 @@ export class StripeService {
       customer_email: customerEmail || undefined,
       metadata: {
         bookingId: bookingId || '',
+        stripe_mode: mode,
         integration_identifier: 'hosted_mobile_app_0001',
         origin_context: 'mobile_app'
       }
@@ -99,7 +123,8 @@ export class StripeService {
     return {
       success: true,
       url: session.url,
-      sessionId: session.id
+      sessionId: session.id,
+      mode
     };
   }
 
