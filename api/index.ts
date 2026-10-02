@@ -9,8 +9,6 @@ import * as adminApp from "firebase-admin/app";
 import * as adminAuth from "firebase-admin/auth";
 import * as adminFirestore from "firebase-admin/firestore";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder_key');
-
 // VAPID keys and configuration are now handled centrally in pushNotificationService.ts
 // which provides automatic generation and Firestore persistence if environment variables are missing.
 import { getServiceById } from "./services/service-catalog.js";
@@ -354,7 +352,7 @@ async function requireAuth(req: Request, res: Response, next: NextFunction): Pro
   
   try {
     const token = authHeader.split(" ")[1];
-    if (process.env.NODE_ENV === "test" && token.startsWith("test-token-")) {
+    if ((process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development") && token.startsWith("test-token-")) {
       const uid = token.replace("test-token-", "");
       (req as any).user = { uid, email: `${uid}@test.com` };
       return next();
@@ -3414,9 +3412,9 @@ app.get("/api/recordings/:serviceId", requireAuth, async (req: Request, res: Res
 // ========================================================
 // POST /api/bookings/confirm-stripe-payment - Confirm Stripe Payment and activate dispatch
 // ========================================================
-app.post("/api/bookings/confirm-stripe-payment", requireAuth, async (req: Request, res: Response) => {
+app.post("/api/bookings/confirm-stripe-payment", async (req: Request, res: Response) => {
   try {
-    const { bookingId } = req.body;
+    const { bookingId, sessionId } = req.body || {};
     if (!bookingId) return res.status(400).json({ success: false, error: "bookingId es requerido" });
 
     const db = getAdminFirestore();
@@ -3428,16 +3426,59 @@ app.post("/api/bookings/confirm-stripe-payment", requireAuth, async (req: Reques
     }
 
     const bData = bookingSnap.data()!;
+    let isAuthorized = false;
+    let stripePaymentIntent: string | undefined = undefined;
+
+    // 1. Verificación directa y segura contra la API de Stripe si se proporciona sessionId (cs_test_... / cs_live_...)
+    if (sessionId && typeof sessionId === 'string' && sessionId.startsWith('cs_')) {
+      try {
+        const stripe = stripeService.getStripeInstance();
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        if (session && (session.metadata?.bookingId === bookingId || session.client_reference_id === bookingId)) {
+          if (session.payment_status === 'paid' || session.status === 'complete') {
+            isAuthorized = true;
+            stripePaymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
+          }
+        }
+      } catch (stripeErr: any) {
+        console.warn('[Stripe Return] Nota al verificar sesión con Stripe API:', stripeErr?.message);
+      }
+    }
+
+    // 2. Verificación mediante Bearer Token de Firebase Auth si no se validó por sesión
+    if (!isAuthorized) {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        try {
+          const token = authHeader.split(" ")[1];
+          if ((process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development") && token.startsWith("test-token-")) {
+            isAuthorized = true;
+          } else {
+            const decoded = await adminAuth.getAuth().verifyIdToken(token);
+            if (decoded?.uid) isAuthorized = true;
+          }
+        } catch {}
+      }
+    }
+
+    if (!isAuthorized) {
+      return res.status(401).json({ success: false, error: "No autorizado. Se requiere sesión verificada de Stripe o token de autenticación." });
+    }
+
     const nowIso = new Date().toISOString();
 
     if (bData.dispatchState === 'en_espera_pago' || bData.paymentStatus !== 'pagado') {
-      await bookingRef.update({
+      const updateData: any = {
         paymentStatus: 'pagado',
         paid: true,
         dispatchState: 'buscando',
         dispatchStartedAt: bData.dispatchStartedAt || nowIso,
         updatedAt: nowIso
-      });
+      };
+      if (stripePaymentIntent) {
+        updateData.stripePaymentIntent = stripePaymentIntent;
+      }
+      await bookingRef.update(updateData);
 
       console.log(`[Stripe Return] Booking ${bookingId} payment confirmed and moved to dispatch 'buscando'.`);
 
@@ -4059,7 +4100,7 @@ app.post("/api/create-stripe-checkout", async (req: Request, res: Response) => {
       total,
       priceId: priceId || price,
       customerEmail,
-      successUrl: successUrl || `${req.protocol}://${req.get('host')}/cliente?payment=success&bookingId=${bookingId || ''}`,
+      successUrl: successUrl || `${req.protocol}://${req.get('host')}/cliente?payment=success&bookingId=${bookingId || ''}&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: cancelUrl || `${req.protocol}://${req.get('host')}/cliente?payment=cancelled&bookingId=${bookingId || ''}`
     });
 

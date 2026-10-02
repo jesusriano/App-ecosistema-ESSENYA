@@ -299,10 +299,17 @@ export async function flushPendingSubscriptions(): Promise<number> {
         }
 
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        let token: string | undefined = undefined;
         try {
-          const token = await auth.currentUser?.getIdToken();
+          if (auth.authStateReady) await auth.authStateReady();
+          token = await auth.currentUser?.getIdToken();
           if (token) headers['Authorization'] = `Bearer ${token}`;
         } catch {}
+
+        if (!token) {
+          // Si el usuario aún no tiene sesión activa de Firebase, mantener en cola IndexedDB
+          continue;
+        }
 
         const res = await fetchWithExponentialBackoff('/api/push/registrations', {
           method: 'POST',
@@ -315,11 +322,17 @@ export async function flushPendingSubscriptions(): Promise<number> {
 
         if (!res.ok) {
           const bodyText = await res.text().catch(() => '');
-          console.error('[Push Registrations] HTTP error:', {
+          console.warn('[Push Registrations] Reintento no exitoso:', {
             status: res.status,
             statusText: res.statusText,
             body: bodyText
           });
+          item.attempts = (item.attempts || 0) + 1;
+          if (item.attempts >= 10) {
+            await removePendingSubscription(item.id);
+          } else {
+            await enqueuePendingSubscription(item);
+          }
         } else {
           const data = await res.json().catch(() => null);
           if (data && data.success) {
@@ -489,13 +502,30 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
     }
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    let token: string | undefined = undefined;
     try {
-      const token = await auth.currentUser?.getIdToken();
+      if (auth.authStateReady) await auth.authStateReady();
+      token = await auth.currentUser?.getIdToken();
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
     } catch (authErr) {
       console.warn('[WebPush] No se pudo obtener el token de autenticación para push subscribe:', authErr);
+    }
+
+    // Si el usuario aún no tiene sesión activa de Firebase, guardar en cola IndexedDB para sincronización al iniciar sesión
+    if (!token) {
+      console.log('[WebPush] Usuario sin sesión activa de Firebase. Suscripción guardada en cola IndexedDB para sincronización al iniciar sesión.');
+      await enqueuePendingSubscription({
+        id: `sub_${userId}_${Date.now()}`,
+        userId,
+        fcmToken,
+        subscription: subscriptionData,
+        timestamp: Date.now(),
+        attempts: 0
+      });
+      trackPushSubscriptionSuccess(Capacitor.isNativePlatform() ? 'android' : 'web', userId, 'vapid');
+      return { success: true, queued: true };
     }
 
     let isServerSaved = false;
@@ -511,7 +541,7 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
 
       if (!subRes.ok) {
         const bodyText = await subRes.text().catch(() => '');
-        console.error('[Push Registrations] HTTP error:', {
+        console.warn('[Push Registrations] Respuesta no exitosa del servidor:', {
           status: subRes.status,
           statusText: subRes.statusText,
           body: bodyText

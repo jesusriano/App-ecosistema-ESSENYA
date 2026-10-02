@@ -175,36 +175,40 @@ export const PushSubscriptionButton: React.FC<PushSubscriptionButtonProps> = ({
       // PASO 4: Enviar datos al backend y guardar respaldo en Firestore
       let isSynced = false;
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      let idToken: string | undefined = undefined;
       try {
-        const idToken = await auth.currentUser?.getIdToken();
+        if (auth.authStateReady) await auth.authStateReady();
+        idToken = await auth.currentUser?.getIdToken();
         if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
       } catch {}
 
-      try {
-        const response = await fetch('/api/push/registrations', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            fcmToken: currentFcmToken,
-            subscription: sub ? sub.toJSON() : null
-          })
-        });
-
-        if (!response.ok) {
-          const errText = await response.text().catch(() => '');
-          console.error('[Push Registrations] HTTP error:', {
-            status: response.status,
-            statusText: response.statusText,
-            body: errText
+      if (idToken) {
+        try {
+          const response = await fetch('/api/push/registrations', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              fcmToken: currentFcmToken,
+              subscription: sub ? sub.toJSON() : null
+            })
           });
-        } else {
-          const result = await response.json().catch(() => null);
-          if (result && result.success) {
-            isSynced = true;
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => '');
+            console.warn('[Push Registrations] Respuesta no exitosa:', {
+              status: response.status,
+              statusText: response.statusText,
+              body: errText
+            });
+          } else {
+            const result = await response.json().catch(() => null);
+            if (result && result.success) {
+              isSynced = true;
+            }
           }
+        } catch (netErr) {
+          console.warn('[PushSubscriptionButton] Error en API push registrations:', netErr);
         }
-      } catch (netErr) {
-        console.warn('[PushSubscriptionButton] Error en API push registrations:', netErr);
       }
 
       // Respaldo directo en Firestore si el backend devolvió 401 o estuvo inaccesible

@@ -110,21 +110,33 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     const params = new URLSearchParams(window.location.search);
     const paymentStatus = params.get('payment');
     const bookingId = params.get('bookingId');
+    const sessionId = params.get('session_id');
 
     if (paymentStatus === 'success' && bookingId) {
       showToast('¡Pago Recibido por Stripe!', 'Tu pago ha sido registrado. Tu reserva ha sido enviada a despacho automático.', 'success');
       
       // Confirm payment and trigger dispatch on backend
-      auth.currentUser?.getIdToken().then(token => {
-        fetch('/api/bookings/confirm-stripe-payment', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ bookingId })
-        }).catch(err => console.warn('Error verifying Stripe return payment:', err));
-      });
+      const confirmPayment = async () => {
+        try {
+          if (auth.authStateReady) await auth.authStateReady();
+          const token = await auth.currentUser?.getIdToken();
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+
+          const res = await fetch('/api/bookings/confirm-stripe-payment', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ bookingId, sessionId })
+          });
+          const data = await res.json().catch(() => null);
+          if (data && data.success) {
+            console.log('[Stripe Return] Reserva confirmada y en despacho:', bookingId);
+          }
+        } catch (err) {
+          console.warn('Error verifying Stripe return payment:', err);
+        }
+      };
+      confirmPayment();
 
       // Clean URL params
       const newUrl = window.location.pathname;
@@ -616,7 +628,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
               serviceName: newBk.serviceName,
               total: totalPrice,
               customerEmail: client?.email || '',
-              successUrl: `${window.location.origin}/cliente?payment=success&bookingId=${newBk.id}`,
+              successUrl: `${window.location.origin}/cliente?payment=success&bookingId=${newBk.id}&session_id={CHECKOUT_SESSION_ID}`,
               cancelUrl: `${window.location.origin}/cliente?payment=cancelled&bookingId=${newBk.id}`
             })
           });

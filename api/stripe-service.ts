@@ -5,25 +5,29 @@ import Stripe from 'stripe';
  * Gestiona Checkout Sessions, validación segura de Webhooks y Reembolsos.
  */
 export class StripeService {
-  private stripe: Stripe;
-  private webhookSecret: string;
+  private stripe: Stripe | null = null;
+  private currentKey: string = '';
+  private webhookSecret: string = '';
 
   constructor(secretKey?: string, webhookSecret?: string) {
-    const apiKey = secretKey || process.env.STRIPE_SECRET_KEY || '';
-    if (!apiKey) {
-      console.warn('⚠️ [StripeService]: STRIPE_SECRET_KEY no configurada en las variables de entorno.');
+    this.currentKey = secretKey || process.env.STRIPE_SECRET_KEY || '';
+    if (this.currentKey) {
+      this.stripe = new Stripe(this.currentKey);
     }
-    this.stripe = new Stripe(apiKey);
     this.webhookSecret = webhookSecret || process.env.STRIPE_WEBHOOK_SECRET || '';
   }
 
   /**
-   * Obtiene la instancia subyacente del SDK de Stripe
+   * Obtiene la instancia subyacente del SDK de Stripe de manera reactiva al entorno
    */
   getStripeInstance(): Stripe {
-    const currentKey = process.env.STRIPE_SECRET_KEY || '';
-    if (currentKey && (!this.stripe || !(this.stripe as any)._apiKey || (this.stripe as any)._apiKey === '')) {
-      this.stripe = new Stripe(currentKey);
+    const envKey = process.env.STRIPE_SECRET_KEY || '';
+    if (!this.stripe || this.currentKey !== envKey) {
+      if (!envKey) {
+        throw new Error("STRIPE_SECRET_KEY no está configurada en las variables de entorno.");
+      }
+      this.currentKey = envKey;
+      this.stripe = new Stripe(envKey);
     }
     return this.stripe;
   }
@@ -105,9 +109,11 @@ export class StripeService {
    */
   handleWebhook(rawBody: Buffer | string, signature: string | string[] | undefined): Stripe.Event {
     const sig = Array.isArray(signature) ? signature[0] : signature;
+    const stripe = this.getStripeInstance();
+    const secret = this.webhookSecret || process.env.STRIPE_WEBHOOK_SECRET || '';
 
-    if (this.webhookSecret && sig) {
-      return this.stripe.webhooks.constructEvent(rawBody, sig, this.webhookSecret);
+    if (secret && sig) {
+      return stripe.webhooks.constructEvent(rawBody, sig, secret);
     }
 
     const payload = typeof rawBody === 'string' ? JSON.parse(rawBody) : (rawBody as any).toString ? JSON.parse(rawBody.toString()) : rawBody;
@@ -122,6 +128,7 @@ export class StripeService {
     amount?: number;
     reason?: Stripe.RefundCreateParams.Reason;
   }): Promise<Stripe.Refund> {
+    const stripe = this.getStripeInstance();
     const refundParams: Stripe.RefundCreateParams = {
       payment_intent: params.paymentIntentId,
       reason: params.reason || 'requested_by_customer',
@@ -131,7 +138,7 @@ export class StripeService {
       refundParams.amount = Math.round(params.amount * 100);
     }
 
-    return await this.stripe.refunds.create(refundParams);
+    return await stripe.refunds.create(refundParams);
   }
 }
 

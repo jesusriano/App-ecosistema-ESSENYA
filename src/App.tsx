@@ -161,7 +161,10 @@ function MainAppContent() {
 
       try {
         const isIframe = window.self !== window.top;
-        const uid = firebaseUser?.uid || 'anonymous';
+        const uid = firebaseUser?.uid;
+
+        // Solo sincronizar push con el servidor si hay un usuario autenticado con sesión activa
+        if (!uid) return;
 
         // Si el permiso ya está concedido, asegurar Service Worker y suscripción VAPID activa
         if (Notification.permission === 'granted') {
