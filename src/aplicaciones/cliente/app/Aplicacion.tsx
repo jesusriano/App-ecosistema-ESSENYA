@@ -45,6 +45,8 @@ import { getServiceImage, getStaticServiceImageFallback } from '../../../shared/
 import { RescheduleBookingModal } from '../components/RescheduleBookingModal';
 import { CancelBookingModal } from '../components/CancelBookingModal';
 import { checkRescheduleEligibility, checkCancellationEligibility } from '../../../shared/data/scheduling';
+import { trackConversion } from '../../../shared/utils/analytics';
+import { getMetaTrackingData } from '../../../shared/utils/metaTracking';
 import { verifyStripeFrontendConfig } from '../../../shared/utils/stripeCheck';
 import { useEcosystem } from '../../../shared/context/EcosystemContext';
 import { auth, db, storage } from '../../../lib/firebase';
@@ -343,6 +345,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     try {
       showToast('Conectando con Stripe TEST', 'Generando sesión segura de Checkout...', 'info');
       const targetBookingId = b.id;
+      const metaTracking = getMetaTrackingData();
       const res = await fetch('/api/create-stripe-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -351,6 +354,9 @@ export const ClientApp: React.FC<ClientAppProps> = ({
           serviceName: b.serviceName,
           total: b.total,
           customerEmail: client?.email || '',
+          fbp: metaTracking.fbp,
+          fbc: metaTracking.fbc,
+          eventId: `purchase_${targetBookingId}`,
           successUrl: `${window.location.origin}/cliente?payment=success&bookingId=${targetBookingId}&session_id={CHECKOUT_SESSION_ID}`,
           cancelUrl: `${window.location.origin}/cliente?payment=cancelled&bookingId=${targetBookingId}`
         })
@@ -707,6 +713,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
       if (paymentMethodType === 'stripe' && totalPrice > 0) {
         try {
+          const metaTracking = getMetaTrackingData();
           const res = await fetch('/api/create-stripe-checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -715,6 +722,9 @@ export const ClientApp: React.FC<ClientAppProps> = ({
               serviceName: newBk.serviceName,
               total: totalPrice,
               customerEmail: client?.email || '',
+              fbp: metaTracking.fbp,
+              fbc: metaTracking.fbc,
+              eventId: `purchase_${actualBookingId}`,
               successUrl: `${window.location.origin}/cliente?payment=success&bookingId=${actualBookingId}&session_id={CHECKOUT_SESSION_ID}`,
               cancelUrl: `${window.location.origin}/cliente?payment=cancelled&bookingId=${actualBookingId}`
             })

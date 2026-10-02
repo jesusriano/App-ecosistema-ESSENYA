@@ -77,6 +77,23 @@ export interface ConversionEventParams {
 export function trackConversion(eventName: string, params: ConversionEventParams = {}) {
   if (typeof window === 'undefined') return;
 
+  // Standard Google Tag Manager (GTM) dataLayer push with both root & ecommerce schemas
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({
+    event: eventName,
+    value: params.value,
+    currency: params.currency || 'MXN',
+    transaction_id: params.transaction_id,
+    items: params.items,
+    ecommerce: {
+      transaction_id: params.transaction_id,
+      value: params.value,
+      currency: params.currency || 'MXN',
+      items: params.items,
+    },
+    ...params,
+  });
+
   if (window.gtag) {
     window.gtag('event', eventName, {
       ...params,

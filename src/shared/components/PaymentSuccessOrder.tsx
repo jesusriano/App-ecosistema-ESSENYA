@@ -6,6 +6,8 @@ export const PaymentSuccessOrder: React.FC = () => {
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get('session_id');
   const bookingId = searchParams.get('bookingId');
+  const amountParam = searchParams.get('amount') || searchParams.get('total');
+  const amountVal = amountParam ? Number(amountParam) : 1100;
 
   return (
     <div className="min-h-[85vh] flex flex-col items-center justify-center p-4 bg-[#FAF8F5] dark:bg-[#0D0D0D]">

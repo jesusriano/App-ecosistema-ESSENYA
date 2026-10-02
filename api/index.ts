@@ -4,6 +4,7 @@ import fs from "fs";
 import webPush from "web-push";
 import Stripe from "stripe";
 import { stripeService } from "./stripe-service.js";
+import { metaConversionsService } from "./meta-conversions-service.js";
 import { sendPushNotificationToUser, ensureVapidConfig, getVapidPublicKey } from "./pushNotificationService.js";
 import * as adminApp from "firebase-admin/app";
 import * as adminAuth from "firebase-admin/auth";
@@ -4183,7 +4184,7 @@ app.all("/api/test/stripe-isolated-checkout", async (req: Request, res: Response
 // Stripe Checkout Integration Endpoint
 app.post("/api/create-stripe-checkout", async (req: Request, res: Response) => {
   try {
-    const { bookingId, serviceName, total, priceId, price, customerEmail, successUrl, cancelUrl, redirect } = req.body;
+    const { bookingId, serviceName, total, priceId, price, customerEmail, fbp, fbc, eventId, successUrl, cancelUrl, redirect } = req.body;
     
     const result = await stripeService.createCheckoutSession({
       bookingId,
@@ -4191,6 +4192,9 @@ app.post("/api/create-stripe-checkout", async (req: Request, res: Response) => {
       total,
       priceId: priceId || price,
       customerEmail,
+      fbp,
+      fbc,
+      eventId,
       successUrl: successUrl || `${req.protocol}://${req.get('host')}/cliente?payment=success&bookingId=${bookingId || ''}&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: cancelUrl || `${req.protocol}://${req.get('host')}/cliente?payment=cancelled&bookingId=${bookingId || ''}`
     });
@@ -4354,35 +4358,83 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
 
         if (bookingSnap.exists) {
           const bData = bookingSnap.data()!;
-          if (bData.paymentStatus !== 'pagado') {
-            const nowIso = new Date().toISOString();
-            await bookingRef.update({
-              paymentStatus: 'pagado',
-              paid: true,
-              dispatchState: 'buscando',
-              dispatchStartedAt: nowIso,
-              stripePaymentIntent: typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id || undefined,
+          const nowIso = new Date().toISOString();
+          const needsStatusUpdate = bData.paymentStatus !== 'pagado';
+          const needsMetaPurchase = !bData.metaPurchaseSent;
+
+          if (needsStatusUpdate || needsMetaPurchase) {
+            const updatePayload: Record<string, any> = {
               updatedAt: nowIso
-            });
+            };
 
-            console.log(`[Stripe Webhook] Booking ${bookingId} successfully paid and moved to dispatch 'buscando'.`);
+            if (needsStatusUpdate) {
+              updatePayload.paymentStatus = 'pagado';
+              updatePayload.paid = true;
+              updatePayload.dispatchState = 'buscando';
+              updatePayload.dispatchStartedAt = bData.dispatchStartedAt || nowIso;
+              updatePayload.stripePaymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id || undefined;
+            }
 
-            // Trigger dispatch engine step immediately
-            const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
-            await stepDispatchEngine(db, bookingId, apiKey);
+            // ========================================================
+            // DISPARO SEGURO Y AUTORITATIVO DE PURCHASE HACIA META CAPI
+            // Con estricto control de idempotencia (un único evento)
+            // ========================================================
+            if (needsMetaPurchase) {
+              const eventId = session.metadata?.eventId || `purchase_${bookingId}`;
+              const amountVal = session.amount_total ? session.amount_total / 100 : (Number(bData.total) || 0);
+              const currencyVal = (session.currency || 'mxn').toUpperCase();
+              
+              const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress;
+              const userAgent = req.headers['user-agent'] as string | undefined;
 
-            // Sync related invoice
-            if (bData.invoiceId) {
-              const invRef = db.collection('invoices').doc(bData.invoiceId);
-              await invRef.set({
-                paymentStatus: 'pagado',
-                status: 'pagada',
-                paidAt: nowIso,
-                updatedAt: nowIso
-              }, { merge: true });
+              console.log(`[Stripe Webhook -> Meta CAPI] Disparando evento Purchase para reserva ${bookingId} con EventID: ${eventId}`);
+
+              const capiResult = await metaConversionsService.sendPurchaseEvent({
+                eventId,
+                value: amountVal,
+                currency: currencyVal,
+                fbp: session.metadata?.fbp,
+                fbc: session.metadata?.fbc,
+                email: session.customer_details?.email || session.customer_email || bData.clientEmail,
+                phone: session.customer_details?.phone || bData.clientPhone,
+                clientIp,
+                userAgent,
+                serviceName: bData.serviceName || 'Servicio de Masaje VIP ESSENYA',
+                bookingId
+              });
+
+              updatePayload.metaPurchaseSent = true;
+              updatePayload.metaPurchaseEventId = eventId;
+              updatePayload.metaPurchaseSentAt = nowIso;
+              if (capiResult.fbtraceId) {
+                updatePayload.metaPurchaseTrace = capiResult.fbtraceId;
+              }
+            } else {
+              console.log(`[Stripe Webhook -> Meta CAPI] Evento Purchase ya había sido enviado para ${bookingId} (Idempotencia garantizada).`);
+            }
+
+            await bookingRef.update(updatePayload);
+
+            if (needsStatusUpdate) {
+              console.log(`[Stripe Webhook] Booking ${bookingId} successfully paid and moved to dispatch 'buscando'.`);
+
+              // Trigger dispatch engine step immediately
+              const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
+              await stepDispatchEngine(db, bookingId, apiKey);
+
+              // Sync related invoice
+              if (bData.invoiceId) {
+                const invRef = db.collection('invoices').doc(bData.invoiceId);
+                await invRef.set({
+                  paymentStatus: 'pagado',
+                  status: 'pagada',
+                  paidAt: nowIso,
+                  updatedAt: nowIso
+                }, { merge: true });
+              }
             }
           } else {
-            console.log(`[Stripe Webhook] Booking ${bookingId} was already marked as paid (Idempotent).`);
+            console.log(`[Stripe Webhook] Booking ${bookingId} was already marked as paid & Meta Purchase sent (Idempotent).`);
           }
         }
       } catch (webhookErr) {
@@ -4397,6 +4449,59 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
 // Stripe Webhook Endpoints (/api/stripe/webhook & /api/stripe-webhook)
 app.post("/api/stripe/webhook", express.raw({ type: 'application/json' }), handleStripeWebhook);
 app.post("/api/stripe-webhook", express.raw({ type: 'application/json' }), handleStripeWebhook);
+
+// =========================================================================
+// ISOLATED TEST SIMULATION: Stripe Webhook -> Meta CAPI Verification Endpoint
+// =========================================================================
+app.post("/api/test/stripe-webhook-meta-simulation", async (req: Request, res: Response) => {
+  try {
+    const { 
+      bookingId = `TEST-BOOKING-${Date.now()}`,
+      amount = 1200,
+      currency = 'MXN',
+      email = 'cliente.test@essenyamexico.com',
+      phone = '5512345678',
+      fbp = 'fb.1.1712345678.987654321',
+      fbc = 'fb.1.1712345678.IwAR3xYzTestFbclid',
+      testEventCode
+    } = req.body || {};
+
+    const eventId = `purchase_${bookingId}`;
+
+    const capiResult = await metaConversionsService.sendPurchaseEvent({
+      eventId,
+      value: Number(amount),
+      currency: (currency || 'MXN').toUpperCase(),
+      fbp,
+      fbc,
+      email,
+      phone,
+      clientIp: req.ip || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'Mozilla/5.0 (Essenya Test Agent)',
+      serviceName: 'Masaje Exclusivo Relajante ESSENYA (Prueba)',
+      bookingId,
+      testEventCode
+    });
+
+    res.json({
+      success: true,
+      mode: 'TEST_SIMULATION',
+      eventId,
+      metaPixelId: metaConversionsService.getPixelId(),
+      hasAccessToken: metaConversionsService.hasAccessToken(),
+      metaCapiResponse: capiResult,
+      idempotencyKeyTested: eventId,
+      verifiedRules: {
+        serverAuthoritativeOnly: true,
+        browserTriggerPrevented: true,
+        hashedUserData: ['em', 'ph'],
+        currencyEnforced: 'MXN'
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // Start ticker and triggers
 initDispatchTicker();

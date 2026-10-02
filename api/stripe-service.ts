@@ -55,10 +55,13 @@ export class StripeService {
     total: number;
     priceId?: string;
     customerEmail?: string;
+    fbp?: string;
+    fbc?: string;
+    eventId?: string;
     successUrl: string;
     cancelUrl: string;
   }): Promise<{ success: boolean; url: string; sessionId: string; mode: 'test' | 'live' }> {
-    const { bookingId, serviceName, total, priceId, customerEmail, successUrl, cancelUrl } = params;
+    const { bookingId, serviceName, total, priceId, customerEmail, fbp, fbc, eventId, successUrl, cancelUrl } = params;
 
     if (!total && !priceId) {
       throw new Error("Faltan datos requeridos de la reserva (total o priceId).");
@@ -109,6 +112,9 @@ export class StripeService {
       metadata: {
         bookingId: bookingId || '',
         stripe_mode: mode,
+        fbp: fbp || '',
+        fbc: fbc || '',
+        eventId: eventId || `purchase_${bookingId}`,
         integration_identifier: 'hosted_mobile_app_0001',
         origin_context: 'mobile_app'
       }
