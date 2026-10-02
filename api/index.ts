@@ -4113,6 +4113,73 @@ app.get("/api/stripe/config", (req: Request, res: Response) => {
   });
 });
 
+// =========================================================================
+// ISOLATED STRIPE TEST ENDPOINT (Completely isolated, zero impact on production)
+// =========================================================================
+app.all("/api/test/stripe-isolated-checkout", async (req: Request, res: Response) => {
+  try {
+    const testSecretKey = process.env.STRIPE_TEST_SECRET_KEY || 
+      (process.env.STRIPE_SECRET_KEY?.startsWith('sk_test_') ? process.env.STRIPE_SECRET_KEY : '');
+
+    if (!testSecretKey || !testSecretKey.startsWith('sk_test_')) {
+      return res.status(400).json({
+        success: false,
+        error: "VARIABLE_NOT_CONFIGURED: STRIPE_TEST_SECRET_KEY no está configurada o no comienza con 'sk_test_'. Por seguridad, no se ejecuta en modo LIVE."
+      });
+    }
+
+    const isolatedStripe = new Stripe(testSecretKey);
+    const host = req.get('host') || 'localhost:3000';
+    const protocol = req.protocol || 'http';
+    const amount = Number(req.body?.amount || req.query.amount || 20);
+
+    const session = await isolatedStripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items: [
+        {
+          price_data: {
+            currency: 'mxn',
+            product_data: {
+              name: 'ESSENYA — Prueba Aislada Stripe TEST',
+              description: 'Producto de prueba aislado para verificación de pasarela TEST'
+            },
+            unit_amount: Math.round(amount * 100)
+          },
+          quantity: 1
+        }
+      ],
+      success_url: `${protocol}://${host}/success?session_id={CHECKOUT_SESSION_ID}&test=true`,
+      cancel_url: `${protocol}://${host}/checkout-demo?status=cancelled&test=true`,
+      metadata: {
+        isolated_test: 'true',
+        timestamp: new Date().toISOString()
+      }
+    });
+
+    if (req.query.redirect === 'true' || req.body?.redirect === true) {
+      return res.redirect(303, session.url!);
+    }
+
+    res.json({
+      success: true,
+      sessionId: session.id,
+      url: session.url,
+      livemode: session.livemode,
+      currency: session.currency,
+      amountTotal: session.amount_total,
+      keyPrefix: testSecretKey.substring(0, 10) + '...',
+      environment: 'STRIPE_TEST_ISOLATED'
+    });
+  } catch (err: any) {
+    console.error("[Isolated Stripe Test Error]:", err);
+    res.status(500).json({
+      success: false,
+      error: err.message,
+      code: err.code || err.type || 'STRIPE_API_ERROR'
+    });
+  }
+});
+
 // Stripe Checkout Integration Endpoint
 app.post("/api/create-stripe-checkout", async (req: Request, res: Response) => {
   try {

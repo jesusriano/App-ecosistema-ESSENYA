@@ -142,6 +142,59 @@ export const StripeProductCheckout: React.FC = () => {
     }
   };
 
+  const handleCreateIsolatedTestCheckout = async () => {
+    setLoading(true);
+    setError(null);
+    setSessionResult(null);
+
+    const startTime = performance.now();
+    addLog('REQUEST', `POST /api/test/stripe-isolated-checkout [STRIPE_TEST_SECRET_KEY]`, {
+      endpoint: '/api/test/stripe-isolated-checkout',
+      amount: testAmount,
+      currency: 'mxn',
+      isolatedMode: true
+    });
+
+    try {
+      const response = await fetch('/api/test/stripe-isolated-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: testAmount })
+      });
+
+      const latencyMs = Math.round(performance.now() - startTime);
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || !data || !data.success || !data.url) {
+        const errorMsg = data?.error || `Error del servidor HTTP ${response.status}`;
+        addLog('ERROR', `Fallo en prueba aislada (${response.status}) en ${latencyMs}ms`, data);
+        throw new Error(errorMsg);
+      }
+
+      addLog('RESPONSE_SUCCESS', `Checkout TEST Aislado Creado en ${latencyMs}ms (livemode: false)`, {
+        sessionId: data.sessionId,
+        url: data.url,
+        livemode: data.livemode,
+        keyPrefix: data.keyPrefix,
+        environment: data.environment
+      });
+
+      setSessionResult({
+        sessionId: data.sessionId,
+        url: data.url
+      });
+
+      const opened = window.open(data.url, '_blank');
+      if (opened) {
+        addLog('REDIRECT', 'Pestaña de Stripe TEST abierta en el navegador.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error en prueba aislada de Stripe TEST');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCopyLogs = () => {
     const textToCopy = logs
       .map(l => `[${l.timestamp}] [${l.type}] ${l.title}\n${l.details ? JSON.stringify(l.details, null, 2) : ''}`)
@@ -223,6 +276,19 @@ export const StripeProductCheckout: React.FC = () => {
 
         {/* Action Button Area */}
         <div className="p-5 space-y-3">
+          {/* Isolated Test Endpoint Button */}
+          <button
+            type="button"
+            id="isolated-test-button"
+            disabled={loading}
+            onClick={() => handleCreateIsolatedTestCheckout()}
+            className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs tracking-wider uppercase rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>Prueba Aislada (STRIPE_TEST_SECRET_KEY)</span>
+            <ExternalLink className="w-3.5 h-3.5 ml-1 opacity-80" />
+          </button>
+
           <button
             type="button"
             id="checkout-demo-button"
