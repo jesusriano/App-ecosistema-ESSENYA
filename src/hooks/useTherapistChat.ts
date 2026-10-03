@@ -181,7 +181,8 @@ export function useTherapistChat({
       } else if (type === 'access') {
         msg = 'El timbre principal no funciona, por favor toca el interfón 4B o avísame al llegar para abrir el portón.';
       } else {
-        msg = 'Hola Elena, ¿podrías confirmarme si traen el difusor aromático de lavanda? Muchas gracias.';
+        const firstName = activeTherapist?.name ? activeTherapist.name.split(' ')[0] : 'Terapeuta';
+        msg = `Hola ${firstName}, ¿podrías confirmarme si traen el difusor aromático de lavanda? Muchas gracias.`;
       }
       handleIncomingMessage(msg);
     }, 1000);

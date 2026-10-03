@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from '../context/ToastContext';
 import { LuxuryButton } from './ui/LuxuryButton';
+import { useAuth } from '../shared/context/AuthContext';
 import { Therapist, Booking, BookingState } from '../types';
 import { 
   Calendar, Clock, MapPin, Navigation, MessageSquare, DollarSign, 
@@ -79,15 +80,20 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
   onRejectBooking,
   onUpdateLiveLocation,
 }) => {
+  const { firebaseUser, getUser, sessions } = useAuth();
+  const authTherapist = getUser('terapeuta');
+  const registeredName = therapist?.name || (authTherapist ? `${authTherapist.nombre || ''} ${authTherapist.apellidos || ''}`.trim() : '') || firebaseUser?.displayName || (firebaseUser?.email ? firebaseUser.email.split('@')[0] : 'Terapeuta Certificada');
+  const registeredEmail = therapist?.email || authTherapist?.correo || firebaseUser?.email || 'terapeuta@essenya.mx';
+
   const activeTherapist: Therapist = therapist || {
-    id: 'ther-1',
-    name: 'Elena Rostova',
-    photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
-    phone: '525512345678',
-    email: 'elena.rostova@essenya.mx',
+    id: firebaseUser?.uid || 'ther-1',
+    name: registeredName,
+    photo: (authTherapist as any)?.fotografia || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
+    phone: authTherapist?.telefono || '525512345678',
+    email: registeredEmail,
     rating: 4.9,
     reviewCount: 128,
-    totalServices: 342,
+    totalServices: (authTherapist as any)?.serviciosCompletados || 0,
     gender: 'femenino',
     specialties: ['Masaje Tejido Profundo', 'Descontracturante VIP'],
     status: 'disponible',
@@ -101,8 +107,8 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
     vehicleType: 'Auto Ejecutivo',
     lat: 19.4326,
     lng: -99.1332,
-    completedServicesCount: 342,
-    bio: 'Especialista certificada con 8 años de experiencia en masajes terapéuticos de alto nivel.'
+    completedServicesCount: (authTherapist as any)?.serviciosCompletados || 0,
+    bio: 'Especialista certificada ESSENYA.'
   };
 
   const { showToast } = useToast();
@@ -894,9 +900,9 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
                   <span className="text-xs text-[#888888] block">Pago a Recibir</span>
                   <span className="text-xl font-bold text-gold-gradient">${(currentBooking?.total ?? 0).toLocaleString()} MXN</span>
                   {etaInfo && (
-                    <div className="mt-1 flex items-center gap-1.5 text-[10px] bg-[#C9A55B]/10 text-[#C9A55B] px-2 py-0.5 rounded border border-[#C9A55B]/20 font-bold uppercase animate-pulse">
-                      <Clock className="w-3 h-3" />
-                      <span>Arribo en: {etaInfo.duration}</span>
+                    <div className="mt-1 flex items-center gap-1.5 text-[10px] bg-[#C9A55B]/15 text-[#C9A55B] px-2.5 py-1 rounded-lg border border-[#C9A55B]/30 font-bold uppercase animate-pulse">
+                      <Clock className="w-3 h-3 text-[#C9A55B]" />
+                      <span>Ruta más rápida: {etaInfo.duration} ({etaInfo.distance})</span>
                     </div>
                   )}
                 </div>

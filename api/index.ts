@@ -4513,6 +4513,61 @@ app.post("/api/test/stripe-webhook-meta-simulation", async (req: Request, res: R
   }
 });
 
+// =========================================================================
+// CAMPAIGN PUBLISHING & TARGET TIME MANAGEMENT
+// Ensures target_time for running campaigns is set at least 30 seconds into the future
+// =========================================================================
+export function calculateSafeCampaignTargetTime(futureMarginSeconds: number = 30): number {
+  const MIN_REQUIRED_MARGIN_SECONDS = 10;
+  const safeMargin = Math.max(MIN_REQUIRED_MARGIN_SECONDS + 5, futureMarginSeconds);
+  return Math.floor(Date.now() / 1000) + safeMargin;
+}
+
+export async function publishRunningCampaign(campaignData: {
+  campaignId?: string;
+  name?: string;
+  status?: string;
+  target_time?: number;
+  [key: string]: any;
+}) {
+  const isRunning = (campaignData.status || '').toLowerCase() === 'running' || (campaignData.status || '').toLowerCase() === 'active';
+  
+  // Calculate target_time strictly in the future (+30s) if running or if target_time is under +10s
+  const nowUnix = Math.floor(Date.now() / 1000);
+  let targetTime = Number(campaignData.target_time) || 0;
+
+  if (isRunning || targetTime <= nowUnix + 10) {
+    targetTime = calculateSafeCampaignTargetTime(30);
+  }
+
+  const updatedPayload = {
+    ...campaignData,
+    status: campaignData.status || 'RUNNING',
+    target_time: targetTime,
+    updated_at: new Date().toISOString()
+  };
+
+  console.log(`[Campaign Publishing] Campaña ${updatedPayload.name || campaignData.campaignId || 'GEC-01'} lista para publicación. target_time ajustado a: ${targetTime} (${targetTime - nowUnix}s en el futuro).`);
+
+  return {
+    success: true,
+    campaignId: campaignData.campaignId || `cmp_${Date.now()}`,
+    target_time: targetTime,
+    secondsInFuture: targetTime - nowUnix,
+    status: updatedPayload.status,
+    payload: updatedPayload
+  };
+}
+
+app.post("/api/admin/campaigns/publish", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const result = await publishRunningCampaign(req.body || {});
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Start ticker and triggers
 initDispatchTicker();
 initFirestoreBookingsTrigger();

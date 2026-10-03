@@ -2,12 +2,14 @@ import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { 
   Sparkles, Calendar, Award, ShieldCheck, Clock, MapPin, ChevronRight, 
-  Crown, Gem, Shield, Gift, CheckCircle2, Lock, ArrowUpRight, Wallet, X
+  Crown, Gem, Shield, Gift, CheckCircle2, Lock, ArrowUpRight, Wallet, X,
+  AlertTriangle, Key
 } from 'lucide-react';
 import { useCliente } from '../hooks/useCliente';
 import { useAuth } from '../../../shared/context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 import { LiveTrackingMap } from '../../../shared/components/LiveTrackingMap';
+import { ClientQuickAlertModal } from '../../../shared/components/ClientQuickAlertModal';
 import { LuxuryButton } from '../../../shared/components/ui/LuxuryButton';
 import { RescheduleBookingModal } from '../components/RescheduleBookingModal';
 import { CancelBookingModal } from '../components/CancelBookingModal';
@@ -40,6 +42,10 @@ export const InicioPage: React.FC<InicioPageProps> = ({ onGoToReservas }) => {
 
   const [rescheduleTarget, setRescheduleTarget] = useState<Booking | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null);
+  const [alertModalState, setAlertModalState] = useState<{
+    isOpen: boolean;
+    type: 'urgent' | 'access';
+  }>({ isOpen: false, type: 'urgent' });
 
   const onConfirmReschedule = async (bookingId: string, newDate: string, newTime: string) => {
     if (handleRescheduleBooking) {
@@ -332,35 +338,57 @@ export const InicioPage: React.FC<InicioPageProps> = ({ onGoToReservas }) => {
             cityZone={activeBooking.cityZone}
             therapistName={activeBooking.therapistName}
             therapistPhoto={activeBooking.therapistPhoto}
+            therapistZone={activeBooking.therapistZone || 'Polanco / Lomas'}
             bookingState={activeBooking.state}
           />
 
-          {/* Quick Action Buttons for Cancellation (<4h policy) and Reschedule */}
+          {/* Quick Action Buttons for Urgent Request, Interfon Access, Cancellation and Reschedule */}
           {activeBooking.state !== 'servicio_finalizado' && activeBooking.state !== 'cancelado' && (
-            <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  const eligibility = checkRescheduleEligibility(activeBooking.date, activeBooking.time, activeBooking.state);
-                  if (!eligibility.canReschedule) {
-                    showToast('Reprogramación no disponible', 'Esta reserva ya no puede reprogramarse porque faltan menos de 4 horas para el inicio del servicio.', 'error');
-                  }
-                  setRescheduleTarget(activeBooking);
-                }}
-                className="flex items-center space-x-1.5 bg-[#FAF6EE] dark:bg-[#222222] border border-[#C9A55B]/40 px-3.5 py-2 rounded-xl text-xs font-semibold text-[#806020] dark:text-[#C9A55B] hover:bg-[#C9A55B] hover:text-black transition-all cursor-pointer"
-              >
-                <Calendar className="w-3.5 h-3.5 text-[#C9A55B]" />
-                <span>Reprogramar Masaje</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCancelTarget(activeBooking)}
-                className="flex items-center space-x-1.5 bg-rose-500/10 border border-rose-500/30 px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white transition-all cursor-pointer"
-                title="Cancelación disponible hasta 4 horas antes"
-              >
-                <X className="w-3.5 h-3.5" />
-                <span>Cancelar Cita</span>
-              </button>
+            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAlertModalState({ isOpen: true, type: 'urgent' })}
+                  className="flex items-center space-x-1.5 bg-amber-500/15 border border-amber-500/40 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-600 dark:text-amber-300 hover:bg-amber-500 hover:text-black transition-all cursor-pointer shadow-xs"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span>⚠️ Petición Urgente</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAlertModalState({ isOpen: true, type: 'access' })}
+                  className="flex items-center space-x-1.5 bg-sky-500/15 border border-sky-500/40 px-3 py-1.5 rounded-xl text-xs font-bold text-sky-600 dark:text-sky-300 hover:bg-sky-500 hover:text-black transition-all cursor-pointer shadow-xs"
+                >
+                  <Key className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                  <span>🚪 Acceso Interfón</span>
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const eligibility = checkRescheduleEligibility(activeBooking.date, activeBooking.time, activeBooking.state);
+                    if (!eligibility.canReschedule) {
+                      showToast('Reprogramación no disponible', 'Esta reserva ya no puede reprogramarse porque faltan menos de 4 horas para el inicio del servicio.', 'error');
+                    }
+                    setRescheduleTarget(activeBooking);
+                  }}
+                  className="flex items-center space-x-1.5 bg-[#FAF6EE] dark:bg-[#222222] border border-[#C9A55B]/40 px-3 py-1.5 rounded-xl text-xs font-semibold text-[#806020] dark:text-[#C9A55B] hover:bg-[#C9A55B] hover:text-black transition-all cursor-pointer"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-[#C9A55B]" />
+                  <span>Reprogramar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCancelTarget(activeBooking)}
+                  className="flex items-center space-x-1.5 bg-rose-500/10 border border-rose-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white transition-all cursor-pointer"
+                  title="Cancelación disponible hasta 4 horas antes"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Cancelar</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -439,6 +467,22 @@ export const InicioPage: React.FC<InicioPageProps> = ({ onGoToReservas }) => {
         onClose={() => setCancelTarget(null)}
         onConfirmCancel={onConfirmCancel}
       />
+
+      {/* Quick Alert Modal for Urgent Requests and Access Interfon */}
+      {activeBooking && (
+        <ClientQuickAlertModal
+          isOpen={alertModalState.isOpen}
+          onClose={() => setAlertModalState({ isOpen: false, type: 'urgent' })}
+          type={alertModalState.type}
+          bookingId={activeBooking.id}
+          bookingCode={activeBooking.code}
+          currentUserId={client?.id || authUser?.id || 'cliente_vip'}
+          currentUserName={client?.name || 'Cliente VIP'}
+          therapistId={activeBooking.therapistId}
+          therapistName={activeBooking.therapistName}
+          onSuccess={(msg) => showToast('Alerta Registrada', msg, 'success')}
+        />
+      )}
     </div>
   );
 };

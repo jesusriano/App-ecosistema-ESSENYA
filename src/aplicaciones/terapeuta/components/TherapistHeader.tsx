@@ -11,22 +11,24 @@ interface TherapistHeaderProps {
 }
 
 export const TherapistHeader: React.FC<TherapistHeaderProps> = ({ therapist, onOpenPanicModal }) => {
-  const { logout } = useAuth();
+  const { logout, firebaseUser, sessions } = useAuth();
   const { pendingSyncCount } = useEcosystem();
   const [isAvailable, setIsAvailable] = useState<boolean>(therapist?.status === 'disponible');
 
+  const registeredTherapistName = therapist?.name || (sessions?.terapeuta ? `${sessions.terapeuta.nombre || ''} ${sessions.terapeuta.apellidos || ''}`.trim() : '') || firebaseUser?.displayName || (firebaseUser?.email ? firebaseUser.email.split('@')[0] : 'Terapeuta Certificada');
+
   const activeTherapist = therapist || {
-    id: 'ther-1',
-    name: 'Elena Rostova',
-    photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
-    phone: '525512345678',
+    id: firebaseUser?.uid || 'ther-1',
+    name: registeredTherapistName,
+    photo: (sessions?.terapeuta as any)?.fotografia || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
+    phone: (sessions?.terapeuta as any)?.telefono || '525512345678',
     rating: 4.9,
     reviewCount: 128,
     specialties: ['Masaje Tejido Profundo', 'Descontracturante VIP'],
     status: 'disponible',
     coverageZones: ['Polanco', 'Lomas de Chapultepec'],
-    completedServicesCount: 342,
-    bio: 'Especialista certificada con 8 años de experiencia en masajes terapéuticos de alto nivel.'
+    completedServicesCount: (sessions?.terapeuta as any)?.serviciosCompletados || 0,
+    bio: 'Especialista certificada ESSENYA.'
   };
 
   return (

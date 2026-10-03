@@ -93,7 +93,23 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [systemConfig, setSystemConfig] = useState<{
     googleMapsKey?: string;
     autoCleanupDone?: boolean;
-  }>({});
+  }>({
+    googleMapsKey: (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string) || ''
+  });
+
+  useEffect(() => {
+    const unsubConfig = onSnapshot(doc(db, 'configuraciones', 'global'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setSystemConfig(prev => ({
+          ...prev,
+          googleMapsKey: data.googleMapsKey || import.meta.env.VITE_GOOGLE_MAPS_API_KEY || prev.googleMapsKey || '',
+          autoCleanupDone: Boolean(data.autoCleanupDone)
+        }));
+      }
+    }, () => {});
+    return () => unsubConfig();
+  }, []);
 
   // Shared Ecosystem Connected State
   const [services, setServices] = useState<ServiceItem[]>(INITIAL_SERVICES);
@@ -484,7 +500,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
         id: docSnap.id || d.id || '',
         code: d.code || d.folio || `ESS-${(docSnap.id || d.id || '0000').substring(0, 6).toUpperCase()}`,
         clientId: d.clientId || '',
-        clientName: d.clientName || d.nombreCliente || 'Cliente VIP',
+        clientName: d.clientName || d.nombreCliente || (authClient ? `${authClient.nombre} ${authClient.apellidos || ''}`.trim() : '') || (client?.name || 'Cliente'),
         clientPhone: safeClientPhone,
         clientAddress: d.clientAddress || d.direccion || '',
         cityZone: d.cityZone || d.zona || d.ciudad || 'Ciudad de México',

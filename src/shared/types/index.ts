@@ -146,6 +146,7 @@ export interface Booking {
   therapistName?: string;
   therapistPhoto?: string;
   therapistPhone?: string;
+  therapistZone?: string;
   therapistId2?: string;
   therapistName2?: string;
   therapistPhoto2?: string;

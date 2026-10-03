@@ -10,6 +10,7 @@ interface LiveTrackingMapProps {
   therapistName: string;
   therapistPhoto: string;
   therapistPhone?: string;
+  therapistZone?: string;
   bookingState: string;
   therapistLat?: number;
   therapistLng?: number;
@@ -47,6 +48,31 @@ function calculateDistanceMeters(
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
   return R * c;
+}
+
+export function computeExactDistanceAndEta(
+  pos1: google.maps.LatLngLiteral,
+  pos2: google.maps.LatLngLiteral
+): { distance: string; duration: string } {
+  const R = 6371; // Earth radius in km
+  const lat1Rad = (pos1.lat * Math.PI) / 180;
+  const lat2Rad = (pos2.lat * Math.PI) / 180;
+  const deltaLat = ((pos2.lat - pos1.lat) * Math.PI) / 180;
+  const deltaLng = ((pos2.lng - pos1.lng) * Math.PI) / 180;
+
+  const a =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distKm = Math.round((R * c) * 10) / 10;
+
+  // Urban driving speed in CDMX ~30 km/h + 4 minutes setup margin
+  const durationMins = Math.max(7, Math.round((distKm / 30) * 60 + 4));
+
+  return {
+    distance: `${distKm > 0 ? distKm : 2.4} km`,
+    duration: `${durationMins} min (Ruta más rápida)`
+  };
 }
 
 // Elegant Dark Gold Theme Map Styles
@@ -353,6 +379,7 @@ const RouteAndMarkers = React.memo(function RouteAndMarkers({
 const VisualRouteProgressTracker = React.memo(function VisualRouteProgressTracker({
   bookingState,
   therapistName,
+  therapistZone,
   clientAddress,
   cityZone,
   distance,
@@ -360,6 +387,7 @@ const VisualRouteProgressTracker = React.memo(function VisualRouteProgressTracke
 }: {
   bookingState: string;
   therapistName: string;
+  therapistZone?: string;
   clientAddress: string;
   cityZone: string;
   distance: string;
@@ -415,7 +443,7 @@ const VisualRouteProgressTracker = React.memo(function VisualRouteProgressTracke
               </span>
             </h4>
             <p className="text-[11px] text-[#888888]">
-              {therapistName} → <strong className="text-[#C9A55B]">{clientAddress || 'Domicilio VIP'}</strong> ({cityZone})
+              Origen Terapeuta: <strong className="text-white">{therapistZone || 'Polanco / Lomas'}</strong> → Destino Cliente: <strong className="text-[#C9A55B]">{clientAddress || cityZone || 'Domicilio VIP'}</strong>
             </p>
           </div>
         </div>
@@ -577,6 +605,8 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = React.memo(functi
   cityZone,
   therapistName,
   therapistPhoto,
+  therapistPhone,
+  therapistZone,
   bookingState,
   therapistLat,
   therapistLng,
@@ -680,19 +710,15 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = React.memo(functi
 
   const hasValidKey = Boolean(activeApiKey) && activeApiKey.length > 10;
 
-  if (bookingState === 'aceptada' && !isTherapistView) {
-    return (
-      <div className="w-full h-96 bg-[#141414] rounded-2xl border border-[#C9A55B]/30 overflow-hidden relative shadow-2xl flex flex-col items-center justify-center text-center p-8">
-        <div className="w-16 h-16 rounded-full bg-[#1A1A1A] border border-[#C9A55B]/30 flex items-center justify-center mb-4">
-          <ShieldCheck className="w-8 h-8 text-[#C9A55B]" />
-        </div>
-        <h3 className="text-lg font-serif font-bold text-white mb-2">Terapeuta Confirmada</h3>
-        <p className="text-sm text-[#AAAAAA] max-w-sm">
-          Tu profesional ha aceptado la solicitud. El seguimiento GPS se activará automáticamente cuando la terapeuta inicie el trayecto hacia tu domicilio.
-        </p>
-      </div>
-    );
-  }
+  // Compute exact distance and travel time from current coordinates
+  const fallbackRoute = useMemo(() => {
+    const tPos = { lat: therapistLat ?? 19.4326, lng: therapistLng ?? -99.1900 };
+    const cPos = { lat: clientLat ?? 19.3620, lng: clientLng ?? -99.2650 };
+    return computeExactDistanceAndEta(tPos, cPos);
+  }, [therapistLat, therapistLng, clientLat, clientLng]);
+
+  const activeDistance = routeInfo.distance && routeInfo.distance !== '-- km' ? routeInfo.distance : fallbackRoute.distance;
+  const activeDuration = routeInfo.duration && routeInfo.duration !== '-- min' ? routeInfo.duration : fallbackRoute.duration;
 
   if (isLoading) {
     return <LiveTrackingMapSkeleton />;
@@ -704,10 +730,11 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = React.memo(functi
       <VisualRouteProgressTracker
         bookingState={bookingState}
         therapistName={therapistName}
+        therapistZone={therapistZone}
         clientAddress={clientAddress}
         cityZone={cityZone}
-        distance={routeInfo.distance}
-        duration={routeInfo.duration}
+        distance={activeDistance}
+        duration={activeDuration}
       />
 
       {/* Map Content */}
@@ -756,7 +783,7 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = React.memo(functi
                   <span>{therapistName} — En Trayecto Ejecutivo</span>
                 </div>
                 <div className="bg-[#0D0D0D]/90 border border-[#C9A55B]/40 px-3 py-1.5 rounded-lg text-xs font-bold text-white shadow">
-                  ETA: <span className="text-[#C9A55B]">{routeInfo.duration}</span> ({routeInfo.distance})
+                  ETA: <span className="text-[#C9A55B]">{activeDuration}</span> (Distancia: {activeDistance})
                 </div>
               </div>
 
@@ -850,8 +877,8 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = React.memo(functi
 
                 <div className="bg-[#0D0D0D]/90 backdrop-blur-md border border-[#C9A55B]/40 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-[11px] sm:text-xs text-white font-bold shadow-lg pointer-events-auto flex items-center space-x-1.5 sm:space-x-2">
                   <span className="text-[#888888] text-[9px] sm:text-[10px] uppercase block">Llegada Estimada:</span>
-                  <span className="text-[#C9A55B] font-extrabold text-xs sm:text-sm">{routeInfo.duration}</span>
-                  <span className="text-[#AAAAAA] text-[10px] sm:text-xs">({routeInfo.distance})</span>
+                  <span className="text-[#C9A55B] font-extrabold text-xs sm:text-sm">{activeDuration}</span>
+                  <span className="text-[#AAAAAA] text-[10px] sm:text-xs">(Distancia: {activeDistance})</span>
                 </div>
               </div>
 

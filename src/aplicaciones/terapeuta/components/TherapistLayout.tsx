@@ -4,6 +4,7 @@ import { TherapistNavigation, TherapistRoutePath } from './TherapistNavigation';
 import { Therapist } from '../../../shared/types/index';
 import { PanicModal } from '../../../shared/components/PanicModal';
 import { TechSupportWhatsAppButton } from '../../../shared/components/TechSupportWhatsAppButton';
+import { useAuth } from '../../../shared/context/AuthContext';
 
 interface TherapistLayoutProps {
   children: React.ReactNode;
@@ -19,6 +20,9 @@ export const TherapistLayout: React.FC<TherapistLayoutProps> = ({
   onNavigate,
 }) => {
   const [showPanicModal, setShowPanicModal] = useState<boolean>(false);
+  const { firebaseUser, sessions } = useAuth();
+
+  const registeredName = therapist?.name || (sessions?.terapeuta ? `${sessions.terapeuta.nombre || ''} ${sessions.terapeuta.apellidos || ''}`.trim() : '') || firebaseUser?.displayName || 'Terapeuta Certificada';
 
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#FAF8F5] dark:bg-[#0D0D0D] text-[#1C1917] dark:text-white flex flex-col font-sans transition-colors duration-300">
@@ -45,7 +49,7 @@ export const TherapistLayout: React.FC<TherapistLayoutProps> = ({
         onClose={() => setShowPanicModal(false)}
         userType="terapeuta"
         userId={therapist?.userId || therapist?.id}
-        userName={therapist?.name || 'Elena Rostova'}
+        userName={registeredName}
         userLocation={therapist?.coverageZones?.[0] || 'Polanco / Lomas CDMX'}
       />
 

@@ -18,10 +18,11 @@ import {
   MessageSquare, FileText, Star, Award, ShieldCheck, ChevronRight, 
   Bot, AlertCircle, RefreshCw, Send, X, Heart, Droplets, Music, Sliders,
   AlertTriangle, CreditCard, Building2, Check, CheckCheck, Copy, Users, UserCheck, Banknote, Camera, Upload,
-  LocateFixed, Crown, Gem, Shield, Gift, Wallet, Lock, ExternalLink
+  LocateFixed, Crown, Gem, Shield, Gift, Wallet, Lock, ExternalLink, Key
 } from 'lucide-react';
 import { PanicModal } from '../../../shared/components/PanicModal';
 import { BookingChatDrawer } from '../../../shared/components/BookingChatDrawer';
+import { ClientQuickAlertModal } from '../../../shared/components/ClientQuickAlertModal';
 import { WhatsAppButton } from '../../../shared/components/WhatsAppButton';
 import { TechSupportWhatsAppButton } from '../../../shared/components/TechSupportWhatsAppButton';
 import { LiveTrackingMap } from '../../../shared/components/LiveTrackingMap';
@@ -472,6 +473,10 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
   // Chat Drawer
   const [showChat, setShowChat] = useState<boolean>(false);
+  const [alertModalState, setAlertModalState] = useState<{
+    isOpen: boolean;
+    type: 'urgent' | 'access';
+  }>({ isOpen: false, type: 'urgent' });
   const [chatInput, setChatInput] = useState<string>('');
   const [isOtherTyping, setIsOtherTyping] = useState<boolean>(false);
   const [chatMessages, setChatMessages] = useState<Array<{ sender: string, text: string, time: string, read?: boolean }>>([]);
@@ -2513,6 +2518,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                       cityZone={activeBooking.cityZone}
                       therapistName={activeBooking.therapistName || 'Terapeuta ESSENYA'}
                       therapistPhoto={activeBooking.therapistPhoto || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=600&q=80'}
+                      therapistZone={activeBooking.therapistZone || 'Polanco / Lomas'}
                       bookingState={activeBooking.state}
                       therapistLat={activeBooking.liveLat}
                       therapistLng={activeBooking.liveLng}
@@ -2605,6 +2611,26 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                         <MessageSquare className="w-4 h-4" />
                         <span>Chat con {activeBooking.therapistName}</span>
                       </button>
+
+                      {/* Quick Alert Trigger Buttons */}
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setAlertModalState({ isOpen: true, type: 'urgent' })}
+                          className="py-2 px-2.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-600 dark:text-amber-300 font-bold text-[11px] rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer shadow-xs"
+                        >
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          <span>Petición Urgente</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAlertModalState({ isOpen: true, type: 'access' })}
+                          className="py-2 px-2.5 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-600 dark:text-sky-300 font-bold text-[11px] rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer shadow-xs"
+                        >
+                          <Key className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                          <span>Acceso Interfón</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3151,6 +3177,22 @@ export const ClientApp: React.FC<ClientAppProps> = ({
           clientName={client?.name || activeBooking.clientName}
           therapistId={activeBooking.therapistId}
           therapistName={activeBooking.therapistName}
+        />
+      )}
+
+      {/* QUICK ALERT MODAL FOR URGENT REQUESTS & ACCESS INTERFON */}
+      {activeBooking && (
+        <ClientQuickAlertModal
+          isOpen={alertModalState.isOpen}
+          onClose={() => setAlertModalState({ isOpen: false, type: 'urgent' })}
+          type={alertModalState.type}
+          bookingId={activeBooking.id}
+          bookingCode={activeBooking.code}
+          currentUserId={client?.id || 'cliente_vip'}
+          currentUserName={client?.name || 'Cliente VIP'}
+          therapistId={activeBooking.therapistId}
+          therapistName={activeBooking.therapistName}
+          onSuccess={(msg) => showToast('Alerta Registrada', msg, 'success')}
         />
       )}
 
