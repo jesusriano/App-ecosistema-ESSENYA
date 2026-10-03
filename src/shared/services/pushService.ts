@@ -68,52 +68,58 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 export function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const DEFAULT_VALID_KEY = vapidKey || "BAUvrHF6zeG0owm8gJL997JQPueRBzedGAcRA2tsV5Kl57cXfPk8d1NR9Wtqmg8HNSkD2RK1lXBCWwNSiUfBzpY";
   
-  // 1. Sanitize the string
-  let cleanString = String(base64String || '').trim();
-  
-  // Strip quotes if they were accidentally included
-  cleanString = cleanString.replace(/^['"]|['"]$/g, '').trim();
-  
-  // Strip any whitespace, tabs, or newlines inside the key
-  cleanString = cleanString.replace(/[\s\r\n\t]/g, '');
+  // 1. Sanitize & convert URL-safe base64 to standard base64 alphabet FIRST
+  let str = String(base64String || '').trim();
+  str = str.replace(/^['"]|['"]$/g, '').trim();
+  str = str.replace(/-/g, '+').replace(/_/g, '/');
+  str = str.replace(/[^A-Za-z0-9+/]/g, '');
 
-  // Strip trailing padding '=' so we can calculate the correct padding dynamically
-  cleanString = cleanString.replace(/=+$/, '');
-  
-  // 2. Validate format using a regex to ensure it's a valid Base64 or Base64url string
-  const isValidBase64 = /^[A-Za-z0-9\-_+/]+$/.test(cleanString) && cleanString.length >= 40;
-  
-  if (!isValidBase64) {
-    cleanString = DEFAULT_VALID_KEY.replace(/=+$/, '');
+  if (str.length < 40) {
+    str = DEFAULT_VALID_KEY.replace(/-/g, '+').replace(/_/g, '/').replace(/[^A-Za-z0-9+/]/g, '');
   }
-  
+
+  // 2. Pad to exact multiple of 4
+  const pad = (4 - (str.length % 4)) % 4;
+  const b64 = str + '='.repeat(pad);
+
+  // 3. Decode safely with native atob or manual fallback lookup table
   try {
-    const padding = '='.repeat((4 - (cleanString.length % 4)) % 4);
-    const base64 = (cleanString + padding).replace(/-/g, '+').replace(/_/g, '/');
-    
-    const globalObj = typeof window !== 'undefined' ? window : self;
-    const rawData = globalObj.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-  } catch (err) {
-    console.error('[WebPush] Error al decodificar la clave VAPID Base64:', err);
-    try {
-      const cleanDefault = DEFAULT_VALID_KEY.replace(/=+$/, '');
-      const paddingDefault = '='.repeat((4 - (cleanDefault.length % 4)) % 4);
-      const base64Default = (cleanDefault + paddingDefault).replace(/-/g, '+').replace(/_/g, '/');
-      const globalObj = typeof window !== 'undefined' ? window : self;
-      const rawData = globalObj.atob(base64Default);
-      const outputArray = new Uint8Array(rawData.length);
-      for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
+    const globalObj = typeof window !== 'undefined' ? window : (typeof self !== 'undefined' ? self : globalThis);
+    const raw = globalObj.atob ? globalObj.atob(b64) : '';
+    if (raw) {
+      const outputArray = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; ++i) {
+        outputArray[i] = raw.charCodeAt(i);
       }
       return outputArray;
-    } catch {
-      return new Uint8Array(0);
     }
+  } catch (err) {
+    console.warn('[WebPush] Native atob warning, using byte lookup table:', err);
+  }
+
+  // Pure JavaScript Base64 decoding lookup table fallback (guaranteed never to throw)
+  try {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    const lookup = new Uint8Array(256);
+    for (let i = 0; i < chars.length; i++) lookup[chars.charCodeAt(i)] = i;
+
+    const unpaddedLen = b64.replace(/=+$/, '').length;
+    const buf = new Uint8Array(Math.floor((unpaddedLen * 6) / 8));
+    let a, b, c, d;
+    let j = 0;
+    for (let i = 0; i < b64.length; i += 4) {
+      a = lookup[b64.charCodeAt(i)] || 0;
+      b = lookup[b64.charCodeAt(i + 1)] || 0;
+      c = lookup[b64.charCodeAt(i + 2)] || 0;
+      d = lookup[b64.charCodeAt(i + 3)] || 0;
+
+      if (j < buf.length) buf[j++] = (a << 2) | (b >> 4);
+      if (b64[i + 2] !== '=' && j < buf.length) buf[j++] = ((b & 15) << 4) | (c >> 2);
+      if (b64[i + 3] !== '=' && j < buf.length) buf[j++] = ((c & 3) << 6) | (d & 63);
+    }
+    return buf;
+  } catch {
+    return new Uint8Array(0);
   }
 }
 

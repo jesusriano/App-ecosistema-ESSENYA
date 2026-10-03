@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { usePush } from '../context/PushContext';
 import { SoundPreset } from '../services/pushService';
-import { Bell, Volume2, VolumeX, CheckCircle2, AlertTriangle, Play, RefreshCw } from 'lucide-react';
+import { Bell, Volume2, VolumeX, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { PushSubscriptionButton } from './PushSubscriptionButton';
 import { auth } from '../../lib/firebase';
 
@@ -21,8 +21,7 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
     volume,
     setSoundEnabled,
     setSoundPreset,
-    setVolume,
-    previewSound
+    setVolume
   } = usePush();
 
   const [loading, setLoading] = useState(false);
@@ -139,13 +138,6 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
               <label className="text-xs font-bold uppercase tracking-wider text-[#78716C] dark:text-[#A8A29E]">
                 Elegir Tono de Sonido
               </label>
-              <button
-                onClick={() => previewSound()}
-                className="px-3 py-1 rounded-lg bg-[#C9A55B]/10 hover:bg-[#C9A55B]/20 text-[#C9A55B] text-xs font-bold flex items-center gap-1.5 transition-all"
-              >
-                <Play className="w-3.5 h-3.5" />
-                <span>▶ Probar sonido</span>
-              </button>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
@@ -154,7 +146,6 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
                   key={preset}
                   onClick={() => {
                     setSoundPreset(preset);
-                    previewSound(preset);
                   }}
                   className={`p-3 rounded-xl border text-xs font-semibold capitalize transition-all text-center ${
                     soundPreset === preset

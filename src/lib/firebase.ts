@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, getFirestore } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getMessaging, isSupported, Messaging } from 'firebase/messaging';
 import appletConfig from '../../firebase-applet-config.json';
@@ -25,16 +25,22 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 // Initialize Auth
 export const auth = getAuth(app);
 
-// Initialize Firestore with custom database ID and resilience settings
+// Initialize Firestore with resilient cache and fallback
 const dbId = appletConfig.firestoreDatabaseId || undefined;
 let firestoreInstance;
 try {
   firestoreInstance = initializeFirestore(app, {
-    experimentalForceLongPolling: true,
     ignoreUndefinedProperties: true,
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
   }, dbId);
 } catch {
-  firestoreInstance = dbId ? getFirestore(app, dbId) : getFirestore(app);
+  try {
+    firestoreInstance = initializeFirestore(app, {
+      ignoreUndefinedProperties: true
+    }, dbId);
+  } catch {
+    firestoreInstance = dbId ? getFirestore(app, dbId) : getFirestore(app);
+  }
 }
 
 export const db = firestoreInstance;
