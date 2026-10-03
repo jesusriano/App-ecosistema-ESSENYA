@@ -50,6 +50,9 @@ import { getMetaTrackingData } from '../../../shared/utils/metaTracking';
 import { verifyStripeFrontendConfig } from '../../../shared/utils/stripeCheck';
 import { useEcosystem } from '../../../shared/context/EcosystemContext';
 import { auth, db, storage } from '../../../lib/firebase';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { validateProfilePhoto } from '../../../shared/utils/fileValidation';
 
 
 interface ClientAppProps {
@@ -262,8 +265,6 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     const targetId = client?.id || auth.currentUser?.uid;
     if (!file || !targetId) return;
 
-    // Validate size (< 20MB) and format (JPEG/PNG/WebP)
-    const { validateProfilePhoto } = await import('../../../shared/utils/fileValidation');
     const validation = validateProfilePhoto(file);
     if (!validation.isValid) {
       showToast('Archivo no válido', validation.error || 'Verifica el tamaño y tipo de imagen.', 'error');
@@ -273,9 +274,6 @@ export const ClientApp: React.FC<ClientAppProps> = ({
     showToast('Subiendo fotografía', 'Guardando tu imagen en el servidor de Storage seguro...', 'info');
 
     try {
-      const { ref, uploadBytesResumable, getDownloadURL } = await import('firebase/storage');
-      const { doc, setDoc } = await import('firebase/firestore');
-
       const fileExt = file.type === 'image/png' ? 'png' : 'jpg';
       const storagePath = `clientes/${targetId}/foto_perfil.${fileExt}`;
       const storageRef = ref(storage, storagePath);
@@ -568,7 +566,6 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
     // Secondary check for VIP15 (Courtesy) usage in Firestore
     if (result.type === 'VIP15' && client?.id) {
-      const { getDoc, doc } = await import('firebase/firestore');
       const clientSnap = await getDoc(doc(db, 'clientes', client.id));
       if (clientSnap.exists() && clientSnap.data().courtesyUsed) {
         showToast('Beneficio Ya Utilizado', 'Esta cortesía única de nivel Diamond ya ha sido aplicada anteriormente.', 'error');

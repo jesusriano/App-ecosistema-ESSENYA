@@ -35,7 +35,11 @@ function isValidVapidKey(key: string | undefined, minLength: number): boolean {
 }
 
 // Initialize VAPID Keys exclusively from environment variables or official Firebase Console key
-let rawPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY || "BDEoPYVIWr6y69eA98bjgPGLyKJSxhut4tp_rr0AuZOBlRoe9zY92NwmKSpKCKWI2nJY45ET5Z_YJkETbaxu6PE";
+const DEFAULT_VAPID_PUBLIC_KEY = "BAUvrHF6zeG0owm8gJL997JQPueRBzedGAcRA2tsV5Kl57cXfPk8d1NR9Wtqmg8HNSkD2RK1lXBCWwNSiUfBzpY";
+let rawPublicKey = process.env.VITE_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC_KEY;
+if (rawPublicKey && rawPublicKey.includes("BHEx")) {
+  rawPublicKey = DEFAULT_VAPID_PUBLIC_KEY;
+}
 let rawPrivateKey = process.env.VAPID_PRIVATE_KEY;
 
 let vapidPublicKey = isValidVapidKey(rawPublicKey, 80) ? sanitizeVapidKey(rawPublicKey!) : undefined;
@@ -49,6 +53,11 @@ const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:seguridad@essenyamexic
  * If still missing, generates a new pair and saves them to Firestore for persistence.
  */
 export async function ensureVapidConfig(db: Firestore): Promise<boolean> {
+  if (isValidVapidKey(rawPublicKey, 80)) {
+    vapidPublicKey = sanitizeVapidKey(rawPublicKey!);
+    vapidConfigured = true;
+    return true;
+  }
   if (vapidConfigured && vapidPublicKey && vapidPrivateKey) return true;
 
   try {
@@ -99,7 +108,7 @@ if (vapidPublicKey && vapidPrivateKey) {
 }
 
 export function getVapidPublicKey(): string | undefined {
-  return vapidPublicKey;
+  return rawPublicKey || vapidPublicKey;
 }
 
 export interface FcmNotificationPayload {

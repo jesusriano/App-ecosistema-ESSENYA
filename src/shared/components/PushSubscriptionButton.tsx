@@ -9,7 +9,8 @@ import {
   unsubscribeFromPushNotifications,
   getVapidPublicKeyFromServer
 } from '../services/pushService';
-import { vapidKey, getMessagingService, auth } from '../../lib/firebase';
+import { vapidKey, getMessagingService, auth, db } from '../../lib/firebase';
+import { updateDoc, doc } from 'firebase/firestore';
 import { getToken } from 'firebase/messaging';
 import { usePush } from '../context/PushContext';
 
@@ -214,8 +215,6 @@ export const PushSubscriptionButton: React.FC<PushSubscriptionButtonProps> = ({
       // Respaldo directo en Firestore si el backend devolvió 401 o estuvo inaccesible
       if (userId && userId !== 'anonymous') {
         try {
-          const { updateDoc, doc } = await import('firebase/firestore');
-          const { db } = await import('../../lib/firebase');
           await updateDoc(doc(db, 'terapeutas', userId), {
             fcmToken: currentFcmToken || null,
             pushSubscribed: true,

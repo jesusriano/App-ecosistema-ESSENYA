@@ -14,7 +14,8 @@ import {
   getVapidPublicKeyFromServer
 } from '../../../shared/services/pushService';
 import { usePush } from '../../../shared/context/PushContext';
-import { vapidKey, getMessagingService, auth } from '../../../lib/firebase';
+import { vapidKey, getMessagingService, auth, db } from '../../../lib/firebase';
+import { updateDoc, doc } from 'firebase/firestore';
 import { getToken } from 'firebase/messaging';
 
 interface TherapistNotificationPermissionPromptProps {
@@ -215,8 +216,6 @@ export const TherapistNotificationPermissionPrompt: React.FC<TherapistNotificati
       const pushRecipientUid = auth.currentUser?.uid || therapistId;
       if (pushRecipientUid) {
         try {
-          const { updateDoc, doc } = await import('firebase/firestore');
-          const { db } = await import('../../../lib/firebase');
           await updateDoc(doc(db, 'terapeutas', pushRecipientUid), {
             fcmToken: currentFcmToken || null,
             pushSubscribed: true,

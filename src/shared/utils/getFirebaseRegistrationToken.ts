@@ -6,7 +6,7 @@
 
 import { getToken } from 'firebase/messaging';
 import { getMessagingService, vapidKey, auth } from '../../lib/firebase';
-import { registerServiceWorker } from '../services/pushService';
+import { registerServiceWorker, getVapidPublicKeyFromServer } from '../services/pushService';
 
 export interface FirebaseTokenResult {
   success: boolean;
@@ -53,7 +53,6 @@ export async function getFirebaseRegistrationToken(userId?: string): Promise<Fir
     }
 
     // 4. Obtener el Token de Registro con el VAPID Key configurado (sincronizado con el servidor)
-    const { getVapidPublicKeyFromServer } = await import('../services/pushService');
     const activeVapidKey = await getVapidPublicKeyFromServer();
 
     // Sincronizar token de autenticación de usuario de Firebase si existe

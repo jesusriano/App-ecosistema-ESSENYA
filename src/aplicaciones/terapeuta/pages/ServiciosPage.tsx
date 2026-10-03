@@ -8,6 +8,8 @@ import { getServiceImage, getStaticServiceImageFallback } from '../../../shared/
 import { ServiceCompletionModal } from '../components/ServiceCompletionModal';
 import { Booking } from '../../../shared/types';
 import { LiveVoiceRecorderWidget } from '../../../shared/components/LiveVoiceRecorderWidget';
+import { db } from '../../../lib/firebase';
+import { updateDoc, doc } from 'firebase/firestore';
 
 export const ServiciosPage: React.FC = () => {
   const { therapist, bookings, services, handleUpdateBookingState, handleAcceptBooking, handleRejectBooking } = useTerapeuta();
@@ -174,8 +176,6 @@ export const ServiciosPage: React.FC = () => {
           <button
             onClick={async () => {
               try {
-                const { updateDoc, doc } = await import('firebase/firestore');
-                const { db } = await import('../../../lib/firebase');
                 if (therapist?.id) {
                   await updateDoc(doc(db, 'terapeutas', therapist.id), { notificacionAprobacion: false }).catch(() => {});
                   await updateDoc(doc(db, 'users', therapist.id), { notificacionAprobacion: false }).catch(() => {});

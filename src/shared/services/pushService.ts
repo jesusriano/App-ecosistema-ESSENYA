@@ -1,5 +1,6 @@
 // Advanced Web Push Notifications Client Service for ESSENYA
-import { vapidKey, getMessagingService, auth } from '../../lib/firebase';
+import { vapidKey, getMessagingService, auth, db } from '../../lib/firebase';
+import { updateDoc, doc } from 'firebase/firestore';
 import { getToken } from 'firebase/messaging';
 import { logPWAError, logPWAWarning, logPWAInfo } from '../utils/errorLogger';
 import { trackPushSubscriptionSuccess, trackPushSubscriptionError } from '../utils/analytics';
@@ -57,7 +58,7 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 }
 
 export function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const DEFAULT_VALID_KEY = vapidKey || "BDEoPYVIWr6y69eA98bjgPGLyKJSxhut4tp_rr0AuZOBlRoe9zY92NwmKSpKCKWI2nJY45ET5Z_YJkETbaxu6PE";
+  const DEFAULT_VALID_KEY = vapidKey || "BAUvrHF6zeG0owm8gJL997JQPueRBzedGAcRA2tsV5Kl57cXfPk8d1NR9Wtqmg8HNSkD2RK1lXBCWwNSiUfBzpY";
   
   // 1. Sanitize the string
   let cleanString = String(base64String || '').trim();
@@ -559,8 +560,6 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
     // Respaldo directo en Firestore para asegurar vinculación del dispositivo
     if (userId && userId !== 'anonymous') {
       try {
-        const { updateDoc, doc } = await import('firebase/firestore');
-        const { db } = await import('../../lib/firebase');
         await updateDoc(doc(db, 'terapeutas', userId), {
           fcmToken: fcmToken || null,
           pushSubscribed: true,

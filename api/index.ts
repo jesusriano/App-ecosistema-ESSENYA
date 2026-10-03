@@ -4403,11 +4403,21 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
                 bookingId
               });
 
-              updatePayload.metaPurchaseSent = true;
-              updatePayload.metaPurchaseEventId = eventId;
-              updatePayload.metaPurchaseSentAt = nowIso;
-              if (capiResult.fbtraceId) {
-                updatePayload.metaPurchaseTrace = capiResult.fbtraceId;
+              // SOLO marcar como enviado si Meta confirmó recepción real (events_received > 0)
+              if (capiResult.success && typeof capiResult.eventsReceived === 'number' && capiResult.eventsReceived > 0) {
+                updatePayload.metaPurchaseSent = true;
+                updatePayload.metaPurchaseEventId = eventId;
+                updatePayload.metaPurchaseSentAt = nowIso;
+                if (capiResult.fbtraceId) {
+                  updatePayload.metaPurchaseTrace = capiResult.fbtraceId;
+                }
+                console.log(`[Stripe Webhook -> Meta CAPI] Evento Purchase confirmado por Meta (events_received: ${capiResult.eventsReceived}, trace: ${capiResult.fbtraceId}) para reserva ${bookingId}.`);
+              } else {
+                console.error(`[Stripe Webhook -> Meta CAPI] FALLO al enviar Purchase a Meta para reserva ${bookingId}: ${capiResult.error || capiResult.reason}`);
+                // NO marcar metaPurchaseSent como true para permitir reintentos del webhook
+                updatePayload.metaPurchaseSent = false;
+                updatePayload.metaPurchaseLastError = capiResult.error || capiResult.reason || 'Meta no confirmó eventos recibidos';
+                updatePayload.metaPurchaseLastAttemptAt = nowIso;
               }
             } else {
               console.log(`[Stripe Webhook -> Meta CAPI] Evento Purchase ya había sido enviado para ${bookingId} (Idempotencia garantizada).`);

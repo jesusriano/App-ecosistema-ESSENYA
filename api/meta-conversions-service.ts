@@ -49,7 +49,9 @@ export class MetaConversionsService {
   constructor() {
     this.pixelId = process.env.META_PIXEL_ID || process.env.VITE_META_PIXEL_ID || '1591130989374283';
     this.accessToken = process.env.META_CONVERSIONS_API_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN || '';
-    this.testEventCode = process.env.META_TEST_EVENT_CODE || '';
+    // En producción / modo LIVE, nunca se debe precargar el código de prueba
+    const isLive = process.env.STRIPE_MODE === 'live' || (process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_SECRET_KEY.startsWith('sk_test_'));
+    this.testEventCode = isLive ? '' : (process.env.META_TEST_EVENT_CODE || '');
   }
 
   getPixelId(): string {
@@ -81,7 +83,14 @@ export class MetaConversionsService {
 
     const currentPixel = this.pixelId;
     const currentToken = this.accessToken || process.env.META_CONVERSIONS_API_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN || '';
-    const activeTestCode = testEventCode || this.testEventCode || process.env.META_TEST_EVENT_CODE;
+    
+    // Regla estricta: en modo LIVE o producción, test_event_code queda estrictamente DESACTIVADO
+    const isLive = process.env.STRIPE_MODE === 'live' || 
+      (process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_SECRET_KEY.startsWith('sk_test_'));
+    
+    const activeTestCode = isLive 
+      ? undefined 
+      : (testEventCode || this.testEventCode || process.env.META_TEST_EVENT_CODE || undefined);
 
     const userData: Record<string, any> = {};
 
@@ -132,19 +141,21 @@ export class MetaConversionsService {
 
     console.log(`[Meta CAPI] Preparando evento Purchase para ${bookingId || eventId} (Valor: $${value} ${currency}, EventID: ${eventId})`);
 
-    // Si no hay token de acceso configurado, registramos el payload con fines de prueba y trazabilidad sin abortar
+    // Si no hay token de acceso configurado, devolver error explícito
     if (!currentToken) {
-      console.warn(`[Meta CAPI] AVISO: META_CONVERSIONS_API_ACCESS_TOKEN no está definido en variables de entorno. Evento Purchase registrado en modo SIMULACIÓN:`, JSON.stringify(requestBody, null, 2));
+      const errorMsg = 'META_CONVERSIONS_API_ACCESS_TOKEN no está definido en las variables de entorno del servidor.';
+      console.error(`[Meta CAPI Error]: ${errorMsg}`);
       return {
-        success: true,
+        success: false,
         skipped: true,
-        reason: 'META_CONVERSIONS_API_ACCESS_TOKEN no configurado (Simulado correctamente para TEST)',
+        error: errorMsg,
+        reason: 'META_CONVERSIONS_API_ACCESS_TOKEN_MISSING',
         payloadSent: requestBody
       };
     }
 
     try {
-      const url = `https://graph.facebook.com/v19.0/${currentPixel}/events?access_token=${currentToken}`;
+      const url = `https://graph.facebook.com/v21.0/${currentPixel}/events?access_token=${currentToken}`;
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -156,22 +167,24 @@ export class MetaConversionsService {
 
       const data = await response.json().catch(() => null);
 
-      if (!response.ok) {
+      if (!response.ok || !data?.events_received || data.events_received < 1) {
+        const errorDetail = data?.error?.message || `Meta Graph API HTTP ${response.status} sin eventos confirmados (events_received: ${data?.events_received || 0})`;
         console.error(`[Meta CAPI Error]: HTTP ${response.status}`, data);
         return {
           success: false,
-          error: data?.error?.message || `HTTP ${response.status} from Meta Graph API`,
-          fbtraceId: data?.error?.fbtrace_id,
+          eventsReceived: data?.events_received || 0,
+          error: errorDetail,
+          fbtraceId: data?.error?.fbtrace_id || data?.fbtrace_id,
           payloadSent: requestBody
         };
       }
 
-      console.log(`[Meta CAPI Éxito]: Evento Purchase aceptado por Meta. Events received: ${data?.events_received}, FBTrace: ${data?.fbtrace_id}`);
+      console.log(`[Meta CAPI Éxito]: Evento Purchase aceptado por Meta. Events received: ${data.events_received}, FBTrace: ${data.fbtrace_id}`);
 
       return {
         success: true,
-        eventsReceived: data?.events_received,
-        fbtraceId: data?.fbtrace_id,
+        eventsReceived: data.events_received,
+        fbtraceId: data.fbtrace_id,
         payloadSent: requestBody
       };
     } catch (err: any) {

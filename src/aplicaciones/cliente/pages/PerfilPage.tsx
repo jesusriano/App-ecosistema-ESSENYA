@@ -7,6 +7,8 @@ import {
 import { useCliente } from '../hooks/useCliente';
 import { useAuth } from '../../../shared/context/AuthContext';
 import { db, storage } from '../../../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { useToast } from '../../../context/ToastContext';
 import { calculateMembershipTier, getCompletedAndPaidBookings } from '../services/membershipService';
 import { NotificationSoundSettings } from '../../../shared/components/NotificationSoundSettings';
@@ -75,7 +77,6 @@ export const PerfilPage: React.FC = () => {
 
     setSavingAddress(true);
     try {
-      const { doc, setDoc } = await import('firebase/firestore');
       const clientRef = doc(db, 'clientes', targetId);
       await setDoc(clientRef, {
         id: targetId,
@@ -115,10 +116,6 @@ export const PerfilPage: React.FC = () => {
     showToast('Subiendo fotografía', 'Procesando y guardando tu imagen en el servidor seguro...', 'info');
 
     try {
-      // Use dynamic imports to keep initial bundle small
-      const { ref, uploadBytesResumable, getDownloadURL } = await import('firebase/storage');
-      const { doc, setDoc } = await import('firebase/firestore');
-
       const targetId = firebaseUser?.uid || authUser?.id || client?.id;
       if (!targetId) {
         throw new Error('No se pudo identificar una sesión de cliente activa.');

@@ -17,6 +17,8 @@ import { getLockoutInfo } from '../../utils/authValidations';
 import { checkIsAdminInFirestore } from '../../services/adminAuthService';
 import { ClientPoliciesGate } from '../ClientPoliciesGate';
 import { ClientPoliciesModal } from '../ClientPoliciesModal';
+import { db } from '../../../lib/firebase';
+import { updateDoc, doc } from 'firebase/firestore';
 
 interface PortalAuthGuardProps {
   role: UserRole;
@@ -484,8 +486,6 @@ export const PortalAuthGuard: React.FC<PortalAuthGuardProps> = ({ role, children
                     const uid = currentUser.id || currentUser.uid;
                     if (uid) {
                       try {
-                        const { updateDoc, doc } = await import('firebase/firestore');
-                        const { db } = await import('../../../lib/firebase');
                         await updateDoc(doc(db, 'terapeutas', uid), { notificacionAprobacion: false }).catch(() => {});
                         await updateDoc(doc(db, 'users', uid), { notificacionAprobacion: false }).catch(() => {});
                       } catch {}
