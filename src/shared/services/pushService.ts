@@ -8,6 +8,14 @@ import { Capacitor } from '@capacitor/core';
 
 export type SoundPreset = 'classic' | 'bell' | 'alert' | 'soft' | 'urgent';
 
+export function notifyPushErrorViaToast(title: string, description: string) {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('essenya-toast', {
+      detail: { title, description, type: 'error' }
+    }));
+  }
+}
+
 export interface PushNotificationPayload {
   title: string;
   body: string;
@@ -547,6 +555,17 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
           statusText: subRes.statusText,
           body: bodyText
         });
+        if (subRes.status === 403) {
+          notifyPushErrorViaToast(
+            'Acceso Denegado (403)',
+            'No se pudo vincular la suscripción push. Verifica tu inicio de sesión de terapeuta/usuario.'
+          );
+        } else {
+          notifyPushErrorViaToast(
+            `Error de Servidor (${subRes.status})`,
+            'No fue posible registrar las notificaciones push en este momento.'
+          );
+        }
       } else {
         const subResult = await subRes.json().catch(() => null);
         if (subResult && subResult.success) {
@@ -555,6 +574,10 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
       }
     } catch (netErr) {
       console.warn('[Push Registrations] Error al comunicarse con /api/push/registrations:', netErr);
+      notifyPushErrorViaToast(
+        'Fallo de Red',
+        'No se pudo conectar con el servidor para registrar la suscripción. Se reintentará automáticamente.'
+      );
     }
 
     // Respaldo directo en Firestore para asegurar vinculación del dispositivo
@@ -595,7 +618,11 @@ export async function subscribeToPushNotifications(userId: string = 'anonymous')
   } catch (err: any) {
     await logPWAError('push-manager', `Fallo crítico en subscribeToPushNotifications para ${userId}`, err);
     trackPushSubscriptionError(Capacitor.isNativePlatform() ? 'android' : 'web', userId, err.message || 'Error desconocido');
-    return { success: false, error: err.message || 'Error desconocido al suscribirse a Push.' };
+    
+    const errorMsg = err?.message || 'Error desconocido al registrar las notificaciones push.';
+    notifyPushErrorViaToast('Error de Suscripción Push', errorMsg);
+    
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -631,40 +658,6 @@ export async function unsubscribeFromPushNotifications(): Promise<{ success: boo
     return { success: true };
   } catch (err: any) {
     console.warn('[WebPush] Nota al desuscribir:', err);
-    return { success: false, error: err.message };
-  }
-}
-
-export async function sendTestPushNotification(userId?: string, title?: string, body?: string, soundPreset?: SoundPreset): Promise<{ success: boolean; error?: string; sentCount?: number }> {
-  try {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    const token = await auth.currentUser?.getIdToken();
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const isProfilePlaceholder = userId === 'ther-1' || userId === 'ther-default' || userId === 'admin' || userId === 'anonymous';
-    const pushRecipientUid = (!isProfilePlaceholder && userId) ? userId : (auth.currentUser?.uid || userId);
-
-    const res = await fetch('/api/push/send', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        userId: pushRecipientUid,
-        title: title || 'Prueba de Notificación ESSENYA',
-        body: body || 'Notificación push nativa operando en tiempo real con sonido.',
-        url: '/',
-        tag: 'essenya-test',
-        soundPreset: soundPreset || 'classic'
-      })
-    });
-    const data = await res.json();
-    return { 
-      success: data.success, 
-      error: data.error,
-      sentCount: data.sentCount
-    };
-  } catch (err: any) {
     return { success: false, error: err.message };
   }
 }

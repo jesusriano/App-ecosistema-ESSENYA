@@ -5,7 +5,6 @@ import {
   requestNotificationPermission,
   subscribeToPushNotifications,
   unsubscribeFromPushNotifications,
-  sendTestPushNotification,
   playNotificationSound,
   registerServiceWorker,
   SoundPreset
@@ -30,7 +29,6 @@ interface PushContextType {
   setVolume: (vol: number) => void;
   enablePush: (userId?: string) => Promise<{ success: boolean; error?: string }>;
   disablePush: () => Promise<{ success: boolean; error?: string }>;
-  testPush: (userId?: string, title?: string, body?: string, preset?: SoundPreset) => Promise<{ success: boolean; error?: string; sentCount?: number }>;
   previewSound: (preset?: SoundPreset) => void;
   inAppNotifications: InAppNotificationItem[];
   unreadCount: number;
@@ -255,6 +253,8 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
       setSubscribed(true);
       if (soundEnabled) playNotificationSound(soundPreset, volume);
       getRegistrationToken(activeUid).catch(() => {});
+    } else if (res.error) {
+      showToast('Fallo en Suscripción Push', res.error, 'error');
     }
     return res;
   }, [userId, soundEnabled, soundPreset, volume, getRegistrationToken]);
@@ -267,29 +267,6 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
     }
     return res;
   }, []);
-
-  const testPush = useCallback(async (targetUserId?: string, title?: string, body?: string, preset?: SoundPreset) => {
-    const presetToUse = preset || soundPreset;
-    if (soundEnabled) playNotificationSound(presetToUse, volume);
-    
-    // Resolve canonical Push Recipient: prioritize authenticated Firebase Auth UID over catalog profile IDs
-    const isProfilePlaceholder = targetUserId === 'ther-1' || targetUserId === 'ther-default' || targetUserId === 'anonymous';
-    const pushRecipientUid = (!isProfilePlaceholder && targetUserId)
-      ? targetUserId
-      : (auth.currentUser?.uid || userId || targetUserId || 'anonymous');
-
-    // Also add to in-app notification center for complete sync test
-    addInAppNotification({
-      userId: pushRecipientUid,
-      title: title || 'Prueba de Notificación ESSENYA',
-      description: body || 'Notificación push nativa con sonido operativo en tiempo real.',
-      eventType: 'reservation.created',
-      category: 'reservas',
-      url: '/'
-    });
-
-    return await sendTestPushNotification(pushRecipientUid, title, body, presetToUse);
-  }, [userId, soundEnabled, soundPreset, volume]);
 
   const addInAppNotification = useCallback((item: Omit<InAppNotificationItem, 'id' | 'timestamp' | 'read'>) => {
     const newItem: InAppNotificationItem = {
@@ -363,7 +340,6 @@ export const PushProvider: React.FC<{ children: React.ReactNode; userId?: string
         setVolume,
         enablePush,
         disablePush,
-        testPush,
         previewSound,
         inAppNotifications,
         unreadCount,

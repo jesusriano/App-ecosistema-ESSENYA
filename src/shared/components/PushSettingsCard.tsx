@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { usePush } from '../context/PushContext';
 import { SoundPreset } from '../services/pushService';
-import { Bell, Volume2, VolumeX, CheckCircle2, AlertTriangle, Send, Play, Sparkles, RefreshCw } from 'lucide-react';
+import { Bell, Volume2, VolumeX, CheckCircle2, AlertTriangle, Play, RefreshCw } from 'lucide-react';
 import { PushSubscriptionButton } from './PushSubscriptionButton';
 import { auth } from '../../lib/firebase';
 
@@ -22,13 +22,11 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
     setSoundEnabled,
     setSoundPreset,
     setVolume,
-    testPush,
     previewSound
   } = usePush();
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [selectedTestEvent, setSelectedTestEvent] = useState<string>('reservation.created');
 
   if (!supported) {
     return (
@@ -43,64 +41,6 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
       </div>
     );
   }
-
-  const handleTestEvent = async () => {
-    setLoading(true);
-    setMessage(null);
-    try {
-      let title = 'Prueba ESSENYA';
-      let body = 'Notificación push en tiempo real.';
-      
-      if (selectedTestEvent === 'reservation.created') {
-        title = role === 'therapist' ? '🔴 Nueva reserva asignada' : '🔔 Reserva solicitada con éxito';
-        body = role === 'therapist' ? 'Tienes una nueva solicitud de servicio de masaje.' : 'Tu solicitud de reserva fue enviada correctamente.';
-      } else if (selectedTestEvent === 'reservation.accepted') {
-        title = '🟢 Reserva confirmada';
-        body = 'Tu masajista ha aceptado la reserva y está preparando su salida.';
-      } else if (selectedTestEvent === 'therapist.travel_started') {
-        title = '🔵 Masajista en camino';
-        body = 'Tu masajista ha iniciado el viaje hacia tu ubicación.';
-      } else if (selectedTestEvent === 'therapist.arrived') {
-        title = '🟣 Masajista ha llegado';
-        body = 'Tu masajista ya llegó al punto de la reserva.';
-      } else if (selectedTestEvent === 'service.started') {
-        title = '🟡 Servicio iniciado';
-        body = 'Tu sesión de masaje ha comenzado oficialmente.';
-      } else if (selectedTestEvent === 'service.completed') {
-        title = '⚪ Servicio finalizado';
-        body = 'Tu sesión ha concluido. Gracias por confiar en ESSENYA.';
-      }
-
-      // UID logic: prioritize authenticated Firebase Auth UID for Push delivery
-      const isProfilePlaceholder = userId === 'ther-1' || userId === 'ther-default' || userId === 'admin' || !userId;
-      const pushRecipientUid = auth.currentUser?.uid || (isProfilePlaceholder ? undefined : userId);
-
-      const res = await testPush(pushRecipientUid, title, body, soundPreset);
-      if (res.success) {
-        if (res.sentCount === 0) {
-          setMessage({ 
-            type: 'error', 
-            text: 'La suscripción está activa en el navegador, pero no se encontró el registro en el servidor. Por favor, haz clic en "Renovar" para resincronizar.' 
-          });
-        } else {
-          setMessage({ type: 'success', text: `Notificación "${selectedTestEvent}" enviada y probada con éxito.` });
-        }
-      } else {
-        const anyError = res.error as any;
-        const errorText = typeof res.error === 'string' 
-          ? res.error 
-          : (anyError?.message || anyError?.error || JSON.stringify(res.error));
-        setMessage({ 
-          type: 'error', 
-          text: errorText || 'Fallo en el servidor al intentar enviar la notificación push.' 
-        });
-      }
-    } catch (err: any) {
-      setMessage({ type: 'error', text: `Error de red o sistema: ${err.message}` });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className={`bg-white dark:bg-[#1C1917] border border-[#C9A55B]/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 ${className}`}>
@@ -246,47 +186,6 @@ export const PushSettingsCard: React.FC<PushSettingsCardProps> = ({ userId, role
                 onChange={(e) => setVolume(parseFloat(e.target.value))}
                 className="w-full accent-[#C9A55B] cursor-pointer"
               />
-            </div>
-          </div>
-        )}
-
-        {/* Real Push Testing Section */}
-        {subscribed && (
-          <div className="p-4 rounded-2xl bg-[#C9A55B]/5 border border-[#C9A55B]/30 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-[#C9A55B]">
-                <Sparkles className="w-4 h-4" />
-                <h4 className="text-xs font-bold uppercase tracking-wider">Prueba de Notificación Push Real</h4>
-              </div>
-              <span className="text-[10px] font-mono opacity-50">UID: {userId?.slice(0, 8)}...</span>
-            </div>
-            
-            <p className="text-xs text-[#78716C] dark:text-[#A8A29E]">
-              Selecciona un evento para enviar una notificación nativa. Si falla, pulsa "Renovar" arriba.
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-2">
-              <select
-                value={selectedTestEvent}
-                onChange={(e) => setSelectedTestEvent(e.target.value)}
-                className="flex-1 bg-white dark:bg-[#1C1917] border border-[#C9A55B]/30 rounded-xl px-3 py-2 text-xs font-medium text-[#1C1917] dark:text-white focus:outline-none"
-              >
-                <option value="reservation.created">1. Reserva Creada (Solicitud)</option>
-                <option value="reservation.accepted">2. Reserva Confirmada (Aceptada)</option>
-                <option value="therapist.travel_started">3. Masajista en Camino (Viaje)</option>
-                <option value="therapist.arrived">4. Masajista Llegó (Ubicación)</option>
-                <option value="service.started">5. Servicio Iniciado (Sesión)</option>
-                <option value="service.completed">6. Servicio Finalizado (Fin)</option>
-              </select>
-
-              <button
-                onClick={handleTestEvent}
-                disabled={loading}
-                className="px-5 py-2 rounded-xl bg-[#C9A55B] hover:bg-[#B89448] text-[#1C1917] font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-50"
-              >
-                {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                <span>Enviar Push</span>
-              </button>
             </div>
           </div>
         )}

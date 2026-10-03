@@ -29,6 +29,24 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }, 4500);
   }, []);
 
+  React.useEffect(() => {
+    const handleCustomToast = (e: Event) => {
+      const customEvent = e as CustomEvent<{ title: string; description?: string; type?: ToastType }>;
+      if (customEvent.detail?.title) {
+        showToast(
+          customEvent.detail.title,
+          customEvent.detail.description,
+          customEvent.detail.type || 'info'
+        );
+      }
+    };
+
+    window.addEventListener('essenya-toast', handleCustomToast);
+    return () => {
+      window.removeEventListener('essenya-toast', handleCustomToast);
+    };
+  }, [showToast]);
+
   const removeToast = React.useCallback((id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);

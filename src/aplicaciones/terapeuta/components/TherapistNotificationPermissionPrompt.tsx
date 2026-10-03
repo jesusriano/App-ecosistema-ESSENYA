@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Bell, BellOff, BellRing, CheckCircle2, ShieldAlert, Smartphone, 
   HelpCircle, ChevronRight, X, ArrowRight, Sparkles, Volume2, Info, Compass,
-  RefreshCw, Award, Play, AlertCircle, HeartHandshake
+  RefreshCw, Award, AlertCircle, HeartHandshake
 } from 'lucide-react';
 import { 
   getNotificationPermission, 
@@ -49,8 +49,6 @@ export const TherapistNotificationPermissionPrompt: React.FC<TherapistNotificati
   // Custom detailed pipeline state
   const [subStep, setSubStep] = useState<SubscribingStep>('idle');
   const [subError, setSubError] = useState<string | null>(null);
-  const [testSent, setTestSent] = useState<boolean>(false);
-  const [testLoading, setTestLoading] = useState<boolean>(false);
 
   useEffect(() => {
     setIsSupported(isPushSupported());
@@ -247,28 +245,6 @@ export const TherapistNotificationPermissionPrompt: React.FC<TherapistNotificati
     }
   };
 
-  const triggerTestNotification = async () => {
-    setTestLoading(true);
-    try {
-      if (pushContext) {
-        const pushRecipientUid = auth.currentUser?.uid || therapistId;
-        const result = await pushContext.testPush(
-          pushRecipientUid,
-          '👑 Alerta de Servicio VIP',
-          '¡Felicitaciones! Tu dispositivo está correctamente enlazado para recibir reservas de alto valor en tiempo real.',
-          'urgent'
-        );
-        if (result.success) {
-          setTestSent(true);
-        }
-      }
-    } catch (err) {
-      console.warn('Error sending test push:', err);
-    } finally {
-      setTestLoading(false);
-    }
-  };
-
   const getPercentageForStep = (step: SubscribingStep): number => {
     switch (step) {
       case 'idle': return 0;
@@ -441,34 +417,10 @@ export const TherapistNotificationPermissionPrompt: React.FC<TherapistNotificati
                 </p>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-                <button
-                  onClick={triggerTestNotification}
-                  disabled={testLoading || testSent}
-                  className={`w-full sm:w-auto px-5 py-2.5 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    testSent 
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
-                      : 'bg-[#C9A55B] text-black hover:bg-[#B38F43]'
-                  }`}
-                >
-                  {testLoading ? (
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  ) : testSent ? (
-                    <>
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>¡Prueba Enviada! Revisa tu pantalla</span>
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-3.5 h-3.5 text-black fill-black" />
-                      <span>Enviar Notificación de Prueba</span>
-                    </>
-                  )}
-                </button>
-
+              <div className="flex items-center justify-center pt-2">
                 <button
                   onClick={handleDismiss}
-                  className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold border border-white/20 hover:bg-white/5 rounded-xl transition-all cursor-pointer"
+                  className="px-6 py-2.5 text-xs font-bold bg-[#C9A55B] text-black hover:bg-[#B38F43] rounded-xl transition-all cursor-pointer shadow-md"
                 >
                   Ir a mi Agenda
                 </button>

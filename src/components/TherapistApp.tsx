@@ -12,19 +12,18 @@ import {
 import { PanicModal } from './PanicModal';
 import { BookingChatDrawer } from '../shared/components/BookingChatDrawer';
 import { WhatsAppButton } from './WhatsAppButton';
-import { fetchPostCareProtocol } from '../shared/services/api';
 import { LiveTrackingMap } from '../shared/components/LiveTrackingMap';
 import { ServiceCompletionModal } from '../aplicaciones/terapeuta/components/ServiceCompletionModal';
 import { VoiceNotificationService } from '../shared/services/VoiceNotificationService';
-import { VoiceRecorderService, ServiceRecording } from '../shared/services/VoiceRecorderService';
+import { VoiceRecorderService } from '../shared/services/VoiceRecorderService';
 import { TherapistNotificationsPanel } from '../aplicaciones/terapeuta/components/TherapistNotificationsPanel';
 import { NotificationHistoryService } from '../shared/services/NotificationHistoryService';
-import { 
-  notifyTherapistNewMessage, 
-  isUrgentChatMessage 
-} from '../shared/utils/notificationAudio';
-import { sendChatMessage, subscribeToChatMessages } from '../shared/services/chatService';
 import { TherapistNotificationPermissionPrompt } from '../aplicaciones/terapeuta/components/TherapistNotificationPermissionPrompt';
+import { isUrgentChatMessage } from '../shared/utils/notificationAudio';
+import { useTherapistLocation } from '../hooks/useTherapistLocation';
+import { useTherapistVoiceRecorder } from '../hooks/useTherapistVoiceRecorder';
+import { usePostCareProtocol } from '../hooks/usePostCareProtocol';
+import { useTherapistChat } from '../hooks/useTherapistChat';
 
 
 interface TherapistAppProps {
@@ -112,23 +111,7 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [completedCelebrationBooking, setCompletedCelebrationBooking] = useState<Booking | null>(null);
   const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState<boolean>(false);
-
-  const [isRecording, setIsRecording] = useState<boolean>(false);
-  const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
-  const [activeMediaRecorder, setActiveMediaRecorder] = useState<MediaRecorder | null>(null);
   const [showFinishConfirmModal, setShowFinishConfirmModal] = useState<boolean>(false);
-
-  useEffect(() => {
-    let interval: any = null;
-    if (isRecording) {
-      interval = setInterval(() => {
-        setRecordingSeconds(s => s + 1);
-      }, 1000);
-    } else {
-      clearInterval(interval);
-    }
-    return () => clearInterval(interval);
-  }, [isRecording]);
 
   useEffect(() => {
     const handleOnlineEvent = () => {
@@ -143,74 +126,6 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
       window.removeEventListener('offline', handleOfflineEvent);
     };
   }, []);
-
-  const startLiveRecording = async () => {
-    if (!currentBooking) return;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = VoiceRecorderService.getBestMimeType() || 'audio/webm';
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-      const chunks: Blob[] = [];
-      const recId = `rec-${Date.now()}`;
-      const now = new Date();
-      const startTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) {
-          chunks.push(e.data);
-        }
-      };
-
-      recorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: mimeType });
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          const base64data = reader.result as string;
-          const durationSecs = recordingSeconds;
-          const newRec: ServiceRecording = {
-            id: recId,
-            serviceId: currentBooking.id,
-            therapistId: activeTherapist.id,
-            date: now.toLocaleDateString(),
-            startTime: startTimeStr,
-            endTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            durationSeconds: durationSecs,
-            durationFormatted: VoiceRecorderService.formatDuration(durationSecs),
-            mimeType: mimeType,
-            audioDataUrl: base64data,
-            syncStatus: navigator.onLine ? 'sincronizada' : 'pendiente_sincronizacion',
-            createdAt: now.toISOString()
-          };
-
-          await VoiceRecorderService.saveRecordingLocal(newRec);
-          if (navigator.onLine) {
-            await VoiceRecorderService.syncRecordingToFirestore(newRec);
-            showToast('Grabación Guardada', 'Audio grabado y sincronizado correctamente.', 'success');
-          } else {
-            showToast('Sin Conexión', 'Grabación guardada localmente. Se sincronizará cuando vuelva la conexión.', 'info');
-          }
-        };
-        reader.readAsDataURL(blob);
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      recorder.start(1000);
-      setActiveMediaRecorder(recorder);
-      setIsRecording(true);
-      setRecordingSeconds(0);
-      showToast('Grabación Iniciada', '🎙️ El micrófono se encuentra activo.', 'success');
-    } catch (err: any) {
-      showToast('Error de Micrófono', err?.message || 'No fue posible acceder al micrófono.', 'error');
-    }
-  };
-
-  const stopLiveRecording = () => {
-    if (activeMediaRecorder && activeMediaRecorder.state !== 'inactive') {
-      activeMediaRecorder.stop();
-    }
-    setIsRecording(false);
-    setActiveMediaRecorder(null);
-  };
 
   const defaultCompletedServices: any[] = [];
 
@@ -339,74 +254,6 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
   const [expandedPendingId, setExpandedPendingId] = useState<string | null>(null);
   const activePending = pendingBookings[0] || null;
 
-  // Periodically report live GPS to server so dispatch engine recognizes location as fresh
-  useEffect(() => {
-    if (!navigator.geolocation) return;
-    const reportLocation = () => {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          fetch('/api/therapist/location', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              lat: pos.coords.latitude,
-              lng: pos.coords.longitude,
-              status: activeTherapist.status || 'disponible'
-            })
-          }).catch(() => {});
-        },
-        () => {},
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
-      );
-    };
-    reportLocation();
-    const interval = setInterval(reportLocation, 60000);
-    return () => clearInterval(interval);
-  }, [activeTherapist.id, activeTherapist.status]);
-
-  // Find active booking assigned to therapist.
-  // We only pick bookings where the therapist is explicitly assigned and is not in a final state.
-  const currentBooking = bookings.find(b => {
-    const isAssignedToMe = b.therapistId === activeTherapist.id || 
-                           b.therapistId2 === activeTherapist.id || 
-                           (Array.isArray(b.therapistIds) && b.therapistIds.includes(activeTherapist.id));
-    
-    // We prioritize bookings that are in an active flow (accepted, on the way, arrived, or started)
-    // but we also include 'pendiente' if the therapist has already accepted a slot (e.g. dual booking slot 1).
-    return isAssignedToMe && b.state !== 'servicio_finalizado' && b.state !== 'cancelado';
-  }) || null;
-
-  // Watch position and update Firestore for active bookings
-  useEffect(() => {
-    if (!currentBooking || !onUpdateLiveLocation) return;
-    
-    // Only track if moving towards or at client
-    const statesToTrack: BookingState[] = ['en_camino', 'llegue', 'servicio_iniciado'];
-    if (!statesToTrack.includes(currentBooking.state)) return;
-
-    if (!navigator.geolocation) {
-      console.warn('Geolocation not supported');
-      return;
-    }
-
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        onUpdateLiveLocation(currentBooking.id, latitude, longitude);
-      },
-      (error) => {
-        console.warn('Geolocation error in tracking:', error.message);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 5000
-      }
-    );
-
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [currentBooking?.id, currentBooking?.state, onUpdateLiveLocation]);
-
   const handleAccept = (booking: Booking) => {
     if (onAcceptBooking) {
       onAcceptBooking(booking.id, activeTherapist);
@@ -433,267 +280,74 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
     );
   };
 
-  // Post care state
-  const [therapistNotes, setTherapistNotes] = useState<string>('Rigidez liberada en trapecios y lumbar izquierda. Se recomienda buena hidratación.');
-  const [postCareLoading, setPostCareLoading] = useState<boolean>(false);
-  const [postCareResult, setPostCareResult] = useState<any>(null);
+  // Find active booking assigned to therapist.
+  const currentBooking = bookings.find(b => {
+    const isAssignedToMe = b.therapistId === activeTherapist.id || 
+                           b.therapistId2 === activeTherapist.id || 
+                           (Array.isArray(b.therapistIds) && b.therapistIds.includes(activeTherapist.id));
+    return isAssignedToMe && b.state !== 'servicio_finalizado' && b.state !== 'cancelado';
+  }) || null;
 
-  // Chat state
-  const [chatInput, setChatInput] = useState<string>('');
-  const [isClientTyping, setIsClientTyping] = useState<boolean>(false);
-  const [messages, setMessages] = useState<Array<{ sender: string, text: string, time: string, read?: boolean }>>([]);
-
-  // Subtle Audio & Tactile Vibration Notification States
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('essenya_therapist_sound_enabled') !== 'false';
-    } catch {
-      return true;
-    }
+  // Custom Hooks for API and Side Effects
+  useTherapistLocation({
+    activeTherapist,
+    currentBooking,
+    onUpdateLiveLocation
   });
-  const [vibrationEnabled, setVibrationEnabled] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('essenya_therapist_vibration_enabled') !== 'false';
-    } catch {
-      return true;
-    }
+
+  const {
+    isRecording,
+    recordingSeconds,
+    startLiveRecording,
+    stopLiveRecording
+  } = useTherapistVoiceRecorder({
+    currentBooking,
+    activeTherapist,
+    showToast
   });
-  const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
-  const [recentMessageAlert, setRecentMessageAlert] = useState<{
-    sender: string;
-    text: string;
-    time: string;
-    isUrgent: boolean;
-  } | null>(null);
-  const [isNotifyingPulse, setIsNotifyingPulse] = useState<boolean>(false);
 
-  // Auto-dismiss floating notification banner after 6 seconds
-  useEffect(() => {
-    if (!recentMessageAlert) return;
-    const timer = setTimeout(() => {
-      setRecentMessageAlert(null);
-    }, 6000);
-    return () => clearTimeout(timer);
-  }, [recentMessageAlert]);
+  const {
+    therapistNotes,
+    setTherapistNotes,
+    postCareLoading,
+    postCareResult,
+    generatePostCare
+  } = usePostCareProtocol({
+    showToast
+  });
 
-  // Real-time listener for incoming messages from active booking client
-  useEffect(() => {
-    const handleRemoteMessage = (event: any) => {
-      const { bookingId, text, sender } = event?.detail || {};
-      if (text) {
-        // If it belongs to current active booking or any active booking
-        if (!bookingId || !currentBooking?.id || bookingId === currentBooking.id) {
-          handleIncomingMessage(text, sender || currentBooking?.clientName || 'Cliente');
-        }
-      }
-    };
+  const {
+    chatInput,
+    setChatInput,
+    isClientTyping,
+    messages,
+    unreadChatCount,
+    setUnreadChatCount,
+    soundEnabled,
+    vibrationEnabled,
+    recentMessageAlert,
+    setRecentMessageAlert,
+    isNotifyingPulse,
+    handleSendChat,
+    handleSimulateClientMessage,
+    handleToggleSound,
+    handleToggleVibration,
+    handleTestNotificationSound
+  } = useTherapistChat({
+    currentBooking,
+    activeTherapist,
+    activeTab,
+    showToast
+  });
 
-    window.addEventListener('essenya_chat_message', handleRemoteMessage);
-    return () => {
-      window.removeEventListener('essenya_chat_message', handleRemoteMessage);
-    };
-  }, [currentBooking?.id, currentBooking?.clientName, activeTab, soundEnabled, vibrationEnabled]);
-
-  const handleToggleSound = () => {
-    const nextState = !soundEnabled;
-    setSoundEnabled(nextState);
-    try {
-      localStorage.setItem('essenya_therapist_sound_enabled', String(nextState));
-    } catch {}
-
-    if (nextState) {
-      notifyTherapistNewMessage({ soundEnabled: true, vibrationEnabled: false, isUrgent: false });
-      showToast('Notificación Sonora Activada', 'Campanilla sutil activada para nuevos mensajes.', 'gold');
-    } else {
-      showToast('Sonido Silenciado', 'Los mensajes se recibirán en modo silencioso.', 'info');
-    }
-  };
-
-  const handleToggleVibration = () => {
-    const nextState = !vibrationEnabled;
-    setVibrationEnabled(nextState);
-    try {
-      localStorage.setItem('essenya_therapist_vibration_enabled', String(nextState));
-    } catch {}
-
-    if (nextState) {
-      notifyTherapistNewMessage({ soundEnabled: false, vibrationEnabled: true, isUrgent: false });
-      showToast('Vibración Táctil Activada', 'Respuesta háptica habilitada para el terapeuta.', 'gold');
-    } else {
-      showToast('Vibración Desactivada', 'Vibración táctil deshabilitada.', 'info');
-    }
-  };
-
-  const handleTestAlert = (urgent: boolean = false) => {
-    setIsNotifyingPulse(true);
-    setTimeout(() => setIsNotifyingPulse(false), 1200);
-
-    notifyTherapistNewMessage({
-      soundEnabled: true,
-      vibrationEnabled: true,
-      isUrgent: urgent
-    });
-
-    showToast(
-      urgent ? '⚠️ Petición Urgente (Prueba)' : '🔔 Notificación Spa (Prueba)',
-      urgent 
-        ? 'Campanilla distintiva de 3 armónicos y vibración háptica triple ejecutadas.'
-        : 'Campanilla armónica sutil de 2 tonos y vibración táctil suave ejecutadas.',
-      urgent ? 'error' : 'gold'
-    );
-  };
-
-  const handleIncomingMessage = (text: string, senderName?: string) => {
-    setIsClientTyping(false);
-    const resolvedSender = senderName || currentBooking?.clientName || 'Don Alejandro';
-    const isUrgent = isUrgentChatMessage(text);
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    const newMsg = {
-      sender: resolvedSender,
-      text,
-      time: timeStr,
-      read: activeTab === 'active'
-    };
-
-    setMessages(prev => [...prev, newMsg]);
-
-    // Trigger subtle audio chime & tactile vibration
-    setIsNotifyingPulse(true);
-    setTimeout(() => setIsNotifyingPulse(false), 1500);
-
-    notifyTherapistNewMessage({
-      soundEnabled,
-      vibrationEnabled,
-      isUrgent
-    });
-
-    // Provide immediate visual notification
-    setRecentMessageAlert({
-      sender: resolvedSender,
-      text,
-      time: timeStr,
-      isUrgent
-    });
-
-    if (activeTab !== 'active') {
-      setUnreadChatCount(prev => prev + 1);
-    }
-
-    showToast(
-      isUrgent ? '⚠️ Petición Urgente del Cliente' : '💬 Mensaje de la Cita Activa',
-      `${resolvedSender}: "${text.length > 55 ? text.substring(0, 52) + '...' : text}"`,
-      isUrgent ? 'error' : 'gold'
-    );
-  };
-
-  const handleSimulateClientMessage = (type: 'urgent' | 'access' | 'routine') => {
-    setIsClientTyping(true);
-    setTimeout(() => {
-      let msg = '';
-      if (type === 'urgent') {
-        msg = 'Por favor tomen nota: tengo alergia al aceite de almendras y ligera molestia en cervicales, requiero toallas adicionales tibias.';
-      } else if (type === 'access') {
-        msg = 'El timbre principal no funciona, por favor toca el interfón 4B o avísame al llegar para abrir el portón.';
-      } else {
-        msg = 'Hola Elena, ¿podrías confirmarme si traen el difusor aromático de lavanda? Muchas gracias.';
-      }
-      handleIncomingMessage(msg);
-    }, 1000);
-  };
+  const handleTestAlert = handleTestNotificationSound;
 
   const handleUpdateStatus = (bookingId: string, newState: BookingState, label: string) => {
     onUpdateBookingState(bookingId, newState);
     showToast('Estado de Servicio Actualizado', `Servicio marcado como "${label}". Notificado al cliente y a central dispatch.`, 'gold');
   };
 
-  const handleGeneratePostCare = async () => {
-    if (therapistNotes.trim().length < 20) {
-      showToast(
-        'Notas insuficientes',
-        'Por favor, ingresa al menos 20 caracteres en las notas clínicas para asegurar recomendaciones precisas.',
-        'error'
-      );
-      return;
-    }
-
-    setPostCareLoading(true);
-    setPostCareResult(null);
-    try {
-      const data = await fetchPostCareProtocol({
-        ritualName: currentBooking?.serviceName || 'Ritual Holístico Essenya',
-        therapistNotes: therapistNotes
-      });
-      if (data.protocol) {
-        setPostCareResult(data.protocol);
-        showToast('Protocolo Generado', 'Recomendaciones post-care sincronizadas con el expediente del socio.', 'gold');
-      } else {
-        throw new Error('No protocol returned');
-      }
-    } catch (e: any) {
-      console.warn('Post-care protocol warning:', e?.message || e);
-      setPostCareResult({
-        hydrationTip: "Beba al menos 750ml de agua tibia con infusión de lavanda o manzanilla durante las próximas 3 horas para favorecer la desintoxicación muscular.",
-        stretchingProtocol: ["Inclinación suave de cuello lateral 15 seg por lado", "Rotación posterior de escápulas para apertura torácica"],
-        careMessage: "Ha sido un absoluto honor brindarle este servicio. Le recomendamos reposar confortablemente para maximizar los beneficios terapéuticos de su experiencia ESSENYA."
-      });
-      showToast('Protocolo Personalizado', 'Protocolo generado exitosamente.', 'gold');
-    } finally {
-      setPostCareLoading(false);
-    }
-  };
-
-
-  // Real-time chat listener for active reservation
-  useEffect(() => {
-    if (!currentBooking?.id) return;
-
-    const unsubscribe = subscribeToChatMessages(currentBooking.id, (realMsgs) => {
-      if (realMsgs.length > 0) {
-        setMessages(realMsgs.map(m => ({
-          sender: m.senderName,
-          text: m.text,
-          time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          read: m.read
-        })));
-      }
-    });
-
-    return () => unsubscribe();
-  }, [currentBooking?.id]);
-
-  const handleSendChat = async () => {
-    const textToSend = chatInput.trim();
-    if (!textToSend || !currentBooking) return;
-
-    setChatInput('');
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    setMessages(prev => [...prev, { 
-      sender: activeTherapist.name || 'Terapeuta', 
-      text: textToSend, 
-      time: timeStr,
-      read: false
-    }]);
-
-    try {
-      await sendChatMessage({
-        bookingId: currentBooking.id,
-        bookingCode: currentBooking.code,
-        senderId: activeTherapist.id,
-        senderName: activeTherapist.name || 'Terapeuta',
-        senderRole: 'terapeuta',
-        text: textToSend,
-        clientId: currentBooking.clientId,
-        clientName: currentBooking.clientName,
-        therapistId: activeTherapist.id,
-        therapistName: activeTherapist.name
-      });
-    } catch (err: any) {
-      console.error('[TherapistApp] Error sending chat message:', err);
-      showToast('Error de Mensajería', 'No se pudo enviar el mensaje al cliente.', 'error');
-    }
-  };
+  const handleGeneratePostCare = () => generatePostCare(currentBooking?.serviceName);
 
   const [etaInfo, setEtaInfo] = useState<{distance: string, duration: string} | null>(null);
 

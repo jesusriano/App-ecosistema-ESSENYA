@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Bell, BellOff, BellRing, RefreshCw, ShieldCheck, AlertTriangle, 
-  Clock, CheckCircle2, XCircle, Send, Database, Key, Sparkles, ExternalLink 
+  Clock, CheckCircle2, XCircle, Database, Key, Sparkles, ExternalLink 
 } from 'lucide-react';
 import { usePush } from '../context/PushContext';
 import { 
@@ -32,12 +32,10 @@ export const PushSettingsPanel: React.FC<PushSettingsPanelProps> = ({
     subscribed: contextSubscribed, 
     fcmToken,
     enablePush, 
-    disablePush,
-    testPush 
+    disablePush 
   } = usePush();
 
   const [loading, setLoading] = useState<boolean>(false);
-  const [testing, setTesting] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [isSubscribed, setIsSubscribed] = useState<boolean>(contextSubscribed);
@@ -173,54 +171,6 @@ export const PushSettingsPanel: React.FC<PushSettingsPanelProps> = ({
       setMessage({ type: 'error', text: err.message || 'Error al re-suscribir.' });
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Manejar prueba de notificación
-  const handleSendTest = async () => {
-    setTesting(true);
-    setMessage(null);
-    try {
-      const title = role === 'therapist' 
-        ? '🔴 Nueva solicitud de masaje' 
-        : role === 'admin'
-        ? '🛡️ Alerta de monitor ESSENYA'
-        : '🔔 Reserva confirmada';
-
-      const body = role === 'therapist'
-        ? 'Tienes una nueva reserva pendiente de atención.'
-        : role === 'admin'
-        ? 'Prueba del sistema de alertas para administradores.'
-        : 'Tu masajista ha confirmado la cita.';
-
-      // UID logic: prioritize authenticated Firebase Auth UID for Push delivery
-      const isProfilePlaceholder = userId === 'ther-1' || userId === 'ther-default' || userId === 'admin' || userId === 'anonymous' || !userId;
-      const pushRecipientUid = auth.currentUser?.uid || (isProfilePlaceholder ? undefined : userId);
-
-      const res = await testPush(pushRecipientUid, title, body);
-      if (res.success) {
-        if (res.sentCount === 0) {
-          setMessage({ 
-            type: 'warning', 
-            text: 'El navegador está suscrito, pero el servidor no encontró tu registro. Por favor haz clic en el icono de renovación (flechas) para resincronizar.' 
-          });
-        } else {
-          setMessage({ type: 'success', text: 'Notificación de prueba enviada con éxito a este dispositivo.' });
-        }
-      } else {
-        const anyError = res.error as any;
-        const errorText = typeof res.error === 'string' 
-          ? res.error 
-          : (anyError?.message || anyError?.error || JSON.stringify(res.error));
-        setMessage({ 
-          type: 'error', 
-          text: errorText || 'Error al procesar el envío en el servidor.' 
-        });
-      }
-    } catch (err: any) {
-      setMessage({ type: 'error', text: `Error técnico: ${err.message}` });
-    } finally {
-      setTesting(false);
     }
   };
 
@@ -443,31 +393,6 @@ export const PushSettingsPanel: React.FC<PushSettingsPanelProps> = ({
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
-        </div>
-
-        {/* Prueba Nativa en Vivo */}
-        <div className="p-4 rounded-2xl bg-[#FAF8F5] dark:bg-[#1A1A1A] border border-[#E5DFD3] dark:border-[#2A2A2A] flex flex-col justify-between space-y-3">
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#78716C] dark:text-[#888888] block mb-1">
-              Verificación en Vivo
-            </span>
-            <p className="text-xs font-semibold text-[#1C1917] dark:text-white">
-              Prueba de Alerta Nativa
-            </p>
-            <p className="text-[11px] text-[#78716C] dark:text-[#888888] mt-0.5">
-              Envía una notificación real para comprobar el sonido, icono y vibración.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleSendTest}
-            disabled={testing || !isSubscribed}
-            className="self-start px-5 py-2.5 rounded-xl bg-[#C9A55B]/15 hover:bg-[#C9A55B]/25 text-[#806020] dark:text-[#C9A55B] border border-[#C9A55B]/30 font-bold text-xs flex items-center gap-2 transition-all cursor-pointer disabled:opacity-40"
-          >
-            {testing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            <span>Enviar Notificación de Prueba</span>
-          </button>
         </div>
 
       </div>
