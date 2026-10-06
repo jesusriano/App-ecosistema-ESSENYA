@@ -260,7 +260,58 @@ self.addEventListener('notificationclose', (event) => {
 });
 
 // ========================================================
-// 5. EVENT 'fetch': 'Stale-While-Revalidate' for Images
+// 5. EVENT 'pushsubscriptionchange': Auto Renewal on Expiration / Rotation
+// ========================================================
+self.addEventListener('pushsubscriptionchange', (event) => {
+  console.log('[ServiceWorker] Push subscription expired or rotated by browser. Re-subscribing in background...');
+  event.waitUntil(
+    (async () => {
+      try {
+        let activeVapidKey = "BAUvrHF6zeG0owm8gJL997JQPueRBzedGAcRA2tsV5Kl57cXfPk8d1NR9Wtqmg8HNSkD2RK1lXBCWwNSiUfBzpY";
+        try {
+          const res = await fetch('/api/push/vapid-public-key');
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.publicKey) activeVapidKey = data.publicKey;
+          }
+        } catch (fetchErr) {
+          console.warn('[ServiceWorker] Could not fetch fresh VAPID key in pushsubscriptionchange:', fetchErr);
+        }
+
+        function urlBase64ToUint8Array(base64String) {
+          const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+          const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+          const rawData = atob(base64);
+          const outputArray = new Uint8Array(rawData.length);
+          for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+          }
+          return outputArray;
+        }
+
+        const newSubscription = await self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(activeVapidKey)
+        });
+
+        await fetch('/api/push/registrations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subscription: newSubscription ? newSubscription.toJSON() : null,
+            oldEndpoint: event.oldSubscription ? event.oldSubscription.endpoint : undefined
+          })
+        });
+        console.log('[ServiceWorker] Push subscription renewed and registered successfully in background.');
+      } catch (err) {
+        console.error('[ServiceWorker] Error handling pushsubscriptionchange:', err);
+      }
+    })()
+  );
+});
+
+// ========================================================
+// 6. EVENT 'fetch': 'Stale-While-Revalidate' for Images
 // ========================================================
 const IMAGE_CACHE_NAME = 'essenya-images-cache';
 

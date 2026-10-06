@@ -1759,6 +1759,50 @@ app.post("/api/admin/therapist/update", requireAdmin, async (req: Request, res: 
   }
 });
 
+// Endpoint para consultar datos sensibles de una terapeuta (Admin o la propia terapeuta)
+app.get("/api/admin/therapist/:id/sensitive", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const authenticatedUid = (req as any).user?.uid;
+    const userRole = String((req as any).user?.rol || (req as any).user?.role || "").toLowerCase();
+    const userEmail = String((req as any).user?.email || "").toLowerCase();
+    const isAdminUser = (req as any).user?.admin === true || 
+      userRole === "administrador" || 
+      userEmail === "essenya222@gmail.com" || 
+      userEmail === "graphixglow.2024@gmail.com" ||
+      userEmail.endsWith("@essenya.mx") ||
+      userEmail.endsWith("@essenya.com");
+    const isSelf = authenticatedUid === id;
+
+    if (!isAdminUser && !isSelf) {
+      return res.status(403).json({ success: false, error: "No autorizado para consultar información sensible." });
+    }
+
+    const db = getAdminFirestore();
+    const snap = await db.collection("terapeutas").doc(id).collection("private_info").doc("sensitive").get();
+    let data: any = {};
+    if (snap.exists) {
+      data = snap.data() || {};
+    } else {
+      const tSnap = await db.collection("terapeutas").doc(id).get();
+      if (tSnap.exists) {
+        const tData = tSnap.data() || {};
+        data = {
+          curp: tData.curp || '',
+          ineNumber: tData.ineNumber || '',
+          cuentaBancariaCLABE: tData.cuentaBancariaCLABE || '',
+          banco: tData.banco || '',
+          numeroCuenta: tData.numeroCuenta || '',
+          titularCuenta: tData.titularCuenta || ''
+        };
+      }
+    }
+    return res.json({ success: true, sensitive: data });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Endpoint para eliminar terapeuta
 app.delete("/api/admin/therapist/:id", requireAdmin, async (req: Request, res: Response) => {
   try {

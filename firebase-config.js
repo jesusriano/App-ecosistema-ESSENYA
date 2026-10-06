@@ -3,7 +3,7 @@
  * Web Push Certificate Key Pair (VAPID)
  */
 
-export const vapidKey = "BHEx7m8uEh5G66_S_vknnlbzdyDQ93X4xuNbqcr-KuS5p_r0ycVGo_7bt6HAYCkABoQTFNvspi4pSOb2Nm4gNl8";
+export const vapidKey = "BAUvrHF6zeG0owm8gJL997JQPueRBzedGAcRA2tsV5Kl57cXfPk8d1NR9Wtqmg8HNSkD2RK1lXBCWwNSiUfBzpY";
 
 export const firebaseConfig = {
   projectId: "essenya-ecosistema",
@@ -13,7 +13,7 @@ export const firebaseConfig = {
   firestoreDatabaseId: "ai-studio-essenya-4bebd9eb-3f06-4b4e-a5fc-4349bc9b5cc8",
   storageBucket: "essenya-ecosistema.firebasestorage.app",
   messagingSenderId: "588888723862",
-  vapidKey: "BHEx7m8uEh5G66_S_vknnlbzdyDQ93X4xuNbqcr-KuS5p_r0ycVGo_7bt6HAYCkABoQTFNvspi4pSOb2Nm4gNl8"
+  vapidKey: "BAUvrHF6zeG0owm8gJL997JQPueRBzedGAcRA2tsV5Kl57cXfPk8d1NR9Wtqmg8HNSkD2RK1lXBCWwNSiUfBzpY"
 };
 
 if (typeof window !== 'undefined') {

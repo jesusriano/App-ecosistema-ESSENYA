@@ -50,47 +50,80 @@ const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:seguridad@essenyamexic
 
 /**
  * Ensures VAPID keys are configured. If missing from env, attempts to retrieve from Firestore.
- * If still missing, generates a new pair and saves them to Firestore for persistence.
  */
 export async function ensureVapidConfig(db: Firestore): Promise<boolean> {
-  if (isValidVapidKey(rawPublicKey, 80)) {
-    vapidPublicKey = sanitizeVapidKey(rawPublicKey!);
-    vapidConfigured = true;
+  // If already configured and both keys exist and are valid, return true
+  if (vapidConfigured && vapidPublicKey && vapidPrivateKey) {
     return true;
   }
-  if (vapidConfigured && vapidPublicKey && vapidPrivateKey) return true;
+
+  // 1. Check if both keys exist from env
+  if (isValidVapidKey(rawPublicKey, 80) && isValidVapidKey(rawPrivateKey, 40)) {
+    const pub = sanitizeVapidKey(rawPublicKey!);
+    const priv = sanitizeVapidKey(rawPrivateKey!);
+    try {
+      webPush.setVapidDetails(vapidSubject, pub, priv);
+      vapidPublicKey = pub;
+      vapidPrivateKey = priv;
+      vapidConfigured = true;
+      console.log('[WebPush-Audit] Web Push (VAPID) configured via environment variables.');
+      return true;
+    } catch (setErr: any) {
+      console.warn('[WebPush-Audit] Error configuring VAPID from env:', setErr?.message);
+    }
+  }
 
   try {
-    // 1. Try Firestore retrieval
+    // 2. Try Firestore retrieval from 'config/vapid' or 'configuraciones/vapid'
     const configRef = db.collection('config').doc('vapid');
     const configSnap = await configRef.get();
     
     if (configSnap.exists) {
       const data = configSnap.data();
-      if (isValidVapidKey(data?.publicKey, 80) && isValidVapidKey(data?.privateKey, 40)) {
-        const testPub = sanitizeVapidKey(data?.publicKey);
-        const testPriv = sanitizeVapidKey(data?.privateKey);
+      const pub = data?.publicKey ? sanitizeVapidKey(data.publicKey) : (isValidVapidKey(rawPublicKey, 80) ? sanitizeVapidKey(rawPublicKey!) : '');
+      const priv = data?.privateKey ? sanitizeVapidKey(data.privateKey) : '';
+      if (isValidVapidKey(pub, 80) && isValidVapidKey(priv, 40)) {
         try {
-          webPush.setVapidDetails(vapidSubject, testPub, testPriv);
-          vapidPublicKey = testPub;
-          vapidPrivateKey = testPriv;
+          webPush.setVapidDetails(vapidSubject, pub, priv);
+          vapidPublicKey = pub;
+          vapidPrivateKey = priv;
           vapidConfigured = true;
-          console.log('[WebPush-Audit] VAPID keys retrieved and verified from Firestore.');
+          console.log('[WebPush-Audit] VAPID keys retrieved and verified from Firestore (config/vapid).');
           return true;
         } catch (setErr: any) {
-          console.warn('[WebPush-Audit] Stored Firestore VAPID keys invalid, will regenerate:', setErr?.message);
+          console.warn('[WebPush-Audit] Stored Firestore VAPID keys invalid:', setErr?.message);
         }
       }
     }
 
-    // 2. Explicit failure if keys are missing from env and Firestore (DO NOT generate new keys)
-    console.error('[WebPush-Audit] ERROR CRÍTICO VAPID: No se encontraron claves VAPID configuradas en las variables de entorno ni en Firestore (config/vapid).');
-    vapidConfigured = false;
-    return false;
+    const configGlobalSnap = await db.collection('configuraciones').doc('vapid').get();
+    if (configGlobalSnap.exists) {
+      const data = configGlobalSnap.data();
+      const pub = data?.publicKey ? sanitizeVapidKey(data.publicKey) : (isValidVapidKey(rawPublicKey, 80) ? sanitizeVapidKey(rawPublicKey!) : '');
+      const priv = data?.privateKey ? sanitizeVapidKey(data.privateKey) : '';
+      if (isValidVapidKey(pub, 80) && isValidVapidKey(priv, 40)) {
+        try {
+          webPush.setVapidDetails(vapidSubject, pub, priv);
+          vapidPublicKey = pub;
+          vapidPrivateKey = priv;
+          vapidConfigured = true;
+          console.log('[WebPush-Audit] VAPID keys retrieved and verified from Firestore (configuraciones/vapid).');
+          return true;
+        } catch (setErr: any) {
+          console.warn('[WebPush-Audit] Stored Firestore configuraciones/vapid keys invalid:', setErr?.message);
+        }
+      }
+    }
   } catch (err: any) {
-    console.error('[WebPush-Audit] Critical error in ensureVapidConfig:', err?.message);
-    return false;
+    console.error('[WebPush-Audit] Critical error reading VAPID from Firestore:', err?.message);
   }
+
+  // Ensure public key is available for client subscriptions
+  if (isValidVapidKey(rawPublicKey, 80)) {
+    vapidPublicKey = sanitizeVapidKey(rawPublicKey!);
+  }
+
+  return Boolean(vapidConfigured && vapidPublicKey && vapidPrivateKey);
 }
 
 // Initial sync check (non-blocking)
@@ -107,13 +140,14 @@ if (vapidPublicKey && vapidPrivateKey) {
   }
 }
 
-export function getVapidPublicKey(): string | undefined {
-  return rawPublicKey || vapidPublicKey;
+export function getVapidPublicKey(): string {
+  return vapidPublicKey || (isValidVapidKey(rawPublicKey, 80) ? sanitizeVapidKey(rawPublicKey!) : DEFAULT_VAPID_PUBLIC_KEY);
 }
 
 export interface FcmNotificationPayload {
   title: string;
   body: string;
+  url?: string;
   data?: Record<string, string>;
   icon?: string;
   badge?: string;
@@ -133,7 +167,7 @@ export async function sendFcmNotificationToUser(
   }
 
   try {
-    console.log(`[FCM] Intentando notificar terapeuta: ${userId}`);
+    console.log(`[FCM] Intentando notificar usuario: ${userId}`);
 
     // 1. Obtener FCM token desde terapeutas/{userId}
     let fcmToken: string | null = null;
@@ -156,7 +190,17 @@ export async function sendFcmNotificationToUser(
       } catch {}
     }
 
-    // 3. Si aún no se encontró, buscar en push_subscriptions
+    // 3. Si no se encontró en users, buscar en clientes/{userId}
+    if (!fcmToken) {
+      try {
+        const clientDoc = await db.collection('clientes').doc(userId).get();
+        if (clientDoc.exists) {
+          fcmToken = clientDoc.data()?.fcmToken || null;
+        }
+      } catch {}
+    }
+
+    // 4. Si aún no se encontró, buscar en push_subscriptions
     if (!fcmToken) {
       try {
         const snap = await db.collection('push_subscriptions').where('userId', '==', userId).get();
@@ -170,7 +214,7 @@ export async function sendFcmNotificationToUser(
     }
 
     if (!fcmToken) {
-      console.log(`[FCM] Terapeuta ${userId} no tiene FCM token registrado.`);
+      console.log(`[FCM] Usuario ${userId} no tiene FCM token registrado.`);
       return { success: false, sentCount: 0, error: 'No FCM token' };
     }
 
@@ -194,6 +238,13 @@ export async function sendFcmNotificationToUser(
         sanitizedData[key] = String(val ?? '');
       }
     }
+    if (payload.url && !sanitizedData.url) {
+      sanitizedData.url = String(payload.url);
+    }
+
+    const deepLinkUrl = sanitizedData.bookingId 
+      ? `/terapeuta/servicios?bookingId=${sanitizedData.bookingId}` 
+      : (payload.url || '/terapeuta/servicios');
 
     const fcmMessage: Message = {
       token: fcmToken,
@@ -215,7 +266,7 @@ export async function sendFcmNotificationToUser(
           requireInteraction: true
         },
         fcmOptions: {
-          link: sanitizedData.bookingId ? '/terapeuta/servicios' : '/terapeuta'
+          link: deepLinkUrl
         }
       }
     };
@@ -427,3 +478,60 @@ export async function sendPushNotificationToUser(
     errors: webPushRes.errors 
   };
 }
+
+/**
+ * Broadcasts a high-priority push notification to all active administrators.
+ */
+export async function notifyAdmins(
+  db: Firestore,
+  payload: PushNotificationPayload
+): Promise<{ success: boolean; sentCount: number }> {
+  try {
+    const adminUids = new Set<string>();
+
+    // 1. From 'administradores' collection
+    try {
+      const snap = await db.collection('administradores').get();
+      snap.docs.forEach(doc => {
+        const d = doc.data();
+        if (d.estado !== 'inactivo' && d.estado !== 'bloqueado') {
+          adminUids.add(doc.id);
+        }
+      });
+    } catch (e) {
+      console.warn('[Push Notification] Error consultando administradores:', e);
+    }
+
+    // 2. From 'admins' fallback collection
+    try {
+      const snap = await db.collection('admins').get();
+      snap.docs.forEach(doc => {
+        const d = doc.data();
+        if (d.estado !== 'inactivo' && d.estado !== 'bloqueado') {
+          adminUids.add(doc.id);
+        }
+      });
+    } catch {}
+
+    // 3. From 'users' collection where rol == 'administrador'
+    try {
+      const snap = await db.collection('users').where('rol', '==', 'administrador').get();
+      snap.docs.forEach(doc => adminUids.add(doc.id));
+    } catch {}
+
+    let totalSent = 0;
+    for (const uid of adminUids) {
+      try {
+        const res = await sendPushNotificationToUser(db, uid, payload);
+        if (res.success && res.sentCount > 0) totalSent += res.sentCount;
+      } catch (err) {
+        console.warn(`[Push Notification] Error notificando admin ${uid}:`, err);
+      }
+    }
+    return { success: true, sentCount: totalSent };
+  } catch (err: any) {
+    console.warn('[Push Notification] Error general en notifyAdmins:', err);
+    return { success: false, sentCount: 0 };
+  }
+}
+

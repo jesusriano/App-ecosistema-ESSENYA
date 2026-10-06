@@ -6,7 +6,7 @@
 
 import { getToken } from 'firebase/messaging';
 import { getMessagingService, vapidKey, auth } from '../../lib/firebase';
-import { registerServiceWorker, getVapidPublicKeyFromServer } from '../services/pushService';
+import { registerServiceWorker, getVapidPublicKeyFromServer, urlBase64ToUint8Array } from '../services/pushService';
 
 export interface FirebaseTokenResult {
   success: boolean;
@@ -52,8 +52,49 @@ export async function getFirebaseRegistrationToken(userId?: string): Promise<Fir
       swRegistration = await navigator.serviceWorker.ready;
     }
 
-    // 4. Obtener el Token de Registro con el VAPID Key configurado (sincronizado con el servidor)
+    // 4. Obtener la VAPID Key activa sincronizada con el servidor
     const activeVapidKey = await getVapidPublicKeyFromServer();
+
+    // 5. Detectar y desuscribir de forma segura cualquier PushSubscription nativa previa creada con una VAPID antigua incompatible
+    if (swRegistration && 'pushManager' in swRegistration) {
+      try {
+        const existingSub = await swRegistration.pushManager.getSubscription();
+        if (existingSub) {
+          const activeBytes = urlBase64ToUint8Array(activeVapidKey);
+          const existingKey = existingSub.options?.applicationServerKey;
+          let isMatchingKey = false;
+
+          if (existingKey) {
+            const existingBytes = new Uint8Array(existingKey);
+            if (existingBytes.length === activeBytes.length) {
+              isMatchingKey = true;
+              for (let i = 0; i < existingBytes.length; i++) {
+                if (existingBytes[i] !== activeBytes[i]) {
+                  isMatchingKey = false;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (!isMatchingKey) {
+            console.warn('[FCM] Suscripción Push previa desalineada detectada. Eliminando suscripción antigua para sincronizar con la VAPID activa...');
+            try {
+              const unsubscribed = await existingSub.unsubscribe();
+              if (!unsubscribed) {
+                console.error('[FCM] Fallo al desuscribir la suscripción Push antigua incompatible.');
+              } else {
+                console.log('[FCM] Suscripción Push antigua eliminada con éxito. Procediendo a registrar con la VAPID actual.');
+              }
+            } catch (unsubErr) {
+              console.error('[FCM] Error técnico al intentar desuscribir la suscripción antigua:', unsubErr);
+            }
+          }
+        }
+      } catch (subCheckErr) {
+        console.warn('[FCM] Advertencia al verificar suscripción previa:', subCheckErr);
+      }
+    }
 
     // Sincronizar token de autenticación de usuario de Firebase si existe
     if (auth.currentUser) {

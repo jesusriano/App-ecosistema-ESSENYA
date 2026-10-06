@@ -487,12 +487,24 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []);
 
   const loadSensitiveInfo = useCallback(async (id: string) => {
+    if (!id || id.includes('demo') || id.startsWith('therapist-')) {
+      return;
+    }
+
+    const currentUid = auth.currentUser?.uid;
+    const isAdminSession = Boolean(sessions.administrador);
+    const isSelf = Boolean(currentUid && currentUid === id);
+
+    // RBAC: Only admin or the therapist herself can request confidential identification/banking data
+    if (!isAdminSession && !isSelf) {
+      return;
+    }
+
     console.log('[TherapistContext] loadSensitiveInfo called for therapist ID:', id);
     try {
       const privateInfoRef = doc(db, 'terapeutas', id, 'private_info', 'sensitive');
       const snap = await getDoc(privateInfoRef);
       if (snap.exists() && snap.data() && Object.keys(snap.data() || {}).length > 0) {
-        console.log('[TherapistContext] Sensitive info successfully found in private_info/sensitive for ID:', id, snap.data());
         let fullData = { ...snap.data() };
         // If master doc has banking data not in subcollection, merge it
         if (!fullData.banco || !fullData.numeroCuenta || !fullData.titularCuenta) {
@@ -511,40 +523,63 @@ export const TherapistProvider: React.FC<{ children: ReactNode }> = ({ children 
           ...prev,
           [id]: fullData
         }));
-      } else {
-        console.log('[TherapistContext] private_info/sensitive not found for ID:', id, '. Checking master doc fallback...');
-        const tSnap = await getDoc(doc(db, 'terapeutas', id));
-        if (tSnap.exists()) {
-          const tData = tSnap.data();
-          console.log('[TherapistContext] Sensitive info successfully loaded from master doc fallback for ID:', id);
-          setSensitiveInfo(prev => ({
-            ...prev,
-            [id]: {
-              curp: tData.curp || '',
-              ineNumber: tData.ineNumber || '',
-              cuentaBancariaCLABE: tData.cuentaBancariaCLABE || '',
-              banco: tData.banco || '',
-              numeroCuenta: tData.numeroCuenta || '',
-              titularCuenta: tData.titularCuenta || ''
+        return;
+      }
+
+      // If subcollection doc not found, check master doc fallback
+      const tSnap = await getDoc(doc(db, 'terapeutas', id));
+      if (tSnap.exists()) {
+        const tData = tSnap.data();
+        setSensitiveInfo(prev => ({
+          ...prev,
+          [id]: {
+            curp: tData.curp || '',
+            ineNumber: tData.ineNumber || '',
+            cuentaBancariaCLABE: tData.cuentaBancariaCLABE || '',
+            banco: tData.banco || '',
+            numeroCuenta: tData.numeroCuenta || '',
+            titularCuenta: tData.titularCuenta || ''
+          }
+        }));
+      }
+    } catch (err: any) {
+      // If direct Firestore read failed with permission error, try the secure backend endpoint fallback
+      const isPermissionErr = err?.code === 'permission-denied' || String(err?.message || '').toLowerCase().includes('permission');
+      if (isPermissionErr) {
+        try {
+          const token = await auth.currentUser?.getIdToken();
+          const headers: Record<string, string> = {};
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+
+          const res = await fetch(`/api/admin/therapist/${id}/sensitive`, { headers });
+          if (res.ok) {
+            const result = await res.json();
+            if (result.success && result.sensitive) {
+              setSensitiveInfo(prev => ({
+                ...prev,
+                [id]: result.sensitive
+              }));
+              return;
             }
-          }));
-        } else {
-          console.warn('[TherapistContext] Therapist document does not exist for ID:', id);
+          }
+        } catch (apiErr) {
+          console.warn('[TherapistContext] Sensitive info backend fallback failed:', apiErr);
         }
       }
-    } catch (err) {
-      console.error('[TherapistContext ERROR] Error loading sensitive info for therapist:', id, err);
+      console.warn('[TherapistContext] Notice: Sensitive info not accessible for therapist ID:', id, err?.message || err);
     }
-  }, []);
+  }, [sessions.administrador]);
 
-  // Automatically load sensitive info for all therapists
+  // Automatically load sensitive info ONLY for the current therapist herself (self-dossier)
+  // Non-admin users are strictly prevented from querying other therapists' confidential data (RBAC).
   useEffect(() => {
-    therapists.forEach(t => {
-      if (t && t.id && !sensitiveInfo[t.id]) {
-        loadSensitiveInfo(t.id);
-      }
-    });
-  }, [therapists, loadSensitiveInfo, sensitiveInfo]);
+    const currentUid = firebaseUser?.uid;
+    const isTherapist = Boolean(sessions.terapeuta);
+
+    if (isTherapist && currentUid && !sensitiveInfo[currentUid]) {
+      loadSensitiveInfo(currentUid);
+    }
+  }, [firebaseUser?.uid, sessions.terapeuta, loadSensitiveInfo, sensitiveInfo]);
 
   // Admin Operation: Create Therapist with Temporary Credentials
   const createTherapist = async (data: {
