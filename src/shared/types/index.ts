@@ -138,6 +138,7 @@ export interface Booking {
   clientId: string;
   clientName: string;
   clientPhone: string;
+  clientEmail?: string;
   clientAddress: string;
   cityZone: string;
   clientLat?: number;
@@ -197,6 +198,7 @@ export interface Booking {
   totalDurationMinutes?: number;
   requiresDualTherapist?: boolean;
   dualTherapistNote?: string;
+  notes?: string;
   adminNotes?: string;
   cancellationReason?: string;
   motivoRechazo?: string;

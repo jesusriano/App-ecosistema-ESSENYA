@@ -13,6 +13,8 @@ export const useAdmin = () => {
     auditLogs: ecosystem.auditLogs,
     activeInvoice: ecosystem.activeInvoice,
     setActiveInvoice: ecosystem.setActiveInvoice,
+    handleNewBooking: ecosystem.handleNewBooking,
+    handleCreateManualBooking: ecosystem.handleCreateManualBooking,
     handleUpdateBookingState: ecosystem.handleUpdateBookingState,
     handleAdminAcceptBooking: ecosystem.handleAdminAcceptBooking,
     handleAdminRejectBooking: ecosystem.handleAdminRejectBooking,

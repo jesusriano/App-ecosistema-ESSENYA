@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Sparkles, Plus, Edit, Trash2, CheckCircle2, 
   DollarSign, Clock, ShieldCheck, Tag, Star, Eye, EyeOff,
   Search, Filter, LayoutGrid, List, CheckSquare, Square,
-  AlertTriangle, RefreshCw, Wand2, Loader2, X
+  AlertTriangle, RefreshCw, Wand2, Loader2, X, Calendar
 } from 'lucide-react';
 import { useAdmin } from '../hooks/useAdmin';
 import { useToast } from '../../../shared/context/ToastContext';
@@ -12,6 +13,7 @@ import { ServiceItem } from '../../../shared/types';
 import { generateOrEditServiceImage } from '../../../shared/services/api';
 
 export const ServiciosPage: React.FC = () => {
+  const navigate = useNavigate();
   const { 
     services, 
     handleAddService, 
@@ -21,6 +23,11 @@ export const ServiciosPage: React.FC = () => {
     handleBulkToggleServices
   } = useAdmin();
   const { showToast } = useToast();
+
+  const handleScheduleService = (s: ServiceItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    navigate(`/admin/reservas?manualServiceId=${s.id}`);
+  };
 
   // Multi-selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -678,6 +685,15 @@ export const ServiciosPage: React.FC = () => {
                   {/* Actions */}
                   <div className="flex items-center space-x-1.5">
                     <button
+                      id={`btn-schedule-${s.id}`}
+                      onClick={(e) => handleScheduleService(s, e)}
+                      className="px-2.5 py-1.5 bg-[#C9A55B]/15 hover:bg-[#C9A55B]/25 border border-[#C9A55B]/40 text-[#C9A55B] rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px] font-bold"
+                      title="Agendar reserva manual con este masaje"
+                    >
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>Agendar</span>
+                    </button>
+                    <button
                       id={`btn-edit-${s.id}`}
                       onClick={(e) => handleOpenEdit(s, e)}
                       className="p-2 bg-[var(--bg-subcard)] hover:bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-primary)] hover:text-[#C9A55B] rounded-xl transition-all cursor-pointer"
@@ -816,6 +832,14 @@ export const ServiciosPage: React.FC = () => {
 
                       <td className="p-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end space-x-1.5">
+                          <button
+                            onClick={(e) => handleScheduleService(s, e)}
+                            className="px-2 py-1 bg-[#C9A55B]/15 hover:bg-[#C9A55B]/25 border border-[#C9A55B]/40 text-[#C9A55B] rounded-lg transition-all cursor-pointer flex items-center gap-1 text-[10px] font-bold"
+                            title="Agendar reserva manual con este masaje"
+                          >
+                            <Calendar className="w-3 h-3" />
+                            <span>Agendar</span>
+                          </button>
                           <button
                             onClick={(e) => handleOpenEdit(s, e)}
                             className="p-1.5 bg-[var(--bg-subcard)] hover:bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-primary)] hover:text-[#C9A55B] rounded-lg transition-all cursor-pointer"

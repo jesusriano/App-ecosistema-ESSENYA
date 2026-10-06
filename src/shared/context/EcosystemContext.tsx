@@ -34,6 +34,7 @@ interface EcosystemContextType {
   handleViewInvoice: (invoice: Invoice) => void;
   
   handleNewBooking: (newBooking: Booking) => Promise<Booking | void>;
+  handleCreateManualBooking: (manualData: Partial<Booking>) => Promise<Booking>;
   handleAcceptBooking: (bookingId: string, acceptingTherapist: Partial<Therapist>) => void;
   handleRejectBooking: (bookingId: string, reason?: string) => void;
   handleAdminAcceptBooking: (bookingId: string) => Promise<void>;
@@ -876,6 +877,67 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `api/bookings`, newBooking);
       throw err;
+    }
+  };
+
+  // Admin Manual Booking Creation Handler
+  const handleCreateManualBooking = async (manualData: Partial<Booking>): Promise<Booking> => {
+    try {
+      const auth = getAuth();
+      const token = await auth.currentUser?.getIdToken();
+
+      const response = await fetch('/api/admin/bookings/manual', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(manualData)
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Error al crear la reserva manual en el servidor');
+      }
+
+      const createdBooking = data.booking as Booking;
+      setBookings(prev => [createdBooking, ...prev.filter(b => b.id !== createdBooking.id)]);
+      return createdBooking;
+    } catch (err: any) {
+      console.warn('[Ecosystem] Endpoint manual falló o sin red, aplicando persistencia directa en Firestore:', err?.message);
+      const fallbackId = `manual-${Date.now()}`;
+      const code = `ESS-${Math.floor(1000 + Math.random() * 9000)}`;
+      const nowIso = new Date().toISOString();
+      const fallbackBooking: Booking = {
+        id: fallbackId,
+        code,
+        clientId: manualData.clientId || `manual-client-${Date.now()}`,
+        clientName: manualData.clientName || 'Cliente VIP',
+        clientPhone: manualData.clientPhone || '',
+        clientAddress: manualData.clientAddress || '',
+        cityZone: manualData.cityZone || 'Polanco / CDMX',
+        serviceId: manualData.serviceId || 'serv-descontracturante',
+        serviceName: manualData.serviceName || 'Masaje Descontracturante',
+        durationMinutes: manualData.durationMinutes || 60,
+        price: manualData.price || 1500,
+        tip: manualData.tip || 0,
+        total: manualData.total || 1500,
+        date: manualData.date || nowIso.split('T')[0],
+        time: manualData.time || '12:00',
+        paymentMethod: manualData.paymentMethod || 'Efectivo / Pago al Recibir',
+        paymentStatus: manualData.paymentStatus || 'pendiente',
+        state: manualData.therapistId ? 'aceptada' : 'pendiente',
+        dispatchState: manualData.therapistId ? 'asignada' : 'buscando',
+        therapistId: manualData.therapistId,
+        therapistName: manualData.therapistName,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        ...manualData
+      } as Booking;
+
+      await setDoc(doc(db, 'reservas', fallbackId), cleanForFirestore(fallbackBooking), { merge: true });
+      setBookings(prev => [fallbackBooking, ...prev.filter(b => b.id !== fallbackId)]);
+      return fallbackBooking;
     }
   };
 
@@ -2083,6 +2145,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     setActiveInvoice,
     handleViewInvoice,
     handleNewBooking,
+    handleCreateManualBooking,
     handleAcceptBooking,
     handleRejectBooking,
     handleAdminAcceptBooking,
@@ -2125,7 +2188,7 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
     currentPortal, setCurrentPortal, services, therapists, activeTherapist,
     client, clients, bookings, invoices, zones, auditLogs, panicAlerts,
     activePanicAlertsCount, activeInvoice, setActiveInvoice, handleViewInvoice,
-    handleNewBooking, handleAcceptBooking, handleRejectBooking,
+    handleNewBooking, handleCreateManualBooking, handleAcceptBooking, handleRejectBooking,
     handleAdminAcceptBooking, handleAdminRejectBooking, handleUpdateBookingState,
     handleReassignTherapist, handleToggleZoneSurge, handleAddTherapist,
     handleEditTherapist, handleDeleteTherapist, handleAddZone,

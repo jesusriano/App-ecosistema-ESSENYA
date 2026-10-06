@@ -3351,6 +3351,199 @@ app.post(["/api/admin/bookings/assign", "/api/admin/bookings/approve", "/api/boo
 });
 
 // ========================================================
+// POST /api/admin/bookings/manual - Create manual booking from Admin Panel
+// ========================================================
+app.post("/api/admin/bookings/manual", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const uid = user?.uid;
+    const email = user?.email || '';
+    if (!uid) return res.status(401).json({ success: false, error: "No autorizado." });
+
+    const adminCheck = await verifyAdminStatus(uid, email);
+    if (!adminCheck.isAdmin) {
+      return res.status(403).json({ success: false, error: "Solo administradores pueden crear reservas manuales." });
+    }
+
+    const {
+      clientName,
+      clientPhone,
+      clientEmail,
+      clientAddress,
+      cityZone = 'Polanco / CDMX',
+      serviceId = 'serv-descontracturante',
+      serviceName = 'Masaje Descontracturante',
+      durationMinutes = 60,
+      price = 1500,
+      tip = 0,
+      total = 1500,
+      date,
+      time,
+      therapistId,
+      paymentMethod = 'Efectivo / Pago al Recibir',
+      paymentStatus = 'pendiente',
+      notes = '',
+      preferences,
+      selectedExtras = []
+    } = req.body;
+
+    if (!clientName || !clientAddress || !date || !time) {
+      return res.status(400).json({ success: false, error: "Nombre de cliente, dirección, fecha y hora son obligatorios." });
+    }
+
+    const db = getAdminFirestore();
+    const newDocRef = db.collection('reservas').doc();
+    const bookingId = newDocRef.id;
+    const codeNum = Math.floor(1000 + Math.random() * 9000);
+    const code = `ESS-${codeNum}`;
+    const nowIso = new Date().toISOString();
+
+    let assignedTherapistData: any = null;
+    if (therapistId) {
+      const [tSnap, tpSnap, uSnap] = await Promise.all([
+        db.collection('terapeutas').doc(therapistId).get(),
+        db.collection('terapeutas_publicos').doc(therapistId).get(),
+        db.collection('users').doc(therapistId).get()
+      ]);
+      const tData = tSnap.exists ? tSnap.data() : (tpSnap.exists ? tpSnap.data() : (uSnap.exists ? uSnap.data() : {}));
+      assignedTherapistData = {
+        therapistId,
+        therapistName: tData?.name || tData?.nombre || [tData?.nombre, tData?.apellidos].filter(Boolean).join(' ') || 'Terapeuta Asignada',
+        therapistPhoto: tData?.photo || tData?.fotografia || '',
+        therapistPhone: tData?.phone || tData?.telefono || ''
+      };
+    }
+
+    const isDirectlyAssigned = Boolean(assignedTherapistData);
+    const state = isDirectlyAssigned ? 'aceptada' : 'pendiente';
+    const dispatchState = isDirectlyAssigned ? 'asignada' : 'buscando';
+
+    const bookingPayload: Record<string, any> = {
+      id: bookingId,
+      code,
+      clientId: req.body.clientId || `manual-client-${Date.now()}`,
+      clientName,
+      clientPhone: clientPhone || '',
+      clientEmail: clientEmail || '',
+      clientAddress,
+      cityZone,
+      serviceId,
+      serviceName,
+      durationMinutes: Number(durationMinutes),
+      totalDurationMinutes: Number(durationMinutes),
+      price: Number(price),
+      tip: Number(tip),
+      total: Number(total),
+      date,
+      time,
+      paymentMethod,
+      paymentStatus,
+      state,
+      dispatchState,
+      notes: notes || '',
+      preferences: preferences || {
+        genderPreference: 'sin_preferencia',
+        pressureLevel: 'Media',
+        essentialOil: 'Lavanda Francesa',
+        musicStyle: 'Acoustic Zen'
+      },
+      selectedExtras,
+      createdByAdmin: true,
+      adminUid: uid,
+      adminApproved: isDirectlyAssigned,
+      adminApprovedAt: isDirectlyAssigned ? nowIso : null,
+      therapistId: assignedTherapistData?.therapistId || null,
+      therapistName: assignedTherapistData?.therapistName || null,
+      therapistPhoto: assignedTherapistData?.therapistPhoto || null,
+      therapistPhone: assignedTherapistData?.therapistPhone || null,
+      therapistIds: isDirectlyAssigned ? [therapistId] : [],
+      assignedTherapistsCount: isDirectlyAssigned ? 1 : 0,
+      activeOfferTherapistIds: [],
+      activeOffers: [],
+      dispatchHistory: [{
+        action: 'manual_admin_creation',
+        adminUid: uid,
+        timestamp: nowIso,
+        details: `Reserva creada manualmente por el administrador.${isDirectlyAssigned ? ` Asignada a ${assignedTherapistData.therapistName}.` : ' Enviada a despacho automático.'}`
+      }],
+      createdAt: nowIso,
+      updatedAt: nowIso
+    };
+
+    await newDocRef.set(bookingPayload);
+
+    // Si se asignó terapeuta directamente, enviar notificación push a la terapeuta con Event ID
+    if (isDirectlyAssigned && therapistId) {
+      const therapistAssignEventId = `booking_${bookingId}_therapist_assigned_${therapistId}`;
+      acquireNotificationEventLock(db, therapistAssignEventId, {
+        bookingId,
+        state: 'aceptada',
+        recipientId: therapistId,
+        eventType: 'therapist_assigned'
+      }).then(async (lock) => {
+        if (lock.acquired) {
+          const tPushRes = await sendPushNotificationToUser(db, therapistId, {
+            title: '✨ Cita Asignada por Administración',
+            body: `Te ha sido asignado el servicio ${code} para el ${date} a las ${time} hrs (${serviceName}).`,
+            url: `/terapeuta/servicios?bookingId=${bookingId}`,
+            tag: `booking-assigned-${bookingId}`,
+            soundPreset: 'chime',
+            eventId: therapistAssignEventId,
+            data: { type: 'booking_assigned', bookingId }
+          });
+          await markNotificationEventCompleted(db, therapistAssignEventId, {
+            sentCount: tPushRes.sentCount,
+            channel: tPushRes.channel,
+            recipients: [therapistId]
+          });
+        }
+      }).catch(err => console.warn('[ManualBooking] Push error to therapist:', err));
+    } else {
+      // Disparar motor de despacho si no tiene terapeuta asignada
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
+      stepDispatchEngine(db, bookingId, apiKey).catch(e => {
+        console.warn("[ManualBooking] Initial step error for dispatch:", e);
+      });
+    }
+
+    // Crear factura administrativa interna
+    const invoiceRef = db.collection('invoices').doc();
+    await invoiceRef.set({
+      id: invoiceRef.id,
+      bookingId,
+      clientId: bookingPayload.clientId,
+      invoiceNumber: `ESS-FAC-2026-${Math.floor(100 + Math.random() * 900)}`,
+      date,
+      subtotal: Number((Number(total) * 0.84).toFixed(2)),
+      tax: Number((Number(total) * 0.16).toFixed(2)),
+      total: Number(total),
+      status: paymentStatus === 'pagado' ? 'pagada' : 'emitida',
+      createdAt: nowIso
+    }).catch(() => {});
+
+    // Registro de auditoría
+    const logRef = db.collection('logs').doc();
+    await logRef.set({
+      timestamp: nowIso,
+      actor: 'Administrador',
+      role: 'Director Operativo',
+      action: 'Creación Manual de Reserva',
+      details: `Reserva manual ${code} creada para ${clientName} (${serviceName}, $${total} MXN).`
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `Reserva ${code} creada exitosamente.${isDirectlyAssigned ? ` Asignada a ${assignedTherapistData.therapistName}.` : ''}`,
+      bookingId,
+      booking: bookingPayload
+    });
+  } catch (err: any) {
+    console.error("Error en /api/admin/bookings/manual:", err);
+    return res.status(500).json({ success: false, error: err.message || "Error al crear la reserva manual." });
+  }
+});
+
+// ========================================================
 // LIVE VOICE RECORDINGS ENDPOINTS (Therapist <-> Administration Sync)
 // ========================================================
 app.post("/api/recordings/upload", requireAuth, async (req: Request, res: Response) => {
