@@ -1,5 +1,11 @@
 import type { Firestore, Transaction } from 'firebase-admin/firestore';
-import { sendPushNotificationToUser, sendFcmNotificationToUser } from './pushNotificationService.js';
+import {
+  sendPushNotificationToUser,
+  sendFcmNotificationToUser,
+  notifyBookingStateTransition,
+  acquireNotificationEventLock,
+  markNotificationEventCompleted
+} from './pushNotificationService.js';
 
 export interface DispatchLevelConfig {
   maxEtaMinutes: number;
@@ -592,25 +598,45 @@ export async function stepDispatchEngine(
       details: `Solicitud despachada a ${cand.therapistName} (ETA estimado: ${cand.etaMinutes} min)`
     });
 
-    // Envío unificado al terapeuta (Prioriza FCM; si no tiene token, usa WebPush como fallback; exactamente 1 notificación lógica)
-    sendPushNotificationToUser(db, (cand as any).pushRecipientUid || cand.therapistId, {
-      title: '🔔 Masaje solicitado',
-      body: `${booking.serviceName || 'Masaje a Domicilio'} en ${booking.cityZone || 'tu zona'} (${booking.time || 'Ahora'} - ETA ${cand.etaMinutes} min)`,
-      url: `/terapeuta/servicios?bookingId=${bookingId}`,
-      tag: `booking-offer-${bookingId}`,
-      soundPreset: 'bell',
-      sound: '/sounds/notification_reservation.mp3',
-      data: {
-        type: 'NEW_BOOKING',
-        bookingId,
-        role: 'therapist',
-        bookingCode: String(booking.code || ''),
-        serviceName: String(booking.serviceName || ''),
-        cityZone: String(booking.cityZone || ''),
-        time: String(booking.time || ''),
-        etaMinutes: String(cand.etaMinutes || 0)
-      }
-    }).catch(e => console.warn('[Dispatch] Error enviando notificación unificada al terapeuta:', e));
+    // Envío unificado al terapeuta protegido con Event ID de oferta para evitar duplicados
+    const offerRecipientUid = (cand as any).pushRecipientUid || cand.therapistId;
+    const offerEventId = `booking_${bookingId}_offer_${cand.therapistId}_lvl_${levelConfigToExecute.maxEtaMinutes}`;
+    const offerLock = await acquireNotificationEventLock(db, offerEventId, {
+      bookingId,
+      state: 'pendiente',
+      recipientId: cand.therapistId,
+      eventType: 'dispatch_offer'
+    });
+
+    if (offerLock.acquired) {
+      sendPushNotificationToUser(db, offerRecipientUid, {
+        title: '🔔 Masaje solicitado',
+        body: `${booking.serviceName || 'Masaje a Domicilio'} en ${booking.cityZone || 'tu zona'} (${booking.time || 'Ahora'} - ETA ${cand.etaMinutes} min)`,
+        url: `/terapeuta/servicios?bookingId=${bookingId}`,
+        tag: `booking-offer-${bookingId}`,
+        soundPreset: 'bell',
+        sound: '/sounds/notification_reservation.mp3',
+        eventId: offerEventId,
+        data: {
+          type: 'NEW_BOOKING',
+          bookingId,
+          role: 'therapist',
+          bookingCode: String(booking.code || ''),
+          serviceName: String(booking.serviceName || ''),
+          cityZone: String(booking.cityZone || ''),
+          time: String(booking.time || ''),
+          etaMinutes: String(cand.etaMinutes || 0)
+        }
+      }).then(res => {
+        markNotificationEventCompleted(db, offerEventId, {
+          sentCount: res.sentCount,
+          channel: res.channel,
+          recipients: [offerRecipientUid]
+        });
+      }).catch(e => console.warn('[Dispatch] Error enviando notificación unificada al terapeuta:', e));
+    } else {
+      console.log(`[Dispatch] Oferta ya enviada previamente al terapeuta ${cand.therapistId} (EventID: ${offerEventId}). Omitiendo duplicado.`);
+    }
   }
 
   const updatePayload: Record<string, any> = {
@@ -887,19 +913,14 @@ export async function acceptDispatchOfferAtomic(
     });
   }
 
-  // Send native push notification to client
-  if (result.clientId) {
-    sendPushNotificationToUser(db, result.clientId, {
-      title: '✨ ¡Reserva Confirmada!',
-      body: `Tu terapeuta ${result.therapistName} ha aceptado tu servicio #${result.bookingCode}.`,
-      url: '/cliente',
-      tag: `booking-accepted-${bookingId}`,
-      soundPreset: 'classic',
-      sound: '/sounds/notification_accepted.mp3',
-      data: {
-        type: 'booking_accepted',
-        bookingId,
-        bookingCode: result.bookingCode
+  // Send native push notification to client with Event ID verification (guarantees exactly one call)
+  if (result.clientId && result.state === 'aceptada') {
+    notifyBookingStateTransition(db, bookingId, 'aceptada', {
+      eventId: `booking_${bookingId}_state_aceptada`,
+      bookingData: {
+        code: result.bookingCode,
+        therapistName: result.therapistName,
+        clientId: result.clientId
       }
     }).catch(e => console.warn('[Dispatch] Error sending acceptance push to client:', e));
   }

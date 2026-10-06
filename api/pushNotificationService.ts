@@ -311,6 +311,7 @@ export interface PushNotificationPayload {
   tag?: string;
   soundPreset?: string;
   sound?: string;
+  eventId?: string;
   data?: Record<string, any>;
 }
 
@@ -534,4 +535,397 @@ export async function notifyAdmins(
     return { success: false, sentCount: 0 };
   }
 }
+
+// ========================================================
+// IDEMPOTENCY & EVENT ID VERIFICATION ENGINE
+// ========================================================
+
+const processedEventIdsCache = new Map<string, number>();
+const EVENT_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
+
+export function isEventProcessedInMemory(eventId: string): boolean {
+  if (!eventId) return false;
+  const ts = processedEventIdsCache.get(eventId);
+  if (!ts) return false;
+  if (Date.now() - ts > EVENT_CACHE_TTL_MS) {
+    processedEventIdsCache.delete(eventId);
+    return false;
+  }
+  return true;
+}
+
+export function markEventProcessedInMemory(eventId: string): void {
+  if (!eventId) return;
+  if (processedEventIdsCache.size > 5000) {
+    const cutoff = Date.now() - EVENT_CACHE_TTL_MS;
+    for (const [k, v] of processedEventIdsCache.entries()) {
+      if (v < cutoff) processedEventIdsCache.delete(k);
+    }
+  }
+  processedEventIdsCache.set(eventId, Date.now());
+}
+
+/**
+ * Checks if an event ID has already been recorded or is currently being processed.
+ * Uses an atomic Firestore transaction + in-memory cache to guarantee exactly ONE execution.
+ */
+export async function acquireNotificationEventLock(
+  db: Firestore,
+  eventId: string,
+  metadata: {
+    bookingId?: string;
+    state?: string;
+    recipientId?: string;
+    eventType?: string;
+  }
+): Promise<{ acquired: boolean; reason?: string }> {
+  if (!eventId) return { acquired: true };
+
+  // 1. In-memory fast check (prevents millisecond duplicate triggers in same instance)
+  if (isEventProcessedInMemory(eventId)) {
+    return { acquired: false, reason: 'ALREADY_PROCESSED_IN_MEMORY' };
+  }
+
+  // 2. Persistent Firestore atomic check and lock
+  try {
+    const eventRef = db.collection('notification_events').doc(eventId);
+    const acquired = await db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(eventRef);
+      if (snap.exists) {
+        const data = snap.data();
+        if (data?.status === 'completed' || data?.status === 'processing') {
+          return false;
+        }
+      }
+      transaction.set(eventRef, {
+        eventId,
+        bookingId: metadata.bookingId || null,
+        state: metadata.state || null,
+        recipientId: metadata.recipientId || null,
+        eventType: metadata.eventType || (metadata.state ? `booking_state_${metadata.state}` : 'generic_event'),
+        status: 'processing',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      return true;
+    });
+
+    if (!acquired) {
+      markEventProcessedInMemory(eventId);
+      return { acquired: false, reason: 'ALREADY_EXISTS_IN_FIRESTORE' };
+    }
+
+    return { acquired: true };
+  } catch (err: any) {
+    console.warn(`[Push-Idempotency] Error al verificar lock de evento ${eventId} en Firestore:`, err?.message);
+    // If transaction failed due to contention or transient error, allow in memory lock check
+    return { acquired: true };
+  }
+}
+
+/**
+ * Updates an event ID record in Firestore and in-memory cache upon completion.
+ */
+export async function markNotificationEventCompleted(
+  db: Firestore,
+  eventId: string,
+  details: {
+    sentCount: number;
+    channel?: string;
+    error?: string;
+    recipients?: string[];
+  }
+): Promise<void> {
+  if (!eventId) return;
+  markEventProcessedInMemory(eventId);
+  try {
+    const eventRef = db.collection('notification_events').doc(eventId);
+    await eventRef.set({
+      status: details.error && details.sentCount === 0 ? 'failed' : 'completed',
+      sentCount: details.sentCount || 0,
+      channel: details.channel || 'none',
+      error: details.error || null,
+      recipients: details.recipients || [],
+      completedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (err: any) {
+    console.warn(`[Push-Idempotency] Error actualizando estado de evento ${eventId}:`, err?.message);
+  }
+}
+
+export interface BookingStateNotificationOptions {
+  eventId?: string;
+  bookingData?: Record<string, any>;
+  reason?: string;
+  sound?: string;
+  soundPreset?: string;
+  customTitle?: string;
+  customBody?: string;
+  url?: string;
+  tag?: string;
+}
+
+/**
+ * Centralized, idempotent notification dispatcher for booking state transitions.
+ * Guarantees EXACTLY ONE push notification is delivered per state transition
+ * using strict Event ID verification.
+ */
+export async function notifyBookingStateTransition(
+  db: Firestore,
+  bookingId: string,
+  newState: string,
+  options: BookingStateNotificationOptions = {}
+): Promise<{ success: boolean; sent: boolean; eventId: string; reason?: string; channel?: string; sentCount?: number }> {
+  if (!db || !bookingId || !newState) {
+    return { success: false, sent: false, eventId: '', reason: 'MISSING_PARAMETERS' };
+  }
+
+  // 1. Generate or verify deterministic Event ID
+  const eventId = options.eventId || `booking_${bookingId}_state_${newState}`;
+
+  // 2. Verify Event ID lock to prevent any duplicate calls
+  const lock = await acquireNotificationEventLock(db, eventId, {
+    bookingId,
+    state: newState,
+    eventType: `booking_state_${newState}`
+  });
+
+  if (!lock.acquired) {
+    console.log(`[Push-Deduplication] Omitiendo llamada duplicada para reserva ${bookingId} en estado '${newState}' (EventID: ${eventId}, Motivo: ${lock.reason})`);
+    return { success: true, sent: false, eventId, reason: lock.reason };
+  }
+
+  // 3. Obtain booking data
+  let bookingData = options.bookingData;
+  if (!bookingData) {
+    try {
+      const snap = await db.collection('reservas').doc(bookingId).get();
+      if (snap.exists) {
+        bookingData = snap.data();
+      }
+    } catch (e: any) {
+      console.warn(`[Push-Deduplication] Error leyendo reserva ${bookingId}:`, e?.message);
+    }
+  }
+
+  if (!bookingData) {
+    await markNotificationEventCompleted(db, eventId, { sentCount: 0, error: 'Reserva no encontrada' });
+    return { success: false, sent: false, eventId, reason: 'BOOKING_NOT_FOUND' };
+  }
+
+  console.log(`[Push-State] Procesando notificación única para reserva ${bookingId} -> estado: '${newState}' (EventID: ${eventId})`);
+
+  let sentCount = 0;
+  let primaryChannel: 'fcm' | 'webpush' | 'none' = 'none';
+  const recipients: string[] = [];
+
+  try {
+    const bookingCode = bookingData.code || bookingId;
+    const therapistName = bookingData.therapistName || 'Tu terapeuta';
+    const serviceName = bookingData.serviceName || 'Masaje ESSENYA';
+
+    if (newState === 'pendiente') {
+      const targetTherapistIds = [
+        bookingData.therapistId,
+        ...(Array.isArray(bookingData.activeOfferTherapistIds) ? bookingData.activeOfferTherapistIds : [])
+      ].filter(Boolean);
+
+      for (const tId of new Set(targetTherapistIds)) {
+        recipients.push(tId);
+        const res = await sendPushNotificationToUser(db, tId, {
+          title: options.customTitle || '🔔 Masaje solicitado',
+          body: options.customBody || `${serviceName} en ${bookingData.cityZone || 'tu zona'} (${bookingData.time || 'Ahora'})`,
+          url: options.url || `/terapeuta/servicios?bookingId=${bookingId}`,
+          tag: options.tag || `booking-offer-${bookingId}`,
+          soundPreset: (options.soundPreset || 'bell') as any,
+          sound: options.sound || '/sounds/notification_reservation.mp3',
+          data: { type: 'NEW_BOOKING', bookingId, bookingCode: String(bookingCode), state: 'pendiente' }
+        });
+        if (res.sentCount > 0) {
+          sentCount += res.sentCount;
+          primaryChannel = res.channel || 'fcm';
+        }
+      }
+    } else if (newState === 'aceptada') {
+      if (bookingData.clientId) {
+        recipients.push(bookingData.clientId);
+        const res = await sendPushNotificationToUser(db, bookingData.clientId, {
+          title: options.customTitle || '✨ ¡Reserva Confirmada!',
+          body: options.customBody || `Tu terapeuta ${therapistName} ha aceptado tu servicio #${bookingCode}.`,
+          url: options.url || '/cliente',
+          tag: options.tag || `booking-state-${bookingId}`,
+          soundPreset: (options.soundPreset || 'classic') as any,
+          sound: options.sound || '/sounds/notification_accepted.mp3',
+          data: { type: 'booking_accepted', bookingId, bookingCode: String(bookingCode), state: 'aceptada' }
+        });
+        if (res.sentCount > 0) {
+          sentCount += res.sentCount;
+          primaryChannel = res.channel || 'fcm';
+        }
+      }
+    } else if (newState === 'en_camino') {
+      if (bookingData.clientId) {
+        recipients.push(bookingData.clientId);
+        const res = await sendPushNotificationToUser(db, bookingData.clientId, {
+          title: options.customTitle || '🚗 Terapeuta En Camino',
+          body: options.customBody || `${therapistName} va en camino a tu domicilio.`,
+          url: options.url || '/cliente',
+          tag: options.tag || `booking-state-${bookingId}`,
+          soundPreset: (options.soundPreset || 'bell') as any,
+          sound: options.sound || '/sounds/notification_arrived.mp3',
+          data: { type: 'booking_state_update', bookingId, state: 'en_camino' }
+        });
+        if (res.sentCount > 0) {
+          sentCount += res.sentCount;
+          primaryChannel = res.channel || 'fcm';
+        }
+      }
+    } else if (newState === 'llegue') {
+      if (bookingData.clientId) {
+        recipients.push(bookingData.clientId);
+        const res = await sendPushNotificationToUser(db, bookingData.clientId, {
+          title: options.customTitle || '📍 ¡Terapeuta Ha Llegado!',
+          body: options.customBody || `${therapistName} ha llegado al domicilio.`,
+          url: options.url || '/cliente',
+          tag: options.tag || `booking-state-${bookingId}`,
+          soundPreset: (options.soundPreset || 'alert') as any,
+          sound: options.sound || '/sounds/notification_arrived.mp3',
+          data: { type: 'booking_state_update', bookingId, state: 'llegue' }
+        });
+        if (res.sentCount > 0) {
+          sentCount += res.sentCount;
+          primaryChannel = res.channel || 'fcm';
+        }
+      }
+    } else if (newState === 'servicio_iniciado') {
+      if (bookingData.clientId) {
+        recipients.push(bookingData.clientId);
+        const res = await sendPushNotificationToUser(db, bookingData.clientId, {
+          title: options.customTitle || '🌸 Sesión Iniciada',
+          body: options.customBody || `Tu masaje ${serviceName} ha comenzado. ¡Disfruta la experiencia ESSENYA!`,
+          url: options.url || '/cliente',
+          tag: options.tag || `booking-state-${bookingId}`,
+          soundPreset: (options.soundPreset || 'soft') as any,
+          sound: options.sound || '/sounds/notification_started.mp3',
+          data: { type: 'booking_state_update', bookingId, state: 'servicio_iniciado' }
+        });
+        if (res.sentCount > 0) {
+          sentCount += res.sentCount;
+          primaryChannel = res.channel || 'fcm';
+        }
+      }
+    } else if (newState === 'servicio_finalizado') {
+      if (bookingData.clientId) {
+        recipients.push(bookingData.clientId);
+        const res = await sendPushNotificationToUser(db, bookingData.clientId, {
+          title: options.customTitle || '✨ Sesión Finalizada',
+          body: options.customBody || `Tu experiencia ha concluido con éxito. ¡Gracias por confiar en ESSENYA!`,
+          url: options.url || '/cliente',
+          tag: options.tag || `booking-state-${bookingId}`,
+          soundPreset: (options.soundPreset || 'classic') as any,
+          sound: options.sound || '/sounds/notification_completed.mp3',
+          data: { type: 'booking_state_update', bookingId, state: 'servicio_finalizado' }
+        });
+        if (res.sentCount > 0) {
+          sentCount += res.sentCount;
+          primaryChannel = res.channel || 'fcm';
+        }
+      }
+    } else if (newState === 'cancelado') {
+      const targetTherapistIds = [
+        bookingData.therapistId,
+        bookingData.therapistId2,
+        ...(Array.isArray(bookingData.therapistIds) ? bookingData.therapistIds : [])
+      ].filter(Boolean);
+
+      const cancelReason = options.reason || bookingData.cancellationReason || 'Cancelación de servicio';
+
+      for (const tId of new Set(targetTherapistIds)) {
+        recipients.push(tId);
+        const res = await sendPushNotificationToUser(db, tId, {
+          title: options.customTitle || '⚠️ Cita Cancelada',
+          body: options.customBody || `El servicio ${bookingCode} para el ${bookingData.date || 'hoy'} ha sido cancelado. Motivo: ${cancelReason}.`,
+          url: options.url || '/terapeuta/servicios',
+          tag: options.tag || `booking-cancelled-${bookingId}`,
+          soundPreset: (options.soundPreset || 'gentle') as any,
+          data: { type: 'booking_cancelled', bookingId }
+        });
+        if (res.sentCount > 0) {
+          sentCount += res.sentCount;
+          primaryChannel = res.channel || 'fcm';
+        }
+      }
+
+      if (bookingData.clientId) {
+        recipients.push(bookingData.clientId);
+        const res = await sendPushNotificationToUser(db, bookingData.clientId, {
+          title: options.customTitle || '⚠️ Cita Cancelada',
+          body: options.customBody || `Tu reserva #${bookingCode} ha sido cancelada. Motivo: ${cancelReason}.`,
+          url: options.url || '/cliente',
+          tag: options.tag || `booking-cancelled-${bookingId}`,
+          soundPreset: (options.soundPreset || 'gentle') as any,
+          data: { type: 'booking_cancelled', bookingId }
+        });
+        if (res.sentCount > 0) {
+          sentCount += res.sentCount;
+          primaryChannel = res.channel || 'fcm';
+        }
+      }
+    } else {
+      // Estado genérico
+      if (bookingData.clientId) {
+        recipients.push(bookingData.clientId);
+        const res = await sendPushNotificationToUser(db, bookingData.clientId, {
+          title: options.customTitle || 'Actualización de Servicio',
+          body: options.customBody || `Tu reserva #${bookingCode} ha cambiado a estado: ${newState}`,
+          url: options.url || '/cliente',
+          tag: options.tag || `booking-state-${bookingId}`,
+          soundPreset: (options.soundPreset || 'classic') as any,
+          sound: options.sound || '/sounds/notification_default.mp3',
+          data: { type: 'booking_state_update', bookingId, state: newState }
+        });
+        if (res.sentCount > 0) {
+          sentCount += res.sentCount;
+          primaryChannel = res.channel || 'fcm';
+        }
+      }
+    }
+
+    // 4. Marcar evento como completado en Firestore y memoria
+    await markNotificationEventCompleted(db, eventId, {
+      sentCount,
+      channel: primaryChannel,
+      recipients
+    });
+
+    // 5. Registrar en la reserva la última notificación procesada
+    await db.collection('reservas').doc(bookingId).set({
+      lastNotifiedState: newState,
+      lastNotificationEventId: eventId,
+      lastNotificationAt: new Date().toISOString()
+    }, { merge: true }).catch(() => {});
+
+    return {
+      success: true,
+      sent: sentCount > 0,
+      eventId,
+      channel: primaryChannel,
+      sentCount
+    };
+  } catch (err: any) {
+    console.error(`[Push-State] Error enviando notificación de estado '${newState}' para reserva ${bookingId}:`, err);
+    await markNotificationEventCompleted(db, eventId, {
+      sentCount: 0,
+      error: err?.message || 'Error en envío de notificación'
+    });
+    return {
+      success: false,
+      sent: false,
+      eventId,
+      reason: err?.message
+    };
+  }
+}
+
 

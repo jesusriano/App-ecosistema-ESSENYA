@@ -25,10 +25,13 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('push', (event) => {
   console.log('[ServiceWorker] Push event received.');
 
+  const title = 'Nueva solicitud';
+  const body = 'El cliente ha solicitado un nuevo masaje.';
+
   // Default backup configuration for the ESSENYA ecosystem
   let data = {
-    title: '🔔 ESSENYA',
-    body: 'Tienes una nueva actualización en tu panel de bienestar.',
+    title: title,
+    body: body,
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     url: '/',
@@ -45,8 +48,8 @@ self.addEventListener('push', (event) => {
 
       // Support Firebase Cloud Messaging (FCM) payload formats
       if (payload.notification) {
-        data.title = payload.notification.title || data.title;
-        data.body = payload.notification.body || data.body;
+        data.title = payload.notification.title || title;
+        data.body = payload.notification.body || body;
         data.icon = payload.notification.icon || data.icon;
         data.badge = payload.notification.badge || data.badge;
       }
@@ -72,12 +75,12 @@ self.addEventListener('push', (event) => {
       };
 
       if (payload.notification) {
-        data.title = payload.notification.title || data.title;
-        data.body = payload.notification.body || data.body;
+        data.title = payload.notification.title || title;
+        data.body = payload.notification.body || body;
       }
     } catch (parseError) {
       console.warn('[ServiceWorker] Push payload is not valid JSON. Reading as plain text:', parseError);
-      data.body = event.data.text() || data.body;
+      data.body = event.data.text() || body;
     }
   }
 
@@ -118,9 +121,9 @@ self.addEventListener('push', (event) => {
    * Muestra la notificación con degradación progresiva (multi-tier fallback),
    * asegurando la visualización del título y mensaje en cualquier plataforma (iOS, Safari, Android, Windows, Mac).
    */
-  async function showNotificationRobust(title, options) {
-    const safeTitle = title || '🔔 ESSENYA';
-    const safeBody = options.body || 'Tienes una nueva actualización en tu panel.';
+  async function showNotificationRobust(notificationTitle, options) {
+    const safeTitle = notificationTitle || title || 'Nueva solicitud';
+    const safeBody = options.body || body || 'El cliente ha solicitado un nuevo masaje.';
 
     // Nivel 1: Opciones enriquecidas completas (para navegadores de escritorio y Android modernos)
     try {

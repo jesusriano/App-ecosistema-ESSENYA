@@ -5,7 +5,14 @@ import webPush from "web-push";
 import Stripe from "stripe";
 import { stripeService } from "./stripe-service.js";
 import { metaConversionsService } from "./meta-conversions-service.js";
-import { sendPushNotificationToUser, ensureVapidConfig, getVapidPublicKey } from "./pushNotificationService.js";
+import {
+  sendPushNotificationToUser,
+  ensureVapidConfig,
+  getVapidPublicKey,
+  notifyBookingStateTransition,
+  acquireNotificationEventLock,
+  markNotificationEventCompleted
+} from "./pushNotificationService.js";
 import * as adminApp from "firebase-admin/app";
 import * as adminAuth from "firebase-admin/auth";
 import * as adminFirestore from "firebase-admin/firestore";
@@ -3052,36 +3059,14 @@ app.post("/api/bookings/cancel", requireAuth, async (req, res) => {
       return { bookingId, refundedAmount: deduction, bookingData };
     });
 
-    // Notify assigned therapists and client immediately via push
+    // Notify assigned therapists and client immediately via idempotent push transition
     const db = getAdminFirestore();
     const bData = result.bookingData;
-    const targetTherapistIds = [
-      bData.therapistId,
-      bData.therapistId2,
-      ...(Array.isArray(bData.therapistIds) ? bData.therapistIds : [])
-    ].filter(Boolean);
-
-    for (const tId of new Set(targetTherapistIds)) {
-      sendPushNotificationToUser(db, tId, {
-        title: '⚠️ Cita Cancelada',
-        body: `El servicio ${bData.code || ''} para el ${bData.date} ha sido cancelado. Motivo: ${reason || 'Cancelación de servicio'}.`,
-        url: '/terapeuta/servicios',
-        tag: `booking-cancelled-${bookingId}`,
-        soundPreset: 'gentle',
-        data: { type: 'booking_cancelled', bookingId }
-      }).catch(e => console.warn('[Cancel] Push error to therapist:', e));
-    }
-
-    if (bData.clientId && bData.clientId !== uid) {
-      sendPushNotificationToUser(db, bData.clientId, {
-        title: '⚠️ Cita Cancelada',
-        body: `Tu servicio ${bData.code || ''} ha sido cancelado. Motivo: ${reason || 'Cancelación'}.`,
-        url: '/cliente',
-        tag: `booking-cancelled-${bookingId}`,
-        soundPreset: 'gentle',
-        data: { type: 'booking_cancelled', bookingId }
-      }).catch(e => console.warn('[Cancel] Push error to client:', e));
-    }
+    notifyBookingStateTransition(db, bookingId, 'cancelado', {
+      eventId: (req.body as any)?.eventId || `booking_${bookingId}_state_cancelado`,
+      bookingData: bData,
+      reason: reason || 'Cancelación de servicio'
+    }).catch(e => console.warn('[Cancel] Push transition error:', e));
 
     res.json({ success: true, message: "Reserva cancelada y saldo reembolsado exitosamente.", bookingId: result.bookingId, refundedAmount: result.refundedAmount });
   } catch (err: any) {
@@ -3300,25 +3285,43 @@ app.post(["/api/admin/bookings/assign", "/api/admin/bookings/approve", "/api/boo
 
     await bookingRef.update(updatePayload);
 
-    // Push notification to assigned therapist
-    sendPushNotificationToUser(db, therapistId, {
-      title: '✨ Cita Asignada por Administración',
-      body: `Te ha sido asignado el servicio ${bookingData.code || ''} para el ${bookingData.date} a las ${bookingData.time} hrs (${bookingData.serviceName || 'Masaje VIP'}).`,
-      url: '/terapeuta/servicios',
-      tag: `booking-assigned-${bookingId}`,
-      soundPreset: 'chime',
-      data: { type: 'booking_assigned', bookingId }
+    // Push notification to assigned therapist with dedicated Event ID verification
+    const therapistAssignEventId = `booking_${bookingId}_therapist_assigned_${therapistId}`;
+    acquireNotificationEventLock(db, therapistAssignEventId, {
+      bookingId,
+      state: 'aceptada',
+      recipientId: therapistId,
+      eventType: 'therapist_assigned'
+    }).then(async (lock) => {
+      if (lock.acquired) {
+        const tPushRes = await sendPushNotificationToUser(db, therapistId, {
+          title: '✨ Cita Asignada por Administración',
+          body: `Te ha sido asignado el servicio ${bookingData.code || ''} para el ${bookingData.date} a las ${bookingData.time} hrs (${bookingData.serviceName || 'Masaje VIP'}).`,
+          url: '/terapeuta/servicios',
+          tag: `booking-assigned-${bookingId}`,
+          soundPreset: 'chime',
+          eventId: therapistAssignEventId,
+          data: { type: 'booking_assigned', bookingId }
+        });
+        await markNotificationEventCompleted(db, therapistAssignEventId, {
+          sentCount: tPushRes.sentCount,
+          channel: tPushRes.channel,
+          recipients: [therapistId]
+        });
+      }
     }).catch(err => console.warn('[Assign] Push error to therapist:', err));
 
-    // Push notification to client
+    // Push notification to client with Event ID verification (guarantees exactly one call)
     if (bookingData.clientId) {
-      sendPushNotificationToUser(db, bookingData.clientId, {
-        title: '✨ Terapeuta Asignada a tu Cita',
-        body: `Tu servicio ${bookingData.code || ''} ha sido confirmado y asignado a ${therapistName}.`,
-        url: '/cliente',
-        tag: `booking-assigned-${bookingId}`,
-        soundPreset: 'chime',
-        data: { type: 'booking_assigned', bookingId }
+      notifyBookingStateTransition(db, bookingId, 'aceptada', {
+        eventId: (req.body as any)?.eventId || `booking_${bookingId}_state_aceptada`,
+        bookingData: {
+          ...bookingData,
+          therapistName
+        },
+        customTitle: '✨ Terapeuta Asignada a tu Cita',
+        customBody: `Tu servicio ${bookingData.code || ''} ha sido confirmado y asignado a ${therapistName}.`,
+        soundPreset: 'chime'
       }).catch(err => console.warn('[Assign] Push error to client:', err));
     }
 
@@ -3616,11 +3619,11 @@ app.put("/api/dispatch/config", requireAdmin, async (req: Request, res: Response
 });
 
 // ========================================================
-// POST /api/bookings/state - Update booking state & notify with sound
+// POST /api/bookings/state - Update booking state & notify with sound (Idempotent with Event ID)
 // ========================================================
 app.post("/api/bookings/state", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { bookingId, state } = req.body;
+    const { bookingId, state, eventId } = req.body;
     if (!bookingId || !state) {
       return res.status(400).json({ success: false, error: "bookingId y state son requeridos" });
     }
@@ -3636,46 +3639,19 @@ app.post("/api/bookings/state", requireAuth, async (req: Request, res: Response)
     const nowIso = new Date().toISOString();
     await bookingRef.update({ state, updatedAt: nowIso });
 
-    let title = "Actualización de Servicio";
-    let body = `Tu reserva #${bookingData.code || bookingId} ha cambiado a estado: ${state}`;
-    let sound = "/sounds/notification_default.mp3";
-    let soundPreset: string = "classic";
+    // Notificación Push única protegida por Event ID (evita duplicados)
+    const transitionEventId = eventId || `booking_${bookingId}_state_${state}`;
+    const notifyResult = await notifyBookingStateTransition(db, bookingId, state, {
+      eventId: transitionEventId,
+      bookingData: { ...bookingData, state }
+    });
 
-    if (state === "en_camino") {
-      title = "🚗 Terapeuta En Camino";
-      body = `${bookingData.therapistName || "Tu terapeuta"} va en camino a tu domicilio.`;
-      sound = "/sounds/notification_arrived.mp3";
-      soundPreset = "bell";
-    } else if (state === "llegue") {
-      title = "📍 ¡Terapeuta Ha Llegado!";
-      body = `${bookingData.therapistName || "Tu terapeuta"} ha llegado al domicilio.`;
-      sound = "/sounds/notification_arrived.mp3";
-      soundPreset = "alert";
-    } else if (state === "servicio_iniciado") {
-      title = "🌸 Sesión Iniciada";
-      body = `Tu masaje ${bookingData.serviceName || ""} ha comenzado. ¡Disfruta la experiencia ESSENYA!`;
-      sound = "/sounds/notification_started.mp3";
-      soundPreset = "soft";
-    } else if (state === "servicio_finalizado") {
-      title = "✨ Sesión Finalizada";
-      body = `Tu experiencia ha concluido con éxito. ¡Gracias por confiar en ESSENYA!`;
-      sound = "/sounds/notification_completed.mp3";
-      soundPreset = "classic";
-    }
-
-    if (bookingData.clientId) {
-      sendPushNotificationToUser(db, bookingData.clientId, {
-        title,
-        body,
-        url: "/cliente",
-        tag: `booking-state-${bookingId}`,
-        soundPreset,
-        sound,
-        data: { type: "booking_state_update", bookingId, state }
-      }).catch(e => console.warn("[Push] Error sending booking state push:", e));
-    }
-
-    res.json({ success: true, message: "Estado actualizado y notificación enviada." });
+    res.json({
+      success: true,
+      message: notifyResult.sent ? "Estado actualizado y notificación enviada." : "Estado actualizado (notificación previamente entregada, duplicado evitado).",
+      eventId: notifyResult.eventId,
+      duplicatePrevented: !notifyResult.sent
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -3808,39 +3784,24 @@ function initFirestoreBookingsTrigger() {
 
             await change.doc.ref.update(updates);
 
-            // Send automatic push notification to assigned therapists
-            const targetTherapistIds = [
-              data.therapistId,
-              data.therapistId2,
-              ...(Array.isArray(data.therapistIds) ? data.therapistIds : [])
-            ].filter(Boolean);
-
-            for (const tId of new Set(targetTherapistIds)) {
-              sendPushNotificationToUser(db, tId, {
-                title: '⚠️ Cita Cancelada',
-                body: `El servicio ${data.code || ''} para el ${data.date} ha sido cancelado automáticamente. Motivo: ${data.cancellationReason || 'Cancelación de servicio'}.`,
-                url: '/terapeuta/servicios',
-                tag: `booking-cancelled-${docId}`,
-                soundPreset: 'gentle',
-                data: { type: 'booking_cancelled', bookingId: docId }
-              }).catch(e => console.warn('[Trigger] Push error to therapist:', e));
-            }
-
-            // Send automatic push notification to client
-            if (data.clientId) {
-              sendPushNotificationToUser(db, data.clientId, {
-                title: '⚠️ Cita Cancelada',
-                body: `Tu reserva ${data.code || ''} ha sido cancelada exitosamente. Tu agenda ha sido actualizada.`,
-                url: '/cliente',
-                tag: `booking-cancelled-${docId}`,
-                soundPreset: 'gentle',
-                data: { type: 'booking_cancelled', bookingId: docId }
-              }).catch(e => console.warn('[Trigger] Push error to client:', e));
-            }
+            // Send automatic push notification to assigned therapists & client with Event ID verification
+            await notifyBookingStateTransition(db, docId, 'cancelado', {
+              eventId: `booking_${docId}_state_cancelado`,
+              bookingData: { ...data, ...updates },
+              reason: data.cancellationReason || 'Cancelación de servicio'
+            }).catch(e => console.warn('[Trigger] Push transition error for cancellation:', e));
           }
         }
 
-        // 2. TRIGGER EN CASO DE RESERVA NUEVA (Sin confirmación manual de administración)
+        // 2. TRIGGER EN CASO DE CAMBIO DE ESTADO DE RESERVA (Idempotente con Event ID)
+        if (change.type === 'modified' && data.state && ['en_camino', 'llegue', 'servicio_iniciado', 'servicio_finalizado', 'aceptada'].includes(data.state)) {
+          notifyBookingStateTransition(db, docId, data.state, {
+            eventId: `booking_${docId}_state_${data.state}`,
+            bookingData: data
+          }).catch(e => console.warn(`[Trigger] Push transition error for state ${data.state}:`, e));
+        }
+
+        // 3. TRIGGER EN CASO DE RESERVA NUEVA (Sin confirmación manual de administración)
         if (data.state === 'pendiente' && data.dispatchState === 'buscando' && (!data.dispatchStartedAt || (Array.isArray(data.activeOfferTherapistIds) && data.activeOfferTherapistIds.length === 0 && !data.dispatchExpiresAt))) {
           const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
           stepDispatchEngine(db, docId, apiKey).catch(e => {
