@@ -656,7 +656,7 @@ export const ServiciosPage: React.FC = () => {
 
                 {/* Footer Controls & Quick Switch */}
                 <div 
-                  className="p-5 pt-0 flex justify-between items-center border-t border-[var(--border-color)] mt-4 pt-3"
+                  className="p-4 sm:p-5 pt-0 flex flex-wrap justify-between items-center gap-2 border-t border-[var(--border-color)] mt-4 pt-3"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {/* Direct 1-Click Status Switch */}
@@ -683,7 +683,7 @@ export const ServiciosPage: React.FC = () => {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center space-x-1.5">
+                  <div className="flex items-center space-x-1.5 shrink-0">
                     <button
                       id={`btn-schedule-${s.id}`}
                       onClick={(e) => handleScheduleService(s, e)}
@@ -870,13 +870,13 @@ export const ServiciosPage: React.FC = () => {
 
       {/* Add / Edit Modal */}
       {showModal && (
-        <div id="modal-servicio" className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 max-w-xl w-full space-y-4 my-8 relative shadow-2xl">
-            <h2 className="text-xl font-serif font-bold text-[var(--text-primary)]">
+        <div id="modal-servicio" className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-4 sm:p-6 max-w-xl w-full space-y-4 my-auto max-h-[92vh] flex flex-col relative shadow-2xl">
+            <h2 className="text-lg sm:text-xl font-serif font-bold text-[var(--text-primary)] shrink-0">
               {editingService ? 'Editar Servicio de Bienestar' : 'Nuevo Servicio en Catálogo'}
             </h2>
 
-            <form onSubmit={handleSubmit} className="space-y-4 text-xs text-[var(--text-muted)]">
+            <form onSubmit={handleSubmit} className="space-y-4 text-xs text-[var(--text-muted)] overflow-y-auto pr-1">
               <div>
                 <label className="block mb-1 text-[var(--text-primary)] font-semibold">Nombre Oficial del Servicio</label>
                 <input
@@ -1049,16 +1049,16 @@ export const ServiciosPage: React.FC = () => {
                 </label>
               </div>
 
-              <div className="flex justify-end space-x-2 pt-4 border-t border-[var(--border-color)]">
+              <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-2 sm:space-x-2 pt-4 border-t border-[var(--border-color)] shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
                   disabled={isProcessing}
-                  className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer text-center"
                 >
                   Cancelar
                 </button>
-                <LuxuryButton type="submit" variant="gold" size="sm" disabled={isProcessing}>
+                <LuxuryButton type="submit" variant="gold" size="sm" disabled={isProcessing} className="w-full sm:w-auto justify-center">
                   {isProcessing ? 'Guardando...' : 'Guardar Servicio'}
                 </LuxuryButton>
               </div>

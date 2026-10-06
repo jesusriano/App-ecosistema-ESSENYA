@@ -858,32 +858,32 @@ export const ReservasPage: React.FC = () => {
 
       {/* Smart Therapist Assignment AI Modal */}
       {smartBookingModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[var(--bg-card)] border border-[#C9A55B]/40 rounded-3xl p-6 max-w-2xl w-full space-y-6 relative shadow-2xl">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-[var(--bg-card)] border border-[#C9A55B]/40 rounded-3xl p-4 sm:p-6 max-w-2xl w-full my-auto max-h-[92vh] flex flex-col space-y-4 sm:space-y-6 relative shadow-2xl">
             <button
               onClick={() => setSmartBookingModal(null)}
-              className="absolute right-5 top-5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+              className="absolute right-4 top-4 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="border-b border-[var(--border-color)] pb-4">
+            <div className="border-b border-[var(--border-color)] pb-3 sm:pb-4 shrink-0 pr-8">
               <div className="flex items-center gap-2 text-[#C9A55B]">
-                <Sparkles className="w-5 h-5 animate-spin" />
-                <span className="text-xs font-mono font-bold uppercase tracking-widest">
+                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 animate-spin shrink-0" />
+                <span className="text-[10px] sm:text-xs font-mono font-bold uppercase tracking-widest">
                   ALGORITMO DE RECOMENDACIÓN INTELIGENTE ESSENYA IA
                 </span>
               </div>
-              <h2 className="text-xl font-serif font-bold text-[var(--text-primary)] mt-1">
+              <h2 className="text-lg sm:text-xl font-serif font-bold text-[var(--text-primary)] mt-1">
                 Asignación Óptima para Servicio {smartBookingModal.code}
               </h2>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+              <p className="text-[11px] sm:text-xs text-[var(--text-muted)] mt-0.5">
                 Evaluando cercanía geográfica en {smartBookingModal.cityZone}, disponibilidad en horario ({smartBookingModal.time}), calificaciones e historial.
               </p>
             </div>
 
             {/* Candidate List */}
-            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+            <div className="space-y-3 overflow-y-auto pr-1">
               {calculateSmartCandidates(smartBookingModal).map((cand, idx) => (
                 <div
                   key={cand.therapist.id}
@@ -980,16 +980,17 @@ export const ReservasPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex justify-end space-x-2 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-2 pt-2">
               <button
                 onClick={() => setRescheduleBookingModal(null)}
-                className="px-4 py-2 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                className="w-full sm:w-auto px-4 py-2 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer text-center"
               >
                 Cancelar
               </button>
               <LuxuryButton
                 variant="gold"
                 size="sm"
+                className="w-full sm:w-auto justify-center"
                 onClick={() => {
                   if (!newDateInput || !newTimeInput) return;
                   handleRescheduleBooking(rescheduleBookingModal.id, newDateInput, newTimeInput);
@@ -1006,10 +1007,10 @@ export const ReservasPage: React.FC = () => {
 
       {/* Cancel Modal */}
       {cancelBookingModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[var(--bg-card)] border border-red-500/40 rounded-3xl p-6 max-w-md w-full space-y-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-[var(--bg-card)] border border-red-500/40 rounded-3xl p-5 sm:p-6 max-w-md w-full space-y-4">
             <h3 className="font-serif font-bold text-lg text-red-500 dark:text-red-400 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5" />
+              <AlertTriangle className="w-5 h-5 shrink-0" />
               <span>Cancelar Servicio de Forma Definitiva</span>
             </h3>
             <p className="text-xs text-[var(--text-muted)]">
@@ -1027,10 +1028,10 @@ export const ReservasPage: React.FC = () => {
               />
             </div>
 
-            <div className="flex justify-end space-x-2 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-2 pt-2">
               <button
                 onClick={() => setCancelBookingModal(null)}
-                className="px-4 py-2 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                className="w-full sm:w-auto px-4 py-2 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer text-center"
               >
                 Regresar
               </button>
@@ -1041,7 +1042,7 @@ export const ReservasPage: React.FC = () => {
                   setCancelBookingModal(null);
                   setCancelReasonInput('');
                 }}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer"
+                className="w-full sm:w-auto px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer text-center"
               >
                 Confirmar Cancelación
               </button>
@@ -1052,10 +1053,10 @@ export const ReservasPage: React.FC = () => {
 
       {/* Reject Modal */}
       {rejectBookingModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[var(--bg-card)] border border-rose-500/40 rounded-3xl p-6 max-w-md w-full space-y-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-[var(--bg-card)] border border-rose-500/40 rounded-3xl p-5 sm:p-6 max-w-md w-full space-y-4">
             <h3 className="font-serif font-bold text-lg text-rose-500 dark:text-rose-400 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5" />
+              <AlertTriangle className="w-5 h-5 shrink-0" />
               <span>Rechazar Solicitud de Reserva</span>
             </h3>
             <p className="text-xs text-[var(--text-muted)]">
@@ -1089,21 +1090,21 @@ export const ReservasPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex justify-end space-x-2 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-2 pt-2">
               <button
                 disabled={!!processingId}
                 onClick={() => {
                   setRejectBookingModal(null);
                   setRejectReasonInput('');
                 }}
-                className="px-4 py-2 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer disabled:opacity-50"
+                className="w-full sm:w-auto px-4 py-2 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer disabled:opacity-50 text-center"
               >
                 Cancelar
               </button>
               <button
                 disabled={!!processingId || !rejectReasonInput.trim()}
                 onClick={onRejectBooking}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                className="w-full sm:w-auto px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1"
               >
                 {processingId ? (
                   <span>Procesando...</span>
@@ -1121,21 +1122,21 @@ export const ReservasPage: React.FC = () => {
 
       {/* Modal: Agendar Servicio Manual / Nueva Reserva */}
       {showManualModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-[var(--bg-card)] border border-[#C9A55B]/40 rounded-3xl p-5 sm:p-7 max-w-2xl w-full my-8 space-y-6 shadow-2xl relative">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto">
+          <div className="bg-[var(--bg-card)] border border-[#C9A55B]/40 rounded-3xl p-4 sm:p-7 max-w-2xl w-full my-auto max-h-[92vh] flex flex-col space-y-4 sm:space-y-6 shadow-2xl relative">
             {/* Header */}
-            <div className="flex justify-between items-start border-b border-[var(--border-color)] pb-4">
-              <div className="space-y-1">
+            <div className="flex justify-between items-start border-b border-[var(--border-color)] pb-3 sm:pb-4 shrink-0">
+              <div className="space-y-1 pr-2">
                 <div className="flex items-center gap-2">
                   <span className="bg-[#C9A55B]/15 text-[#C9A55B] text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-[#C9A55B]/30 uppercase tracking-widest">
                     Módulo Operativo Manual
                   </span>
                 </div>
-                <h3 className="font-serif font-bold text-xl text-[var(--text-primary)] flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-[#C9A55B]" />
+                <h3 className="font-serif font-bold text-lg sm:text-xl text-[var(--text-primary)] flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-[#C9A55B] shrink-0" />
                   <span>Agendar Servicio de Masaje Manual</span>
                 </h3>
-                <p className="text-xs text-[var(--text-muted)]">
+                <p className="text-[11px] sm:text-xs text-[var(--text-muted)]">
                   Crea e ingresa manualmente una cita de bienestar en el sistema, asigna terapeuta directa o activa el motor de despacho.
                 </p>
               </div>
@@ -1143,27 +1144,27 @@ export const ReservasPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowManualModal(false)}
-                className="p-1.5 rounded-xl bg-[var(--bg-subcard)] hover:bg-[var(--bg-active)] text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border-color)] cursor-pointer transition-colors"
+                className="p-1.5 rounded-xl bg-[var(--bg-subcard)] hover:bg-[var(--bg-active)] text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border-color)] cursor-pointer transition-colors shrink-0"
                 title="Cerrar ventana"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={onSubmitManualBooking} className="space-y-6">
+            <form onSubmit={onSubmitManualBooking} className="space-y-4 sm:space-y-6 overflow-y-auto pr-1">
               {/* 1. SELECCIÓN DE CLIENTE */}
-              <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-2xl p-4 space-y-3">
-                <div className="flex justify-between items-center">
+              <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-2xl p-3 sm:p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                   <span className="text-xs font-serif font-bold text-[var(--text-primary)] flex items-center gap-1.5">
                     <User className="w-4 h-4 text-[#C9A55B]" />
                     <span>Datos del Cliente VIP</span>
                   </span>
 
-                  <div className="flex items-center bg-[var(--bg-card)] p-0.5 rounded-xl border border-[var(--border-color)] text-[11px]">
+                  <div className="flex items-center bg-[var(--bg-card)] p-0.5 rounded-xl border border-[var(--border-color)] text-[11px] w-full sm:w-auto">
                     <button
                       type="button"
                       onClick={() => setManualClientMode('nuevo')}
-                      className={`px-2.5 py-1 rounded-lg font-semibold cursor-pointer transition-all ${
+                      className={`flex-1 sm:flex-initial px-3 py-1 rounded-lg font-semibold cursor-pointer transition-all text-center ${
                         manualClientMode === 'nuevo'
                           ? 'bg-[#C9A55B] text-black font-bold'
                           : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
@@ -1174,7 +1175,7 @@ export const ReservasPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setManualClientMode('existente')}
-                      className={`px-2.5 py-1 rounded-lg font-semibold cursor-pointer transition-all ${
+                      className={`flex-1 sm:flex-initial px-3 py-1 rounded-lg font-semibold cursor-pointer transition-all text-center ${
                         manualClientMode === 'existente'
                           ? 'bg-[#C9A55B] text-black font-bold'
                           : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
@@ -1297,7 +1298,7 @@ export const ReservasPage: React.FC = () => {
               </div>
 
               {/* 2. SERVICIO DE MASAJE & DURACIÓN */}
-              <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-2xl p-4 space-y-3">
+              <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-2xl p-3 sm:p-4 space-y-3">
                 <span className="text-xs font-serif font-bold text-[var(--text-primary)] flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-[#C9A55B]" />
                   <span>Ritual de Masaje & Duración</span>
@@ -1384,7 +1385,7 @@ export const ReservasPage: React.FC = () => {
               </div>
 
               {/* 3. PROGRAMACIÓN & ASIGNACIÓN */}
-              <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-2xl p-4 space-y-3">
+              <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-2xl p-3 sm:p-4 space-y-3">
                 <span className="text-xs font-serif font-bold text-[var(--text-primary)] flex items-center gap-1.5">
                   <Clock className="w-4 h-4 text-[#C9A55B]" />
                   <span>Programación de Agenda & Masajista</span>
@@ -1450,7 +1451,7 @@ export const ReservasPage: React.FC = () => {
               </div>
 
               {/* 4. PAGO & PREFERENCIAS */}
-              <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-2xl p-4 space-y-3">
+              <div className="bg-[var(--bg-subcard)] border border-[var(--border-color)] rounded-2xl p-3 sm:p-4 space-y-3">
                 <span className="text-xs font-serif font-bold text-[var(--text-primary)] flex items-center gap-1.5">
                   <Banknote className="w-4 h-4 text-[#C9A55B]" />
                   <span>Método de Pago & Preferencias del Ritual</span>
@@ -1561,12 +1562,12 @@ export const ReservasPage: React.FC = () => {
               </div>
 
               {/* Botones de acción del Modal */}
-              <div className="flex justify-end items-center gap-3 pt-3 border-t border-[var(--border-color)]">
+              <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-2.5 sm:gap-3 pt-3 border-t border-[var(--border-color)] shrink-0">
                 <button
                   type="button"
                   disabled={isSubmittingManual}
                   onClick={() => setShowManualModal(false)}
-                  className="px-4 py-2.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-xl cursor-pointer transition-colors disabled:opacity-50"
+                  className="w-full sm:w-auto px-4 py-2.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-xl cursor-pointer transition-colors disabled:opacity-50 text-center"
                 >
                   Cancelar
                 </button>
@@ -1576,15 +1577,15 @@ export const ReservasPage: React.FC = () => {
                   variant="gold"
                   size="md"
                   disabled={isSubmittingManual}
-                  className="px-6 py-2.5 shadow-lg"
+                  className="w-full sm:w-auto px-6 py-2.5 shadow-lg justify-center"
                 >
                   {isSubmittingManual ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center gap-2">
                       <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
                       <span>Agendando servicio...</span>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 font-bold">
+                    <div className="flex items-center justify-center gap-2 font-bold">
                       <CheckCircle2 className="w-4 h-4" />
                       <span>Crear y Confirmar Cita</span>
                     </div>

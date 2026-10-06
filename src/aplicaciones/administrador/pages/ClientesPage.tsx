@@ -393,8 +393,8 @@ export const ClientesPage: React.FC = () => {
 
       {/* Edit Client Modal */}
       {editClientModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-4 sm:p-6 max-w-lg w-full space-y-4 my-auto max-h-[92vh] overflow-y-auto shadow-2xl">
             <h3 className="font-serif font-bold text-lg text-[var(--text-primary)]">Editar Expediente VIP</h3>
 
             <form onSubmit={handleSaveClient} className="space-y-3 text-xs text-[var(--text-muted)]">
@@ -477,15 +477,15 @@ export const ClientesPage: React.FC = () => {
                 />
               </div>
 
-              <div className="flex justify-end space-x-2 pt-3 border-t border-[var(--border-color)]">
+              <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-2 pt-3 border-t border-[var(--border-color)]">
                 <button
                   type="button"
                   onClick={() => setEditClientModal(null)}
-                  className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                  className="w-full sm:w-auto px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer text-center"
                 >
                   Cancelar
                 </button>
-                <LuxuryButton type="submit" variant="gold" size="sm">
+                <LuxuryButton type="submit" variant="gold" size="sm" className="w-full sm:w-auto justify-center">
                   Guardar Cambios
                 </LuxuryButton>
               </div>
