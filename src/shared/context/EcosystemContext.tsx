@@ -63,7 +63,7 @@ interface EcosystemContextType {
   handleToggleBlockClient: (clientId: string) => void;
   handleDeleteClient: (clientId: string) => Promise<void>;
   
-  handleRescheduleBooking: (bookingId: string, newDate: string, newTime: string) => void;
+  handleRescheduleBooking: (bookingId: string, newDate: string, newTime: string, preferences?: any, notes?: string, clientAddress?: string) => Promise<void> | void;
   handleCancelBooking: (bookingId: string, reason: string) => void;
   handleConfirmPayment: (bookingId: string) => void;
   handleRejectPayment: (bookingId: string, reason: string) => void;
@@ -1889,7 +1889,14 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   // Booking Operational Handlers
-  const handleRescheduleBooking = async (bookingId: string, newDate: string, newTime: string) => {
+  const handleRescheduleBooking = async (
+    bookingId: string, 
+    newDate: string, 
+    newTime: string,
+    preferences?: any,
+    notes?: string,
+    clientAddress?: string
+  ) => {
     try {
       const auth = getAuth();
       const token = await auth.currentUser?.getIdToken();
@@ -1900,21 +1907,24 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ bookingId, newDate, newTime })
+        body: JSON.stringify({ bookingId, newDate, newTime, preferences, notes, clientAddress })
       });
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || 'No fue posible reprogramar la reserva.');
+        throw new Error(data.error || 'No fue posible reprogramar o modificar la reserva.');
       }
 
       setBookings(prev => prev.map(b => {
         if (b.id === bookingId) {
           return { 
             ...b, 
-            date: newDate, 
-            time: newTime,
+            date: newDate || b.date, 
+            time: newTime || b.time,
+            preferences: preferences ? { ...(b.preferences || {}), ...preferences } : b.preferences,
+            notes: notes !== undefined ? notes : b.notes,
+            clientAddress: clientAddress !== undefined ? clientAddress : b.clientAddress,
             updatedAt: new Date().toISOString()
           };
         }
@@ -1924,11 +1934,11 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       addLog(
         'Operaciones',
         'Sistema',
-        'Reprogramación de Servicio',
-        `Reserva ${bookingId} reprogramada para fecha ${newDate} a las ${newTime}.`
+        'Modificación/Reprogramación de Servicio',
+        `Reserva ${bookingId} modificada/reprogramada exitosamente (fecha: ${newDate || 'sin cambio'}, hora: ${newTime || 'sin cambio'}).`
       );
     } catch (err: any) {
-      console.error("Error al reprogramar reserva:", err);
+      console.error("Error al reprogramar/modificar reserva:", err);
       throw err;
     }
   };

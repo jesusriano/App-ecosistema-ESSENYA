@@ -894,7 +894,7 @@ export const TherapistRegistrationForm: React.FC<TherapistRegistrationFormProps>
 
                     <h4 className="font-bold text-[#1C1917] dark:text-white uppercase tracking-wider">3. Cumplimiento Operativo</h4>
                     <p>
-                      Las citas agendadas a través de la plataforma Sennia deben cumplirse puntualmente. Las cancelaciones o reprogramaciones deben notificarse con al menos 4 horas de anticipación a través del canal oficial.
+                      Las citas agendadas a través de la plataforma ESSENYA deben cumplirse puntualmente. Las cancelaciones o reprogramaciones deben notificarse con al menos 5 horas de anticipación a través del canal oficial.
                     </p>
 
                     <h4 className="font-bold text-[#1C1917] dark:text-white uppercase tracking-wider">4. Veracidad de Documentos</h4>

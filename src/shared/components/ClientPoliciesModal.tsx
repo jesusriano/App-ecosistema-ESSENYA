@@ -117,30 +117,30 @@ export const ClientPoliciesModal: React.FC<ClientPoliciesModalProps> = ({
                 <div className="space-y-1.5 pl-2 border-l-2 border-[#C9A55B]/40">
                   <h4 className="font-bold text-[#806020] dark:text-[#C9A55B] flex items-center gap-1.5">
                     <Wallet className="w-3.5 h-3.5" />
-                    <span>Abono a Billetera Virtual (Mín. 4 Horas)</span>
+                    <span>Abono a Billetera Virtual (Mín. 5 Horas)</span>
                   </h4>
                   <p className="text-[#6B655F] dark:text-[#CCCCCC]">
-                    Con un mínimo de <strong>4 horas de anticipación</strong> a tu cita, el <strong>100% de tu saldo pagado</strong> se abona en tu Billetera Virtual ESSENYA de manera automática para ser usado cuando desees en cualquier servicio.
+                    Con un mínimo de <strong>5 horas de anticipación</strong> a tu cita, el <strong>100% de tu saldo pagado</strong> se abona en tu Billetera Virtual ESSENYA de manera automática para ser usado cuando desees en cualquier servicio (el dinero no se devuelve a la tarjeta bancaria, queda 100% disponible como saldo a favor en la aplicación).
                   </p>
                 </div>
 
                 <div className="space-y-1.5 pl-2 border-l-2 border-[#C9A55B]/40">
                   <h4 className="font-bold text-[#806020] dark:text-[#C9A55B] flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5" />
-                    <span>Reagendación Flexible</span>
+                    <span>Reagendación / Modificación Flexible</span>
                   </h4>
                   <p className="text-[#6B655F] dark:text-[#CCCCCC]">
-                    Puedes reprogramar tu fecha y hora sin costo alguno con al menos 4 horas de anticipación desde el portal.
+                    Puedes reprogramar tu fecha y hora sin costo alguno con al menos 5 horas de anticipación desde el portal, o modificar tus preferencias de masaje en cualquier momento.
                   </p>
                 </div>
 
                 <div className="space-y-1.5 pl-2 border-l-2 border-red-500/40">
                   <h4 className="font-bold text-red-600 dark:text-red-400 flex items-center gap-1.5">
                     <AlertTriangle className="w-3.5 h-3.5" />
-                    <span>Cancelaciones con Menos de 4 Horas</span>
+                    <span>Cancelaciones con Menos de 5 Horas</span>
                   </h4>
                   <p className="text-[#6B655F] dark:text-[#CCCCCC]">
-                    Cancelaciones con menos de 4 horas o ausencia en el domicilio no admiten reembolso ni abono a billetera, cubriendo los traslados y el bloqueo exclusivo de agenda de la terapeuta.
+                    Cancelaciones con menos de 5 horas o ausencia en el domicilio no admiten reembolso ni abono a billetera, cubriendo los traslados y el bloqueo exclusivo de agenda de la terapeuta.
                   </p>
                 </div>
               </div>

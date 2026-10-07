@@ -3002,11 +3002,11 @@ app.post("/api/bookings/cancel", requireAuth, async (req, res) => {
         throw new Error("No es posible cancelar un servicio que ya está en curso o finalizado.");
       }
 
-      // 4-Hour Notice Rule check for client cancellations
+      // 5-Hour Notice Rule check for client cancellations
       if (bookingData.clientId === uid && !isAdmin) {
         const hoursRem = calculateHoursRemaining(bookingData.date, bookingData.time);
-        if (hoursRem < 4) {
-          throw new Error("Esta reserva ya no puede cancelarse porque faltan menos de 4 horas para el inicio del servicio.");
+        if (hoursRem < 5) {
+          throw new Error("Esta reserva ya no puede cancelarse porque faltan menos de 5 horas para el inicio del servicio.");
         }
       }
 
@@ -3016,33 +3016,69 @@ app.post("/api/bookings/cancel", requireAuth, async (req, res) => {
       }
 
       const clientUid = bookingData.clientId;
-      const deduction = bookingData.walletDeduction || 0;
+      const isPaid = bookingData.paymentStatus === 'pagado' || 
+                     bookingData.paid === true || 
+                     ['pagado', 'paid', 'completado'].includes(bookingData.paymentStatus);
+      const totalAmount = Number(bookingData.total || 0);
+      const walletUsed = Number(bookingData.walletDeduction || 0);
+      const servicePrice = Number(bookingData.servicePrice || bookingData.price || 0);
 
-      // Refund wallet balance if any was used
-      if (deduction > 0) {
+      // Si la reserva ya fue pagada (tarjeta, Stripe, saldo o mixta):
+      // El dinero NO se devuelve a la tarjeta, se abona íntegramente a la billetera ESSENYA del cliente.
+      let refundAmount = 0;
+      if (isPaid) {
+        refundAmount = totalAmount > 0 ? totalAmount : (walletUsed > 0 ? walletUsed : servicePrice);
+      } else if (walletUsed > 0) {
+        refundAmount = walletUsed;
+      }
+
+      // Refund to wallet balance if paid or wallet was used
+      if (refundAmount > 0 && clientUid) {
         const refundCardRef = getAdminFirestore().collection('clientes').doc(clientUid).collection('billetera').doc();
         t.set(refundCardRef, {
-          code: `REFUND-${bookingData.code}`,
-          title: `Reembolso Reserva ${bookingData.code}`,
-          initialAmount: deduction,
-          currentBalance: deduction,
+          code: `REFUND-${bookingData.code || bookingId.slice(0, 6).toUpperCase()}`,
+          title: `Reembolso Reserva #${bookingData.code || ''}`,
+          initialAmount: refundAmount,
+          purchasePrice: refundAmount,
+          currentBalance: refundAmount,
           status: 'activa',
           expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           createdAt: new Date().toISOString(),
           isGiftForSomeoneElse: false,
-          history: []
+          senderName: 'ESSENYA Concierge',
+          recipientName: bookingData.clientName || 'Cliente',
+          customMessage: `Reembolso automático de $${refundAmount} MXN acreditado en tu Billetera Virtual ESSENYA por cancelación de la reserva #${bookingData.code || ''}. Saldo disponible de inmediato para nuevas citas en la aplicación.`,
+          history: [
+            {
+              id: `tx-${Date.now()}`,
+              date: new Date().toISOString(),
+              bookingCode: bookingData.code,
+              serviceName: bookingData.serviceName,
+              amountDeducted: 0,
+              remainingBalance: refundAmount,
+              description: `Abono de $${refundAmount} MXN a saldo en billetera por cancelación anticipada.`
+            }
+          ]
         });
 
         // Add ledger entry
         const ledgerRef = getAdminFirestore().collection('clientes').doc(clientUid).collection('wallet_ledger').doc();
         t.set(ledgerRef, {
           type: 'CREDIT',
-          amount: deduction,
+          amount: refundAmount,
           source: 'BOOKING_REFUND',
           referenceId: bookingId,
+          bookingCode: bookingData.code,
           timestamp: new Date().toISOString(),
-          description: `Reembolso por cancelación de reserva ${bookingData.code}`
+          description: `Reembolso automático a billetera por cancelación de reserva #${bookingData.code || ''} ($${refundAmount} MXN)`
         });
+
+        // Update client doc lastWalletRefund timestamp
+        const clientRef = getAdminFirestore().collection('clientes').doc(clientUid);
+        t.set(clientRef, {
+          lastWalletRefundAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
       }
 
       t.update(bookingRef, {
@@ -3053,10 +3089,12 @@ app.post("/api/bookings/cancel", requireAuth, async (req, res) => {
         cancellationReason: reason || 'Cancelado por el usuario',
         canceledAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        refundedAmount: deduction
+        refundedAmount: refundAmount,
+        refundMethod: refundAmount > 0 ? 'billetera' : 'ninguno',
+        refundDestination: 'Billetera Virtual ESSENYA'
       });
 
-      return { bookingId, refundedAmount: deduction, bookingData };
+      return { bookingId, refundedAmount: refundAmount, bookingData };
     });
 
     // Notify assigned therapists and client immediately via idempotent push transition
@@ -3068,23 +3106,23 @@ app.post("/api/bookings/cancel", requireAuth, async (req, res) => {
       reason: reason || 'Cancelación de servicio'
     }).catch(e => console.warn('[Cancel] Push transition error:', e));
 
-    res.json({ success: true, message: "Reserva cancelada y saldo reembolsado exitosamente.", bookingId: result.bookingId, refundedAmount: result.refundedAmount });
+    res.json({ success: true, message: "Reserva cancelada y saldo reembolsado exitosamente a tu billetera.", bookingId: result.bookingId, refundedAmount: result.refundedAmount });
   } catch (err: any) {
     console.error("Error en cancelación atómica:", err);
     res.status(400).json({ success: false, error: err.message || "Error interno al cancelar." });
   }
 });
 
-// Reschedule endpoint with 4-hour notice rule validation
+// Reschedule / Modify booking endpoint with 5-hour notice rule validation
 app.post("/api/bookings/reschedule", requireAuth, async (req, res) => {
   try {
-    const { bookingId, newDate, newTime } = req.body;
+    const { bookingId, newDate, newTime, preferences, notes, clientAddress } = req.body;
     const user = (req as any).user;
     const uid = user?.uid;
     const email = user?.email || '';
     if (!uid) return res.status(401).json({ error: "No autorizado" });
-    if (!bookingId || !newDate || !newTime) {
-      return res.status(400).json({ error: "Faltan parámetros obligatorios (bookingId, newDate, newTime)" });
+    if (!bookingId) {
+      return res.status(400).json({ error: "bookingId es obligatorio" });
     }
 
     const adminCheck = await verifyAdminStatus(uid, email);
@@ -3101,34 +3139,49 @@ app.post("/api/bookings/reschedule", requireAuth, async (req, res) => {
       bookingData.therapistId2 === uid;
 
     if (bookingData.clientId !== uid && !isAdmin && !isTherapistAssigned) {
-      return res.status(403).json({ error: "No tienes permiso para reprogramar esta reserva." });
+      return res.status(403).json({ error: "No tienes permiso para reprogramar o modificar esta reserva." });
     }
 
     if (bookingData.state === 'cancelado') {
-      return res.status(400).json({ error: "La reserva está cancelada y no puede reprogramarse." });
+      return res.status(400).json({ error: "La reserva está cancelada y no puede modificarse." });
     }
 
     if (['servicio_finalizado', 'servicio_iniciado'].includes(bookingData.state)) {
       return res.status(400).json({ error: "No es posible reprogramar un servicio que ya está en curso o finalizado." });
     }
 
-    // 4-Hour Notice Rule check for non-admin client rescheduling
-    if (bookingData.clientId === uid && !isAdmin) {
+    // 5-Hour Notice Rule check for non-admin client rescheduling when changing date/time
+    const isChangingDateTime = (newDate && newDate !== bookingData.date) || (newTime && newTime !== bookingData.time);
+    if (isChangingDateTime && bookingData.clientId === uid && !isAdmin) {
       const hoursRem = calculateHoursRemaining(bookingData.date, bookingData.time);
-      if (hoursRem < 4) {
+      if (hoursRem < 5) {
         return res.status(400).json({ 
-          error: "Esta reserva ya no puede reprogramarse porque faltan menos de 4 horas para el inicio del servicio." 
+          error: "Esta reserva ya no puede reprogramarse porque faltan menos de 5 horas para el inicio del servicio." 
         });
       }
     }
 
     const nowIso = new Date().toISOString();
-    await bookingRef.update({
-      date: newDate,
-      time: newTime,
-      rescheduledAt: nowIso,
+    const updatePayload: any = {
       updatedAt: nowIso
-    });
+    };
+
+    const effectiveDate = newDate || bookingData.date;
+    const effectiveTime = newTime || bookingData.time;
+
+    if (newDate) updatePayload.date = newDate;
+    if (newTime) updatePayload.time = newTime;
+    if (isChangingDateTime) updatePayload.rescheduledAt = nowIso;
+    if (preferences) {
+      updatePayload.preferences = {
+        ...(bookingData.preferences || {}),
+        ...preferences
+      };
+    }
+    if (notes !== undefined) updatePayload.notes = notes;
+    if (clientAddress !== undefined) updatePayload.clientAddress = clientAddress;
+
+    await bookingRef.update(updatePayload);
 
     // Notify assigned therapists and client immediately via push
     const db = getAdminFirestore();
@@ -3140,31 +3193,39 @@ app.post("/api/bookings/reschedule", requireAuth, async (req, res) => {
 
     for (const tId of new Set(targetTherapistIds)) {
       sendPushNotificationToUser(db, tId, {
-        title: '🗓️ Cita Reprogramada',
-        body: `El servicio ${bookingData.code || ''} ha sido reprogramado para el ${newDate} a las ${newTime} hrs.`,
+        title: isChangingDateTime ? '🗓️ Cita Reprogramada' : '✏️ Cita Modificada',
+        body: isChangingDateTime 
+          ? `El servicio ${bookingData.code || ''} ha sido reprogramado para el ${effectiveDate} a las ${effectiveTime} hrs.`
+          : `El servicio ${bookingData.code || ''} ha actualizado sus detalles/preferencias de sesión.`,
         url: '/terapeuta/servicios',
         tag: `booking-rescheduled-${bookingId}`,
         soundPreset: 'bell',
-        data: { type: 'booking_rescheduled', bookingId, newDate, newTime }
+        data: { type: 'booking_rescheduled', bookingId, newDate: effectiveDate, newTime: effectiveTime }
       }).catch(e => console.warn('[Reschedule] Push error to therapist:', e));
     }
 
     if (bookingData.clientId && bookingData.clientId !== uid) {
       sendPushNotificationToUser(db, bookingData.clientId, {
-        title: '🗓️ Cita Reprogramada',
-        body: `Tu servicio ${bookingData.code || ''} ha sido reprogramado para el ${newDate} a las ${newTime} hrs.`,
+        title: isChangingDateTime ? '🗓️ Cita Reprogramada' : '✏️ Cita Modificada',
+        body: isChangingDateTime 
+          ? `Tu servicio ${bookingData.code || ''} ha sido reprogramado para el ${effectiveDate} a las ${effectiveTime} hrs.`
+          : `Tu servicio ${bookingData.code || ''} ha actualizado sus preferencias de sesión.`,
         url: '/cliente',
         tag: `booking-rescheduled-${bookingId}`,
         soundPreset: 'bell',
-        data: { type: 'booking_rescheduled', bookingId, newDate, newTime }
+        data: { type: 'booking_rescheduled', bookingId, newDate: effectiveDate, newTime: effectiveTime }
       }).catch(e => console.warn('[Reschedule] Push error to client:', e));
     }
 
     return res.json({ 
       success: true, 
-      message: `Reserva reprogramada exitosamente para el ${newDate} a las ${newTime} hrs.`,
-      date: newDate,
-      time: newTime
+      message: isChangingDateTime 
+        ? `Reserva reprogramada exitosamente para el ${effectiveDate} a las ${effectiveTime} hrs.`
+        : `Detalles de la cita actualizados exitosamente.`,
+      date: effectiveDate,
+      time: effectiveTime,
+      preferences: updatePayload.preferences || bookingData.preferences,
+      notes: updatePayload.notes !== undefined ? updatePayload.notes : bookingData.notes
     });
   } catch (err: any) {
     console.error("Error en reprogramación de reserva:", err);

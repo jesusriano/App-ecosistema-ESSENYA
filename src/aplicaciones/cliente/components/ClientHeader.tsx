@@ -78,8 +78,8 @@ export const ClientHeader: React.FC<ClientHeaderProps> = ({ client, onOpenPanicM
               title={`Categoría Actual: ${currentTier.fullLabel} (${completedCount} ${completedCount === 1 ? 'masaje concluido' : 'masajes concluidos'}). Clic para ver perfil y beneficios.`}
             >
               {getTierIcon()}
-              <span className="whitespace-nowrap font-serif font-bold">{currentTier.fullLabel}</span>
-              <span className="bg-black/10 dark:bg-white/15 px-1.5 py-0.2 rounded-full text-[9px] font-mono font-semibold">
+              <span className="whitespace-nowrap font-serif font-bold text-[10px] sm:text-xs">{currentTier.fullLabel}</span>
+              <span className="hidden sm:inline-block bg-black/10 dark:bg-white/15 px-1.5 py-0.2 rounded-full text-[9px] font-mono font-semibold">
                 {completedCount} {completedCount === 1 ? 'masaje' : 'masajes'}
               </span>
             </button>

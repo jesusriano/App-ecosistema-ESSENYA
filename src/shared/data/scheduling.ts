@@ -165,8 +165,8 @@ export interface RescheduleEligibility {
 }
 
 /**
- * Evaluates whether a client can cancel an appointment (minimum 4 hours notice required).
- * Rule: El cliente puede cancelar la cita únicamente si faltan 4 horas o más para el inicio de la reserva.
+ * Evaluates whether a client can cancel an appointment (minimum 5 hours notice required).
+ * Rule: El cliente puede cancelar la cita únicamente si faltan 5 horas o más para el inicio de la reserva.
  */
 export function checkCancellationEligibility(
   dateStr?: string,
@@ -201,11 +201,11 @@ export function checkCancellationEligibility(
     };
   }
 
-  if (hoursRemaining < 4) {
+  if (hoursRemaining < 5) {
     return {
       canCancel: false,
       hoursRemaining,
-      message: 'Esta reserva ya no puede cancelarse porque faltan menos de 4 horas para el inicio del servicio.'
+      message: 'Esta reserva ya no puede cancelarse porque faltan menos de 5 horas para el inicio del servicio.'
     };
   }
 
@@ -217,8 +217,8 @@ export function checkCancellationEligibility(
 }
 
 /**
- * Evaluates whether a client can reschedule an appointment (minimum 4 hours notice required).
- * Rule: El cliente puede reprogramar un masaje únicamente si faltan 4 horas o más para el inicio de la reserva.
+ * Evaluates whether a client can reschedule an appointment (minimum 5 hours notice required).
+ * Rule: El cliente puede reprogramar un masaje únicamente si faltan 5 horas o más para el inicio de la reserva.
  */
 export function checkRescheduleEligibility(
   dateStr?: string,
@@ -253,11 +253,11 @@ export function checkRescheduleEligibility(
     };
   }
 
-  if (hoursRemaining < 4) {
+  if (hoursRemaining < 5) {
     return {
       canReschedule: false,
       hoursRemaining,
-      message: 'Esta reserva ya no puede reprogramarse porque faltan menos de 4 horas para el inicio del servicio.'
+      message: 'Esta reserva ya no puede reprogramarse porque faltan menos de 5 horas para el inicio del servicio.'
     };
   }
 

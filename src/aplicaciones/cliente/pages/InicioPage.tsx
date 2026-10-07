@@ -47,17 +47,24 @@ export const InicioPage: React.FC<InicioPageProps> = ({ onGoToReservas }) => {
     type: 'urgent' | 'access';
   }>({ isOpen: false, type: 'urgent' });
 
-  const onConfirmReschedule = async (bookingId: string, newDate: string, newTime: string) => {
+  const onConfirmReschedule = async (
+    bookingId: string, 
+    newDate: string, 
+    newTime: string,
+    preferences?: any,
+    notes?: string,
+    clientAddress?: string
+  ) => {
     if (handleRescheduleBooking) {
-      await handleRescheduleBooking(bookingId, newDate, newTime);
-      showToast('Cita Reprogramada', `Tu cita ha sido reprogramada para el ${newDate} a las ${newTime} hrs.`, 'success');
+      await handleRescheduleBooking(bookingId, newDate, newTime, preferences, notes, clientAddress);
+      showToast('Cita Actualizada', `Tu cita ha sido modificada y actualizada exitosamente.`, 'success');
     }
   };
 
   const onConfirmCancel = async (bookingId: string, reason: string) => {
     if (handleCancelBooking) {
       await handleCancelBooking(bookingId, reason);
-      showToast('Cita Cancelada', 'Tu cita ha sido cancelada correctamente.', 'info');
+      showToast('Cita Cancelada', 'Tu cita ha sido cancelada y el saldo pagado se acreditó en tu Billetera ESSENYA.', 'info');
     }
   };
 
@@ -370,20 +377,21 @@ export const InicioPage: React.FC<InicioPageProps> = ({ onGoToReservas }) => {
                   onClick={() => {
                     const eligibility = checkRescheduleEligibility(activeBooking.date, activeBooking.time, activeBooking.state);
                     if (!eligibility.canReschedule) {
-                      showToast('Reprogramación no disponible', 'Esta reserva ya no puede reprogramarse porque faltan menos de 4 horas para el inicio del servicio.', 'error');
+                      showToast('Reprogramación de horario restringida', 'Faltan menos de 5 horas para el inicio, pero aún puedes modificar notas y preferencias de tu sesión.', 'info');
                     }
                     setRescheduleTarget(activeBooking);
                   }}
                   className="flex items-center space-x-1.5 bg-[#FAF6EE] dark:bg-[#222222] border border-[#C9A55B]/40 px-3 py-1.5 rounded-xl text-xs font-semibold text-[#806020] dark:text-[#C9A55B] hover:bg-[#C9A55B] hover:text-black transition-all cursor-pointer"
+                  title="Modificar preferencias o reprogramar horario (mínimo 5 horas)"
                 >
                   <Calendar className="w-3.5 h-3.5 text-[#C9A55B]" />
-                  <span>Reprogramar</span>
+                  <span>Modificar / Reprogramar</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setCancelTarget(activeBooking)}
                   className="flex items-center space-x-1.5 bg-rose-500/10 border border-rose-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white transition-all cursor-pointer"
-                  title="Cancelación disponible hasta 4 horas antes"
+                  title="Cancelación disponible hasta 5 horas antes con abono íntegro a tu Billetera"
                 >
                   <X className="w-3.5 h-3.5" />
                   <span>Cancelar</span>

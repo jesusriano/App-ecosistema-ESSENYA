@@ -72,7 +72,7 @@ export const CancelBookingModal: React.FC<CancelBookingModalProps> = ({
           </button>
 
           {eligibility.canCancel ? (
-            /* CANCEL PERMITTED (UP TO 4 HOURS BEFORE) */
+            /* CANCEL PERMITTED (UP TO 5 HOURS BEFORE) */
             <form onSubmit={handleConfirm} className="space-y-4">
               <div className="flex items-center space-x-3 mb-1">
                 <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-500">
@@ -84,7 +84,7 @@ export const CancelBookingModal: React.FC<CancelBookingModalProps> = ({
                   </h3>
                   <span className="inline-flex items-center text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 mt-0.5">
                     <CheckCircle2 className="w-3 h-3 mr-1" />
-                    Plazo Válido (Más de 4 horas de anticipación)
+                    Plazo Válido (Más de 5 horas de anticipación)
                   </span>
                 </div>
               </div>
@@ -151,13 +151,13 @@ export const CancelBookingModal: React.FC<CancelBookingModalProps> = ({
               </div>
 
               {/* Policy & Wallet notice */}
-              <div className="bg-[#FAF6EE] dark:bg-[#1C1A14] border border-[#C9A55B]/30 p-3.5 rounded-2xl text-xs space-y-1">
+              <div className="bg-[#FAF6EE] dark:bg-[#1C1A14] border border-[#C9A55B]/30 p-3.5 rounded-2xl text-xs space-y-1.5">
                 <div className="flex items-center space-x-1.5 font-bold text-[#806020] dark:text-[#C9A55B]">
                   <HeartHandshake className="w-4 h-4 text-[#C9A55B]" />
-                  <span>Política de Reembolso Seguro</span>
+                  <span>Política de Abono a Billetera Virtual (Regla 5 Horas)</span>
                 </div>
                 <p className="text-[11px] text-[#6B655F] dark:text-[#AAAAAA] leading-relaxed">
-                  Al cancelar con más de 4 horas de anticipación, cualquier pago anticipado o saldo aplicado se abonará automáticamente en tu <strong>Billetera ESSENYA</strong> para tu siguiente cita sin ningún cargo de penalización.
+                  Al cancelar con más de <strong>5 horas de anticipación</strong>, cualquier pago anticipado con tarjeta o saldo se abonará <strong>íntegramente en tu Billetera ESSENYA</strong> (el dinero no se devuelve a la tarjeta bancaria, queda 100% disponible de inmediato como saldo a favor en la app para agendar cualquier otro masaje cuando lo desees).
                 </p>
               </div>
 
@@ -205,7 +205,7 @@ export const CancelBookingModal: React.FC<CancelBookingModalProps> = ({
                   </h3>
                   <span className="inline-flex items-center text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 mt-0.5">
                     <Clock className="w-3 h-3 mr-1" />
-                    Menos de 4 horas de anticipación
+                    Menos de 5 horas de anticipación
                   </span>
                 </div>
               </div>
@@ -215,7 +215,7 @@ export const CancelBookingModal: React.FC<CancelBookingModalProps> = ({
                   {eligibility.message}
                 </p>
                 <p className="text-[11px] opacity-90 leading-relaxed">
-                  Para garantizar la disponibilidad y el respeto al tiempo de nuestras terapeutas certificadas (quienes ya tienen bloqueada la agenda, kit de insumos y ruta hacia tu domicilio), las cancelaciones automáticas en la aplicación solo están permitidas hasta 4 horas antes de la sesión.
+                  Para garantizar la disponibilidad y el respeto al tiempo de nuestras terapeutas certificadas (quienes ya tienen bloqueada la agenda, kit de insumos y ruta hacia tu domicilio), las cancelaciones automáticas en la aplicación solo están permitidas hasta 5 horas antes de la sesión.
                 </p>
               </div>
 

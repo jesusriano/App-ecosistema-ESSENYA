@@ -83,6 +83,24 @@ export const BilleteraPage: React.FC<BilleteraPageProps> = ({ onGoToReservas }) 
         )}
       </div>
 
+      {/* Wallet Policy Callout Banner */}
+      <div className="bg-[#FAF6EE] dark:bg-[#1C1A14] border border-[#C9A55B]/40 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+        <div className="space-y-1">
+          <div className="flex items-center space-x-2 font-bold text-[#806020] dark:text-[#C9A55B]">
+            <Wallet className="w-4 h-4 text-[#C9A55B]" />
+            <span>Política de Abono por Cancelación Anticipada (Regla 5 Horas)</span>
+          </div>
+          <p className="text-[11px] text-[#6B655F] dark:text-[#AAAAAA] leading-relaxed">
+            Si cancelas un masaje pagado con al menos <strong>5 horas de anticipación</strong>, el 100% de tu dinero no se devuelve a tu tarjeta bancaria: se acredita inmediatamente aquí en tu <strong>Billetera ESSENYA</strong> listo para usarse cuando quieras en tu próxima reserva.
+          </p>
+        </div>
+        {balance > 0 && onGoToReservas && (
+          <LuxuryButton variant="gold" size="sm" onClick={onGoToReservas} className="shrink-0 w-full sm:w-auto">
+            <span>Usar Saldo Ahora</span>
+          </LuxuryButton>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 p-8 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-sm">
           <div className="flex flex-col items-center justify-center text-center space-y-4">
@@ -129,7 +147,7 @@ export const BilleteraPage: React.FC<BilleteraPageProps> = ({ onGoToReservas }) 
           </div>
         </div>
 
-        <div className="lg:col-span-2 bg-[var(--bg-card)] rounded-3xl p-6 shadow-sm border border-[var(--border-color)] h-[500px] flex flex-col">
+        <div className="lg:col-span-2 bg-[var(--bg-card)] rounded-3xl p-6 shadow-sm border border-[var(--border-color)] min-h-[350px] lg:h-[500px] flex flex-col">
           <h3 className="text-xl font-bold text-[var(--text-primary)] mb-6 font-serif">Historial de Movimientos</h3>
           <div className="flex-1 overflow-y-auto pr-2 space-y-4">
             {ledger.length === 0 ? (

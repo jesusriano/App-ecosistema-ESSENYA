@@ -38,7 +38,7 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
       />
 
       {/* Contenido dinámico de las páginas */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 min-w-0">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 min-w-0 pb-24 md:pb-8">
         {children}
       </main>
 
