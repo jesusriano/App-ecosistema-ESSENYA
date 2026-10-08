@@ -349,7 +349,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
   const triggerStripeCheckoutForBooking = async (b: Booking) => {
     try {
-      showToast('Conectando con Stripe TEST', 'Generando sesión segura de Checkout...', 'info');
+      showToast('Conectando con Stripe', 'Generando sesión segura de Checkout...', 'info');
       const targetBookingId = b.id;
       const metaTracking = getMetaTrackingData();
       const res = await fetch('/api/create-stripe-checkout', {
@@ -754,8 +754,8 @@ export const ClientApp: React.FC<ClientAppProps> = ({
             const popup = window.open(data.url, '_blank');
             if (popup) {
               showToast(
-                'Pasarela Stripe TEST Abierta',
-                'Se abrió la pasarela segura de Stripe TEST en una pestaña nueva.',
+                'Pasarela Stripe Abierta',
+                'Se abrió la pasarela segura de Stripe en una pestaña nueva.',
                 'info'
               );
             }
@@ -778,7 +778,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
       showToast(
         'Reserva Registrada',
-        `Código ${actualBookingCode}. ${paymentMethodType === 'stripe' ? 'Completa el pago con Stripe TEST para iniciar despacho.' : 'En espera de validación de pago.'}`,
+        `Código ${actualBookingCode}. ${paymentMethodType === 'stripe' ? 'Completa el pago con Stripe para iniciar despacho.' : 'En espera de validación de pago.'}`,
         'gold'
       );
       
@@ -2309,20 +2309,17 @@ export const ClientApp: React.FC<ClientAppProps> = ({
               </div>
             </div>
 
-            {/* Stripe TEST Payment Pending Call-To-Action Banner */}
+            {/* Payment Pending Call-To-Action Banner */}
             {(activeBooking.dispatchState === 'en_espera_pago' || activeBooking.paymentStatus !== 'pagado') && (
               <div className="bg-gradient-to-r from-amber-500/10 via-[#C9A55B]/20 to-amber-500/10 border-2 border-[#C9A55B] p-6 rounded-2xl shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-in fade-in">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#C9A55B] text-black">
-                      MODO STRIPE TEST ACTIVO
-                    </span>
                     <span className="font-bold text-sm sm:text-base text-[#1C1917] dark:text-white">
                       Pago Pendiente de Acreditación (${activeBooking.total.toLocaleString()} MXN)
                     </span>
                   </div>
                   <p className="text-xs text-[#78716C] dark:text-[#A8A29E] max-w-xl">
-                    Esta reserva está en espera de validación de pago. Haz clic en el botón para abrir la pasarela de prueba de Stripe TEST y completar la simulación con tarjeta.
+                    Esta reserva está en espera de validación de pago. Haz clic en el botón para abrir la pasarela de Stripe y completar el pago con tarjeta.
                   </p>
                 </div>
 
@@ -2333,7 +2330,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                     className="w-full sm:w-auto px-5 py-3 bg-[#635BFF] hover:bg-[#534BE5] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <CreditCard className="w-4 h-4" />
-                    <span>Pagar con Tarjeta (Stripe TEST)</span>
+                    <span>Pagar con Tarjeta</span>
                     <ExternalLink className="w-3.5 h-3.5 opacity-80" />
                   </button>
                 </div>
@@ -2884,7 +2881,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                             className="flex items-center space-x-1.5 bg-[#635BFF] hover:bg-[#534BE5] text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
                           >
                             <CreditCard className="w-3.5 h-3.5" />
-                            <span>Pagar (Stripe TEST)</span>
+                            <span>Pagar con Tarjeta</span>
                           </button>
                         )}
 
@@ -3232,7 +3229,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
         userLocation={client?.address || 'Polanco VIP, Ciudad de México'}
       />
 
-      {/* Stripe TEST Checkout Gateway Modal */}
+      {/* Stripe Checkout Gateway Modal */}
       {stripeModal && stripeModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
           <div className="bg-[#FAF8F5] dark:bg-[#121212] border-2 border-[#C9A55B] rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 relative overflow-hidden text-left">
@@ -3243,14 +3240,14 @@ export const ClientApp: React.FC<ClientAppProps> = ({
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#C9A55B] text-black uppercase">
-                    Modo Stripe TEST
+                    Pasarela Stripe
                   </span>
                   <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
                     Cero cargos reales
                   </span>
                 </div>
                 <h3 className="text-xl font-serif font-bold text-[#1C1917] dark:text-white">
-                  Pasarela Stripe TEST Preparada
+                  Pasarela Stripe Preparada
                 </h3>
               </div>
               <button
@@ -3273,7 +3270,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                 <span className="font-semibold text-[#1C1917] dark:text-white truncate max-w-[200px]">{stripeModal.serviceName}</span>
               </div>
               <div className="flex justify-between items-baseline pt-2 border-t border-[#E5DFD3] dark:border-[#262626]">
-                <span className="font-bold text-sm text-[#1C1917] dark:text-white">Total a Pagar (TEST):</span>
+                <span className="font-bold text-sm text-[#1C1917] dark:text-white">Total a Pagar:</span>
                 <span className="font-mono font-bold text-lg text-[#806020] dark:text-[#C9A55B]">
                   ${stripeModal.total.toLocaleString()} MXN
                 </span>
@@ -3289,7 +3286,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
                 className="w-full py-4 px-6 bg-gradient-to-r from-[#635BFF] via-[#5851EA] to-[#4F46E5] hover:opacity-95 text-white font-bold text-sm tracking-wider uppercase rounded-2xl shadow-xl shadow-indigo-500/25 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.99] text-center"
               >
                 <CreditCard className="w-5 h-5" />
-                <span>Abrir Checkout de Stripe TEST</span>
+                <span>Abrir Checkout de Stripe</span>
                 <ExternalLink className="w-4 h-4 ml-1" />
               </a>
 
@@ -3316,7 +3313,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
             {/* Official Test Cards Reference */}
             <div className="bg-[#FAF8F5] dark:bg-[#0A0A0C] border border-[#E5DFD3] dark:border-[#222227] p-3.5 rounded-2xl space-y-2">
               <div className="flex items-center justify-between text-[11px] font-bold text-[#806020] dark:text-[#C9A55B]">
-                <span>Tarjetas Oficiales Stripe TEST:</span>
+                <span>Tarjetas Oficiales Stripe:</span>
                 <span className="text-[10px] text-slate-500 font-mono">Haz clic para copiar</span>
               </div>
 

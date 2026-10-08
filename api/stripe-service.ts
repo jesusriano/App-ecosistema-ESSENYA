@@ -143,12 +143,11 @@ export class StripeService {
     const stripe = this.getStripeInstance();
     const secret = this.webhookSecret || process.env.STRIPE_WEBHOOK_SECRET || '';
 
-    if (secret && sig) {
-      return stripe.webhooks.constructEvent(rawBody, sig, secret);
+    if (!secret || !sig) {
+      throw new Error("STRIPE_WEBHOOK_SECRET o la firma (stripe-signature) ausentes. Validación criptográfica obligatoria para webhooks de Stripe.");
     }
 
-    const payload = typeof rawBody === 'string' ? JSON.parse(rawBody) : (rawBody as any).toString ? JSON.parse(rawBody.toString()) : rawBody;
-    return payload as Stripe.Event;
+    return stripe.webhooks.constructEvent(rawBody, sig, secret);
   }
 
   /**

@@ -290,6 +290,7 @@ interface RateLimitRecord {
 }
 
 const memoryRateLimits = new Map<string, RateLimitRecord>();
+const registerIpLimits = new Map<string, RateLimitRecord>();
 
 // Periodic cleanup of expired entries (every 5 minutes)
 setInterval(() => {
@@ -904,6 +905,19 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
 // Therapist Registration Endpoint (Public Registration Application)
 app.post("/api/therapist/register", async (req: Request, res: Response) => {
   try {
+    // 0. Rate limiter by IP for registration (Max 5 requests per 15 minutes)
+    const clientIp = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown_ip";
+    const now = Date.now();
+    let ipRecord = registerIpLimits.get(clientIp);
+    if (ipRecord && now < ipRecord.resetTime) {
+      if (ipRecord.count >= 5) {
+        return res.status(429).json({ success: false, error: "Demasiados intentos de registro desde esta IP. Inténtelo más tarde." });
+      }
+      ipRecord.count += 1;
+    } else {
+      registerIpLimits.set(clientIp, { count: 1, resetTime: now + 15 * 60 * 1000 });
+    }
+
     const {
       nombre,
       apellidos,
@@ -928,7 +942,7 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
       documentos
     } = req.body || {};
 
-    // 1. Validaciones de campos obligatorios
+    // 1. Validaciones de campos obligatorios y estrictos
     if (!nombre || typeof nombre !== "string" || !nombre.trim()) {
       return res.status(400).json({ success: false, error: "El nombre es obligatorio." });
     }
@@ -944,8 +958,8 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: "El formato de correo electrónico no es válido." });
     }
 
-    if (!password || typeof password !== "string" || password.length < 6) {
-      return res.status(400).json({ success: false, error: "La contraseña debe contener al menos 6 caracteres." });
+    if (!password || typeof password !== "string" || password.length < 10) {
+      return res.status(400).json({ success: false, error: "La contraseña debe contener al menos 10 caracteres." });
     }
 
     if (!telefono || typeof telefono !== "string" || !telefono.trim()) {
@@ -959,7 +973,7 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
     const auth = adminAuth.getAuth();
     const db = getAdminFirestore();
 
-    // 2. Creación o recuperación en Firebase Authentication
+    // 2. Creación segura en Firebase Authentication (Fallo cerrado si el correo ya existe)
     let userRecord;
     let isExistingAuthUser = false;
     try {
@@ -970,32 +984,35 @@ app.post("/api/therapist/register", async (req: Request, res: Response) => {
       });
     } catch (authError: any) {
       if (authError.code === "auth/email-already-exists") {
-        try {
-          userRecord = await auth.getUserByEmail(trimmedEmail);
-          isExistingAuthUser = true;
+        isExistingAuthUser = true;
+        // Regla estricta: NO modificar la cuenta ni su contraseña si el correo ya existe.
+        // Si hace falta re-postulación, se exige sesión autenticada válida del mismo uid.
+        const authHeader = req.headers.authorization;
+        let authenticatedUid: string | null = null;
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+          try {
+            const token = authHeader.split(" ")[1];
+            const decoded = await auth.verifyIdToken(token);
+            authenticatedUid = decoded.uid;
+          } catch {}
+        }
 
-          // Si ya está activo como terapeuta registrado y aprobado
-          const existingSnap = await db.collection("terapeutas").doc(userRecord.uid).get();
-          if (existingSnap.exists && existingSnap.data()?.estado === "activo") {
+        try {
+          const existingUser = await auth.getUserByEmail(trimmedEmail);
+          if (authenticatedUid && authenticatedUid === existingUser.uid) {
+            // Usuario autenticado pertenece exactamente al mismo UID; permitir actualización de perfil sin reescribir contraseña por seguridad
+            userRecord = existingUser;
+          } else {
+            // Error genérico para evitar toma de cuentas y enumeración de correos
             return res.status(400).json({
               success: false,
-              error: "Esta cuenta de terapeuta ya se encuentra registrada y activa en ESSENYA. Puedes iniciar sesión directamente con tu correo y contraseña."
+              error: "No se pudo procesar el registro. Verifique los datos proporcionados o inicie sesión."
             });
           }
-
-          // Si estaba pendiente o incompleto, actualizar contraseña y nombre para permitir culminar su postulación
-          try {
-            await auth.updateUser(userRecord.uid, {
-              password: password,
-              displayName: `${nombre.trim()} ${apellidos.trim()}`
-            });
-          } catch (updErr) {
-            console.warn("No se pudo actualizar Auth en re-postulación:", updErr);
-          }
-        } catch (getErr: any) {
+        } catch {
           return res.status(400).json({
             success: false,
-            error: "El correo electrónico ya se encuentra en uso. Por favor inicia sesión o utiliza otro correo."
+            error: "No se pudo procesar el registro. Verifique los datos proporcionados."
           });
         }
       } else {
@@ -3712,12 +3729,19 @@ app.get("/api/recordings/:serviceId", requireAuth, async (req: Request, res: Res
 });
 
 // ========================================================
+// ========================================================
 // POST /api/bookings/confirm-stripe-payment - Confirm Stripe Payment and activate dispatch
 // ========================================================
-app.post("/api/bookings/confirm-stripe-payment", async (req: Request, res: Response) => {
+app.post("/api/bookings/confirm-stripe-payment", requireAuth, async (req: Request, res: Response) => {
   try {
     const { bookingId, sessionId } = req.body || {};
-    if (!bookingId) return res.status(400).json({ success: false, error: "bookingId es requerido" });
+    if (!bookingId || !sessionId) {
+      return res.status(400).json({ success: false, error: "bookingId y sessionId son requeridos" });
+    }
+
+    const authUser = (req as any).user;
+    const authUid = authUser?.uid;
+    const authEmail = authUser?.email || '';
 
     const db = getAdminFirestore();
     let bookingRef = db.collection('reservas').doc(bookingId);
@@ -3737,46 +3761,47 @@ app.post("/api/bookings/confirm-stripe-payment", async (req: Request, res: Respo
 
     const bData = bookingSnap.data()!;
     const realBookingId = bookingRef.id;
-    let isAuthorized = false;
-    let stripePaymentIntent: string | undefined = undefined;
 
-    // 1. Verificación directa y segura contra la API de Stripe si se proporciona sessionId (cs_test_... / cs_live_...)
-    if (sessionId && typeof sessionId === 'string' && sessionId.startsWith('cs_')) {
-      try {
-        const stripe = stripeService.getStripeInstance();
-        const session = await stripe.checkout.sessions.retrieve(sessionId);
-        const metaId = session.metadata?.bookingId || session.client_reference_id;
-        if (session && (metaId === bookingId || metaId === realBookingId || metaId === bData.code)) {
-          if (session.payment_status === 'paid' || session.status === 'complete') {
-            isAuthorized = true;
-            stripePaymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
-          }
-        }
-      } catch (stripeErr: any) {
-        console.warn('[Stripe Return] Nota al verificar sesión con Stripe API:', stripeErr?.message);
-      }
+    // Verificar que el usuario sea el dueño de la reserva o admin
+    const adminCheck = await verifyAdminStatus(authUid, authEmail);
+    const isAdmin = adminCheck.isAdmin;
+    const isOwner = bData.clientId === authUid;
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ success: false, error: "No autorizado. Solo el dueño de la reserva o un administrador pueden confirmar el pago." });
     }
 
-    // 2. Verificación mediante Bearer Token de Firebase Auth si no se validó por sesión
-    if (!isAuthorized) {
-      const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        try {
-          const token = authHeader.split(" ")[1];
-          if ((process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development") && token.startsWith("test-token-")) {
-            isAuthorized = true;
-          } else {
-            const decoded = await adminAuth.getAuth().verifyIdToken(token);
-            if (decoded?.uid) isAuthorized = true;
-          }
-        } catch {}
-      }
+    // Verificación obligatoria contra la API de Stripe
+    if (!sessionId || typeof sessionId !== 'string' || !sessionId.startsWith('cs_')) {
+      return res.status(400).json({ success: false, error: "Se requiere un ID de sesión de Stripe válido (sessionId)." });
     }
 
-    if (!isAuthorized) {
-      return res.status(401).json({ success: false, error: "No autorizado. Se requiere sesión verificada de Stripe o token de autenticación." });
+    const stripe = stripeService.getStripeInstance();
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    if (!session) {
+      return res.status(400).json({ success: false, error: "Sesión de Stripe no encontrada." });
     }
 
+    // 1. Solo se confirma si Stripe confirma el pago
+    if (session.payment_status !== 'paid' && session.status !== 'complete') {
+      return res.status(400).json({ success: false, error: "El pago no ha sido confirmado por Stripe." });
+    }
+
+    // 2. El metadata.bookingId coincide con la reserva
+    const metaId = session.metadata?.bookingId || session.client_reference_id;
+    if (metaId !== bookingId && metaId !== realBookingId && metaId !== bData.code) {
+      return res.status(400).json({ success: false, error: "El identificador de reserva en la sesión de Stripe no coincide." });
+    }
+
+    // 3. session.amount_total coincide con el total de la reserva en Firestore (en centavos)
+    const expectedCents = Math.round((Number(bData.total) || 0) * 100);
+    const actualCents = Number(session.amount_total) || 0;
+    if (Math.abs(actualCents - expectedCents) > 1) {
+      return res.status(400).json({ success: false, error: "El monto pagado en Stripe no coincide con el total de la reserva en el sistema." });
+    }
+
+    const stripePaymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
     const nowIso = new Date().toISOString();
 
     if (bData.dispatchState === 'en_espera_pago' || bData.paymentStatus !== 'pagado') {
@@ -3792,16 +3817,16 @@ app.post("/api/bookings/confirm-stripe-payment", async (req: Request, res: Respo
       }
       await bookingRef.update(updateData);
 
-      console.log(`[Stripe Return] Booking ${bookingId} payment confirmed and moved to dispatch 'buscando'.`);
+      console.log(`[Stripe Return] Booking ${bookingId} payment cryptographically verified via Stripe API and moved to dispatch 'buscando'.`);
 
       const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
-      await stepDispatchEngine(db, bookingId, apiKey);
+      await stepDispatchEngine(db, realBookingId, apiKey);
     }
 
-    res.json({ success: true, bookingId });
+    res.json({ success: true, bookingId: realBookingId, verified: true });
   } catch (err: any) {
     console.error("Error al confirmar pago de Stripe:", err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: err.message || "Error al verificar sesión de pago." });
   }
 });
 
@@ -4376,7 +4401,14 @@ app.get("/api/stripe/config", (req: Request, res: Response) => {
 // =========================================================================
 // ISOLATED STRIPE TEST ENDPOINT (Completely isolated, zero impact on production)
 // =========================================================================
-app.all("/api/test/stripe-isolated-checkout", async (req: Request, res: Response) => {
+function requireTestAndAdmin(req: Request, res: Response, next: NextFunction) {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ success: false, error: "Endpoint no disponible en producción." });
+  }
+  return requireAdmin(req, res, next);
+}
+
+app.all("/api/test/stripe-isolated-checkout", requireTestAndAdmin, async (req: Request, res: Response) => {
   try {
     const testSecretKey = process.env.STRIPE_TEST_SECRET_KEY || 
       (process.env.STRIPE_SECRET_KEY?.startsWith('sk_test_') ? process.env.STRIPE_SECRET_KEY : '');
@@ -4440,119 +4472,158 @@ app.all("/api/test/stripe-isolated-checkout", async (req: Request, res: Response
   }
 });
 
-// Stripe Checkout Integration Endpoint
-app.post("/api/create-stripe-checkout", async (req: Request, res: Response) => {
+function validateSafeRedirectUrl(urlInput: unknown, defaultUrl: string, req: Request): string {
+  if (!urlInput || typeof urlInput !== 'string') return defaultUrl;
   try {
-    const { bookingId, serviceName, total, priceId, price, customerEmail, fbp, fbc, eventId, successUrl, cancelUrl, redirect } = req.body;
-    
+    const parsed = new URL(urlInput);
+    const host = req.get('host') || 'localhost:3000';
+    const allowedHosts = [
+      host,
+      'localhost:3000',
+      '0.0.0.0:3000',
+      'essenya.app',
+      'www.essenya.app',
+      'ais-dev-av7zobuhcmzlwtmvumx24q-733077737529.us-east1.run.app',
+      'ais-pre-av7zobuhcmzlwtmvumx24q-733077737529.us-east1.run.app'
+    ];
+    const hostname = parsed.hostname;
+    const isAllowed = allowedHosts.some(h => hostname === h || hostname.endsWith('.run.app') || hostname.endsWith('.essenya.app'));
+    if (isAllowed && (parsed.protocol === 'https:' || parsed.protocol === 'http:')) {
+      return urlInput;
+    }
+  } catch {}
+  return defaultUrl;
+}
+
+async function processSecureCheckout(req: Request, res: Response) {
+  try {
+    const bookingId = (req.body?.bookingId || req.query.bookingId) as string;
+    if (!bookingId) {
+      return res.status(400).json({ success: false, error: "bookingId es requerido para crear la sesión de pago." });
+    }
+
+    const authUser = (req as any).user;
+    const uid = authUser?.uid;
+    const email = authUser?.email || '';
+    if (!uid) {
+      return res.status(401).json({ success: false, error: "No autorizado." });
+    }
+
+    const db = getAdminFirestore();
+    let bookingRef = db.collection('reservas').doc(bookingId);
+    let bookingSnap = await bookingRef.get();
+
+    if (!bookingSnap.exists) {
+      const codeQuery = await db.collection('reservas').where('code', '==', bookingId).limit(1).get();
+      if (!codeQuery.empty) {
+        bookingRef = codeQuery.docs[0].ref;
+        bookingSnap = codeQuery.docs[0];
+      }
+    }
+
+    if (!bookingSnap.exists) {
+      return res.status(404).json({ success: false, error: "Reserva no encontrada en el sistema." });
+    }
+
+    const bData = bookingSnap.data()!;
+    const realBookingId = bookingRef.id;
+
+    // Verificar que sea el dueño de la reserva o admin
+    const adminCheck = await verifyAdminStatus(uid, email);
+    const isAdmin = adminCheck.isAdmin;
+    const isOwner = bData.clientId === uid;
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ success: false, error: "No autorizado. Solo el dueño de la reserva o un administrador pueden iniciar el pago." });
+    }
+
+    // Calcular monto y datos estrictamente del servidor (ignorando datos del cliente)
+    const serverTotal = Number(bData.total);
+    if (isNaN(serverTotal) || serverTotal <= 0) {
+      return res.status(400).json({ success: false, error: "La reserva no cuenta con un monto total válido en el servidor." });
+    }
+
+    const serverServiceName = bData.serviceName || 'Servicio VIP ESSENYA';
+    const customerEmail = email || bData.clientEmail || undefined;
+
+    const defaultSuccessUrl = `${req.protocol}://${req.get('host')}/cliente?payment=success&bookingId=${realBookingId}&session_id={CHECKOUT_SESSION_ID}`;
+    const defaultCancelUrl = `${req.protocol}://${req.get('host')}/cliente?payment=cancelled&bookingId=${realBookingId}`;
+
+    const successUrl = validateSafeRedirectUrl(req.body?.successUrl || req.query?.successUrl, defaultSuccessUrl, req);
+    const cancelUrl = validateSafeRedirectUrl(req.body?.cancelUrl || req.query?.cancelUrl, defaultCancelUrl, req);
+
+    const fbp = req.body?.fbp || req.query?.fbp;
+    const fbc = req.body?.fbc || req.query?.fbc;
+    const eventId = req.body?.eventId || req.query?.eventId;
+
     const result = await stripeService.createCheckoutSession({
-      bookingId,
-      serviceName,
-      total,
-      priceId: priceId || price,
+      bookingId: realBookingId,
+      serviceName: serverServiceName,
+      total: serverTotal,
       customerEmail,
       fbp,
       fbc,
       eventId,
-      successUrl: successUrl || `${req.protocol}://${req.get('host')}/cliente?payment=success&bookingId=${bookingId || ''}&session_id={CHECKOUT_SESSION_ID}`,
-      cancelUrl: cancelUrl || `${req.protocol}://${req.get('host')}/cliente?payment=cancelled&bookingId=${bookingId || ''}`
-    });
-
-    // Support HTTP 303 redirect if requested by client or form
-    if (redirect === true || req.query.redirect === 'true') {
-      return res.redirect(303, result.url);
-    }
-
-    res.json(result);
-  } catch (err: any) {
-    console.error("Error creating Stripe Checkout session:", err);
-    res.status(500).json({ success: false, error: err.message || "Error al crear la sesión de pago con Stripe." });
-  }
-});
-
-// Standard Stripe Checkout Session Endpoint (Supports HTML form action="/create-checkout-session")
-app.all(["/create-checkout-session", "/api/create-checkout-session"], async (req: Request, res: Response) => {
-  try {
-    const bookingId = (req.body?.bookingId || req.query.bookingId || `PROD-${Date.now()}`) as string;
-    const serviceName = (req.body?.serviceName || req.query.serviceName || 'Stubborn Attachments') as string;
-    const total = Number(req.body?.total || req.query.total || 20.00);
-    const priceId = (req.body?.priceId || req.body?.price || req.query.priceId || undefined) as string | undefined;
-    const customerEmail = (req.body?.customerEmail || req.query.customerEmail || undefined) as string | undefined;
-
-    const successUrl = req.body?.successUrl || `${req.protocol}://${req.get('host')}/success?session_id={CHECKOUT_SESSION_ID}&bookingId=${bookingId}`;
-    const cancelUrl = req.body?.cancelUrl || `${req.protocol}://${req.get('host')}/checkout-demo`;
-
-    const result = await stripeService.createCheckoutSession({
-      bookingId,
-      serviceName,
-      total,
-      priceId,
-      customerEmail,
       successUrl,
       cancelUrl
     });
 
-    // If submitted from standard HTML form or browser redirect requested, redirect 303
     const acceptsHtml = req.headers.accept?.includes('text/html');
     const isFormSubmit = req.headers['content-type']?.includes('application/x-www-form-urlencoded') || req.headers['content-type']?.includes('multipart/form-data');
+    const redirectRequested = req.body?.redirect === true || req.query?.redirect === 'true';
 
-    if (acceptsHtml || isFormSubmit || req.query.redirect === 'true' || req.body?.redirect === true) {
+    if (acceptsHtml || isFormSubmit || redirectRequested) {
       return res.redirect(303, result.url);
     }
 
     return res.json(result);
   } catch (err: any) {
-    console.error("Error en /create-checkout-session:", err);
+    console.error("Error en checkout seguro:", err);
     if (req.headers.accept?.includes('text/html')) {
       return res.status(500).send(`Error al iniciar Checkout de Stripe: ${err.message}`);
     }
-    return res.status(500).json({ success: false, error: err.message || "Error al crear sesión de checkout." });
+    return res.status(500).json({ success: false, error: err.message || "Error al crear la sesión de pago." });
   }
-});
+}
 
-// Dedicated 303 Redirect Endpoint for Hosted Checkout Page
-app.all("/api/stripe/checkout-redirect", async (req: Request, res: Response) => {
-  try {
-    const bookingId = (req.body?.bookingId || req.query.bookingId || '') as string;
-    const serviceName = (req.body?.serviceName || req.query.serviceName || 'Servicio de Masaje VIP') as string;
-    const total = Number(req.body?.total || req.query.total || 0);
-    const priceId = (req.body?.priceId || req.query.priceId || '') as string;
-    const customerEmail = (req.body?.customerEmail || req.query.customerEmail || undefined) as string | undefined;
-
-    const result = await stripeService.createCheckoutSession({
-      bookingId,
-      serviceName,
-      total,
-      priceId: priceId || undefined,
-      customerEmail,
-      successUrl: `${req.protocol}://${req.get('host')}/cliente?payment=success&bookingId=${bookingId}`,
-      cancelUrl: `${req.protocol}://${req.get('host')}/cliente?payment=cancelled&bookingId=${bookingId}`
-    });
-
-    res.redirect(303, result.url);
-  } catch (err: any) {
-    console.error("Error in checkout-redirect:", err);
-    res.status(500).send(`Error al iniciar Stripe Checkout: ${err.message}`);
-  }
-});
+app.post("/api/create-stripe-checkout", requireAuth, processSecureCheckout);
+app.all(["/create-checkout-session", "/api/create-checkout-session"], requireAuth, processSecureCheckout);
+app.all("/api/stripe/checkout-redirect", requireAuth, processSecureCheckout);
 
 // Stripe Refund Endpoint
-app.post("/api/stripe/refund", async (req: Request, res: Response) => {
+app.post("/api/stripe/refund", requireAdmin, async (req: Request, res: Response) => {
   try {
     const { bookingId, paymentIntentId, amount, reason } = req.body;
+    const adminUser = (req as any).user;
+    const adminUid = adminUser?.uid || 'admin';
+    const adminEmail = adminUser?.email || 'admin@essenya.mx';
     
     if (!bookingId && !paymentIntentId) {
       return res.status(400).json({ success: false, error: "Se requiere bookingId o paymentIntentId." });
     }
 
     const db = getAdminFirestore();
+    let targetBookingId = bookingId;
     let targetPaymentIntent = paymentIntentId;
+    let bookingData: any = null;
 
-    if (bookingId && !targetPaymentIntent) {
-      const bookingSnap = await db.collection('reservas').doc(bookingId).get();
-      if (bookingSnap.exists) {
-        targetPaymentIntent = bookingSnap.data()?.stripePaymentIntent;
+    if (targetBookingId) {
+      const bookingSnap = await db.collection('reservas').doc(targetBookingId).get();
+      if (!bookingSnap.exists) {
+        return res.status(404).json({ success: false, error: "La reserva especificada no existe en el sistema." });
       }
+      bookingData = bookingSnap.data();
+      if (!targetPaymentIntent) {
+        targetPaymentIntent = bookingData?.stripePaymentIntent;
+      }
+    } else if (targetPaymentIntent) {
+      // Verificar que el paymentIntent pertenezca a una reserva real buscándola en Firestore
+      const querySnap = await db.collection('reservas').where('stripePaymentIntent', '==', targetPaymentIntent).limit(1).get();
+      if (querySnap.empty) {
+        return res.status(400).json({ success: false, error: "El PaymentIntent proporcionado no pertenece a ninguna reserva real en el sistema." });
+      }
+      targetBookingId = querySnap.docs[0].id;
+      bookingData = querySnap.docs[0].data();
     }
 
     if (!targetPaymentIntent) {
@@ -4568,19 +4639,33 @@ app.post("/api/stripe/refund", async (req: Request, res: Response) => {
       reason: reason || 'requested_by_customer'
     });
 
-    if (bookingId) {
-      const nowIso = new Date().toISOString();
-      await db.collection('reservas').doc(bookingId).update({
+    const nowIso = new Date().toISOString();
+    if (targetBookingId) {
+      await db.collection('reservas').doc(targetBookingId).update({
         refundedAmount: refund.amount / 100,
         refundStatus: refund.status,
         stripeRefundId: refund.id,
+        refundedByAdminUid: adminUid,
+        refundedByAdminEmail: adminEmail,
         updatedAt: nowIso
       });
     }
 
+    // Registrar quién reembolsa en audit_logs
+    await db.collection('audit_logs').add({
+      actorId: adminUid,
+      actorEmail: adminEmail,
+      actorRole: 'administrador',
+      action: 'STRIPE_REFUND_PROCESSED',
+      details: `Administrador ${adminEmail} procesó un reembolso de $${refund.amount / 100} ${refund.currency.toUpperCase()} para la reserva ${targetBookingId || 'N/A'} (PaymentIntent: ${targetPaymentIntent}, RefundID: ${refund.id}).`,
+      timestamp: adminFirestore.FieldValue.serverTimestamp(),
+      createdAt: nowIso,
+      ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown"
+    });
+
     res.json({ 
       success: true, 
-      message: "Reembolso procesado exitosamente con Stripe.", 
+      message: "Reembolso procesado exitosamente con Stripe y registrado en auditoría.", 
       refundId: refund.id,
       amountRefunded: refund.amount / 100,
       status: refund.status 
@@ -4605,6 +4690,19 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
   }
 
   const db = getAdminFirestore();
+  const eventId = event.id;
+
+  // Idempotency check: check if event.id was already processed in Firestore
+  try {
+    const eventRef = db.collection('stripe_webhook_events').doc(eventId);
+    const eventSnap = await eventRef.get();
+    if (eventSnap.exists && eventSnap.data()?.processed === true) {
+      console.log(`[Stripe Webhook] Evento ${eventId} ya fue procesado anteriormente (Idempotencia garantizada).`);
+      return res.json({ received: true, idempotentDuplicate: true });
+    }
+  } catch (e) {
+    console.warn("[Stripe Webhook] Error checking idempotency event lock:", e);
+  }
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session;
@@ -4617,6 +4715,15 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
 
         if (bookingSnap.exists) {
           const bData = bookingSnap.data()!;
+
+          // Verificar que amount_total coincida con el total de la reserva en Firestore (en centavos)
+          const expectedCents = Math.round((Number(bData.total) || 0) * 100);
+          const actualCents = Number(session.amount_total) || 0;
+          if (Math.abs(actualCents - expectedCents) > 1) {
+            console.error(`[Stripe Webhook Security Error] El monto pagado (${actualCents} centavos) no coincide con el total de la reserva ${bookingId} (${expectedCents} centavos). Pago rechazado.`);
+            return res.status(400).send(`Webhook Security Error: Amount mismatch.`);
+          }
+
           const nowIso = new Date().toISOString();
           const needsStatusUpdate = bData.paymentStatus !== 'pagado';
           const needsMetaPurchase = !bData.metaPurchaseSent;
@@ -4639,17 +4746,17 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
             // Con estricto control de idempotencia (un único evento)
             // ========================================================
             if (needsMetaPurchase) {
-              const eventId = session.metadata?.eventId || `purchase_${bookingId}`;
+              const capiEventId = session.metadata?.eventId || `purchase_${bookingId}`;
               const amountVal = session.amount_total ? session.amount_total / 100 : (Number(bData.total) || 0);
               const currencyVal = (session.currency || 'mxn').toUpperCase();
               
               const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress;
               const userAgent = req.headers['user-agent'] as string | undefined;
 
-              console.log(`[Stripe Webhook -> Meta CAPI] Disparando evento Purchase para reserva ${bookingId} con EventID: ${eventId}`);
+              console.log(`[Stripe Webhook -> Meta CAPI] Disparando evento Purchase para reserva ${bookingId} con EventID: ${capiEventId}`);
 
               const capiResult = await metaConversionsService.sendPurchaseEvent({
-                eventId,
+                eventId: capiEventId,
                 value: amountVal,
                 currency: currencyVal,
                 fbp: session.metadata?.fbp,
@@ -4665,7 +4772,7 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
               // SOLO marcar como enviado si Meta confirmó recepción real (events_received > 0)
               if (capiResult.success && typeof capiResult.eventsReceived === 'number' && capiResult.eventsReceived > 0) {
                 updatePayload.metaPurchaseSent = true;
-                updatePayload.metaPurchaseEventId = eventId;
+                updatePayload.metaPurchaseEventId = capiEventId;
                 updatePayload.metaPurchaseSentAt = nowIso;
                 if (capiResult.fbtraceId) {
                   updatePayload.metaPurchaseTrace = capiResult.fbtraceId;
@@ -4712,6 +4819,18 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
     }
   }
 
+  // Save idempotency event record
+  try {
+    await db.collection('stripe_webhook_events').doc(eventId).set({
+      eventId,
+      eventType: event.type,
+      processed: true,
+      processedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (e) {
+    console.warn("[Stripe Webhook] Error saving idempotency event record:", e);
+  }
+
   res.json({ received: true });
 };
 
@@ -4722,7 +4841,7 @@ app.post("/api/stripe-webhook", express.raw({ type: 'application/json' }), handl
 // =========================================================================
 // ISOLATED TEST SIMULATION: Stripe Webhook -> Meta CAPI Verification Endpoint
 // =========================================================================
-app.post("/api/test/stripe-webhook-meta-simulation", async (req: Request, res: Response) => {
+app.post("/api/test/stripe-webhook-meta-simulation", requireTestAndAdmin, async (req: Request, res: Response) => {
   try {
     const { 
       bookingId = `TEST-BOOKING-${Date.now()}`,
