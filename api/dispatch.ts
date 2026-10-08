@@ -311,6 +311,20 @@ export async function getEligibleTherapistCandidates(
     // Exclude if busy in another booking
     if (busyTherapistIds.has(tId)) continue;
 
+    // Therapist Gender Preference filtering
+    const genderPref = (booking.therapistGenderPreference || booking.genderPreference || booking.preferences?.genderPreference || 'any').toLowerCase().trim();
+    if (genderPref && genderPref !== 'any' && genderPref !== 'indistinto' && genderPref !== 'sin_preferencia') {
+      const tGender = (tData.gender || tData.genero || tData.sexo || '').toLowerCase().trim();
+      const isMale = tGender.includes('male') || tGender.includes('hombre') || tGender.includes('masculino') || tGender === 'm';
+      const isFemale = tGender.includes('female') || tGender.includes('mujer') || tGender.includes('femenino') || tGender === 'f';
+
+      if (genderPref === 'male' || genderPref === 'hombre' || genderPref === 'm' || genderPref === 'masculino') {
+        if (!isMale) continue;
+      } else if (genderPref === 'female' || genderPref === 'mujer' || genderPref === 'f' || genderPref === 'femenino') {
+        if (!isFemale) continue;
+      }
+    }
+
     // Check therapist work zones (coverage)
     const therapistZones: string[] = Array.isArray(tData.zonasCobertura) && tData.zonasCobertura.length > 0
       ? tData.zonasCobertura

@@ -2908,6 +2908,7 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
         therapistPhone: req.body.therapistPhone || null,
         therapistIds: req.body.therapistId ? [req.body.therapistId] : [],
         assignedTherapistsCount: req.body.therapistId ? 1 : 0,
+        therapistGenderPreference: ['male', 'female', 'any'].includes(req.body.therapistGenderPreference) ? req.body.therapistGenderPreference : (req.body.genderPreference || 'any'),
         clientLat: typeof req.body.clientLat === 'number' ? req.body.clientLat : null,
         clientLng: typeof req.body.clientLng === 'number' ? req.body.clientLng : null,
         dispatchState: initialDispatchState,
