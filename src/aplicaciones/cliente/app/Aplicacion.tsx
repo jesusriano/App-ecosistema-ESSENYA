@@ -717,7 +717,10 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       giftCardCode: appliedGiftCard ? appliedGiftCard.code : undefined,
       expectedWalletDeduction: appliedGiftCard ? giftCardDeduction : 0,
       expectedFinalTotal: totalPrice,
-      applyCourtesy: appliedPromo?.type === 'VIP15'
+      applyCourtesy: appliedPromo?.type === 'VIP15',
+      therapistGenderPreference: ['male', 'female', 'any'].includes(preferences.genderPreference) 
+        ? preferences.genderPreference 
+        : (preferences.genderPreference === 'masculino' ? 'male' : preferences.genderPreference === 'femenino' ? 'female' : 'any')
     };
 
     try {
@@ -1765,92 +1768,92 @@ export const ClientApp: React.FC<ClientAppProps> = ({
             {step === 4 && (
               <div className="max-w-3xl mx-auto space-y-6">
                 <div className="text-center space-y-1">
-                  <h3 className="text-2xl font-serif font-bold text-[#1C1917] dark:text-white">Preferencia de Terapeuta</h3>
+                  <h3 className="text-2xl font-serif font-bold text-[#1C1917] dark:text-white">Preferencia de Género del Terapeuta</h3>
                   <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA]">
-                    Selecciona el género de terapeuta que prefieres para tu sesión. ESSENYA asignará automáticamente al profesional certificado disponible en tu zona.
+                    Selecciona la preferencia de género para tu servicio. El motor de despacho respetará estrictamente esta selección.
                   </p>
                 </div>
 
                 {/* Gender Options Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Option 1: Mujer (Femenino) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Option 1: MUJER */}
                   <div
-                    onClick={() => setPreferences(prev => ({ ...prev, genderPreference: 'femenino' }))}
-                    className={`p-6 rounded-2xl border cursor-pointer transition-all space-y-4 text-center ${
-                      preferences.genderPreference === 'femenino'
+                    onClick={() => setPreferences(prev => ({ ...prev, genderPreference: 'female' }))}
+                    className={`p-5 rounded-2xl border cursor-pointer transition-all space-y-3 text-center ${
+                      preferences.genderPreference === 'female' || preferences.genderPreference === 'femenino'
                         ? 'bg-[#C9A55B]/15 dark:bg-[#C9A55B]/20 border-[#C9A55B] ring-2 ring-[#C9A55B] shadow-lg shadow-[#C9A55B]/15'
                         : 'bg-white dark:bg-[#141414] border-[#E5DFD3] dark:border-[#C9A55B]/20 hover:border-[#C9A55B]'
                     }`}
                   >
-                    <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-[#E6CA65] to-[#C9A55B] flex items-center justify-center text-black shadow-md">
-                      <Users className="w-8 h-8 text-black" />
+                    <div className="w-14 h-14 mx-auto rounded-full bg-gradient-to-br from-[#E6CA65] to-[#C9A55B] flex items-center justify-center text-black shadow-md">
+                      <Users className="w-7 h-7 text-black" />
                     </div>
                     <div>
-                      <h4 className="font-serif font-bold text-lg text-[#1C1917] dark:text-white">Terapeuta Mujer</h4>
-                      <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] mt-1">
-                        Especialista fisioterapeuta o cosmiatra mujer con certificación internacional CIBTAC.
+                      <h4 className="font-serif font-bold text-base text-[#1C1917] dark:text-white">Preferencia: Terapeuta mujer</h4>
+                      <p className="text-[11px] text-[#6B655F] dark:text-[#AAAAAA] mt-1">
+                        El motor de despacho solamente enviará esta solicitud a terapeutas mujeres elegibles.
                       </p>
                     </div>
                     <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full uppercase ${
-                      preferences.genderPreference === 'femenino'
+                      preferences.genderPreference === 'female' || preferences.genderPreference === 'femenino'
                         ? 'bg-[#C9A55B] text-black font-extrabold'
                         : 'bg-[#F5F1EA] dark:bg-[#222222] text-[#806020] dark:text-[#C9A55B]'
                     }`}>
-                      {preferences.genderPreference === 'femenino' ? '✓ Seleccionado' : 'Elegir Mujer'}
+                      {preferences.genderPreference === 'female' || preferences.genderPreference === 'femenino' ? '✓ Seleccionado' : 'Elegir Mujer'}
                     </span>
                   </div>
 
-                  {/* Option 2: Hombre (Masculino) */}
+                  {/* Option 2: HOMBRE */}
                   <div
-                    onClick={() => setPreferences(prev => ({ ...prev, genderPreference: 'masculino' }))}
-                    className={`p-6 rounded-2xl border cursor-pointer transition-all space-y-4 text-center ${
-                      preferences.genderPreference === 'masculino'
+                    onClick={() => setPreferences(prev => ({ ...prev, genderPreference: 'male' }))}
+                    className={`p-5 rounded-2xl border cursor-pointer transition-all space-y-3 text-center ${
+                      preferences.genderPreference === 'male' || preferences.genderPreference === 'masculino'
                         ? 'bg-[#C9A55B]/15 dark:bg-[#C9A55B]/20 border-[#C9A55B] ring-2 ring-[#C9A55B] shadow-lg shadow-[#C9A55B]/15'
                         : 'bg-white dark:bg-[#141414] border-[#E5DFD3] dark:border-[#C9A55B]/20 hover:border-[#C9A55B]'
                     }`}
                   >
-                    <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-[#E6CA65] to-[#9A7B38] flex items-center justify-center text-black shadow-md">
-                      <UserCheck className="w-8 h-8 text-black" />
+                    <div className="w-14 h-14 mx-auto rounded-full bg-gradient-to-br from-[#E6CA65] to-[#9A7B38] flex items-center justify-center text-black shadow-md">
+                      <UserCheck className="w-7 h-7 text-black" />
                     </div>
                     <div>
-                      <h4 className="font-serif font-bold text-lg text-[#1C1917] dark:text-white">Terapeuta Hombre</h4>
-                      <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] mt-1">
-                        Especialista fisioterapeuta hombre capacitado en masajes profundos, deportivos y descontracturantes.
+                      <h4 className="font-serif font-bold text-base text-[#1C1917] dark:text-white">Preferencia: Terapeuta hombre</h4>
+                      <p className="text-[11px] text-[#6B655F] dark:text-[#AAAAAA] mt-1">
+                        El motor de despacho solamente enviará esta solicitud a terapeutas hombres elegibles.
                       </p>
                     </div>
                     <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full uppercase ${
-                      preferences.genderPreference === 'masculino'
+                      preferences.genderPreference === 'male' || preferences.genderPreference === 'masculino'
                         ? 'bg-[#C9A55B] text-black font-extrabold'
                         : 'bg-[#F5F1EA] dark:bg-[#222222] text-[#806020] dark:text-[#C9A55B]'
                     }`}>
-                      {preferences.genderPreference === 'masculino' ? '✓ Seleccionado' : 'Elegir Hombre'}
+                      {preferences.genderPreference === 'male' || preferences.genderPreference === 'masculino' ? '✓ Seleccionado' : 'Elegir Hombre'}
                     </span>
                   </div>
 
-                  {/* Option 3: Sin Preferencia (Indistinto) */}
+                  {/* Option 3: INDISTINTO */}
                   <div
-                    onClick={() => setPreferences(prev => ({ ...prev, genderPreference: 'sin_preferencia' }))}
-                    className={`p-6 rounded-2xl border cursor-pointer transition-all space-y-4 text-center ${
-                      preferences.genderPreference === 'sin_preferencia'
+                    onClick={() => setPreferences(prev => ({ ...prev, genderPreference: 'any' }))}
+                    className={`p-5 rounded-2xl border cursor-pointer transition-all space-y-3 text-center ${
+                      preferences.genderPreference === 'any' || preferences.genderPreference === 'sin_preferencia'
                         ? 'bg-[#C9A55B]/15 dark:bg-[#C9A55B]/20 border-[#C9A55B] ring-2 ring-[#C9A55B] shadow-lg shadow-[#C9A55B]/15'
                         : 'bg-white dark:bg-[#141414] border-[#E5DFD3] dark:border-[#C9A55B]/20 hover:border-[#C9A55B]'
                     }`}
                   >
-                    <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-[#E6CA65] via-[#C9A55B] to-[#9A7B38] flex items-center justify-center text-black shadow-md">
-                      <Sparkles className="w-8 h-8 text-black" />
+                    <div className="w-14 h-14 mx-auto rounded-full bg-gradient-to-br from-[#E6CA65] via-[#C9A55B] to-[#9A7B38] flex items-center justify-center text-black shadow-md">
+                      <Sparkles className="w-7 h-7 text-black" />
                     </div>
                     <div>
-                      <h4 className="font-serif font-bold text-lg text-[#1C1917] dark:text-white">Indistinto / Asignación Rápida</h4>
-                      <p className="text-xs text-[#6B655F] dark:text-[#AAAAAA] mt-1">
-                        Asigna a la o el terapeuta mejor calificado con el tiempo de llegada más rápido a tu ubicación.
+                      <h4 className="font-serif font-bold text-base text-[#1C1917] dark:text-white">Preferencia: Indistinto</h4>
+                      <p className="text-[11px] text-[#6B655F] dark:text-[#AAAAAA] mt-1">
+                        El sistema puede enviar la solicitud tanto a terapeutas hombres como a terapeutas mujeres.
                       </p>
                     </div>
                     <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full uppercase ${
-                      preferences.genderPreference === 'sin_preferencia'
+                      preferences.genderPreference === 'any' || preferences.genderPreference === 'sin_preferencia'
                         ? 'bg-[#C9A55B] text-black font-extrabold'
                         : 'bg-[#F5F1EA] dark:bg-[#222222] text-[#806020] dark:text-[#C9A55B]'
                     }`}>
-                      {preferences.genderPreference === 'sin_preferencia' ? '✓ Seleccionado' : 'Indistinto'}
+                      {preferences.genderPreference === 'any' || preferences.genderPreference === 'sin_preferencia' ? '✓ Seleccionado' : 'Indistinto'}
                     </span>
                   </div>
                 </div>
@@ -1966,8 +1969,12 @@ export const ClientApp: React.FC<ClientAppProps> = ({
 
                   <div className="flex justify-between items-center py-2 border-b border-[#E5DFD3] dark:border-[#222222]">
                     <span className="text-[#6B655F] dark:text-[#AAAAAA]">Preferencia Terapeuta:</span>
-                    <span className="font-bold text-[#806020] dark:text-[#C9A55B] capitalize">
-                      {preferences.genderPreference === 'femenino' ? 'Mujer' : preferences.genderPreference === 'masculino' ? 'Hombre' : 'Indistinto'}
+                    <span className="font-bold text-[#806020] dark:text-[#C9A55B]">
+                      {preferences.genderPreference === 'female' || preferences.genderPreference === 'femenino' 
+                        ? 'Preferencia: Terapeuta mujer' 
+                        : preferences.genderPreference === 'male' || preferences.genderPreference === 'masculino' 
+                        ? 'Preferencia: Terapeuta hombre' 
+                        : 'Preferencia: Indistinto'}
                     </span>
                   </div>
 

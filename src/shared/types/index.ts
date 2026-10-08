@@ -96,7 +96,7 @@ export interface ClientUser {
 }
 
 export interface ServicePreference {
-  genderPreference: 'femenino' | 'masculino' | 'sin_preferencia';
+  genderPreference: 'femenino' | 'masculino' | 'sin_preferencia' | 'male' | 'female' | 'any';
   pressureLevel: PressureLevel;
   essentialOil: EssentialOil;
   musicStyle: MusicStyle;
@@ -177,6 +177,7 @@ export interface Booking {
   expectedWalletDeduction?: number;
   expectedFinalTotal?: number;
   applyCourtesy?: boolean;
+  therapistGenderPreference?: 'male' | 'female' | 'any' | string;
   dispatchExpiresAt?: string;
   activeOfferTherapistIds?: string[];
   activeOffers?: DispatchOffer[];
