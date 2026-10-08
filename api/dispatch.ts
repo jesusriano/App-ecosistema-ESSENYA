@@ -441,6 +441,16 @@ export async function stepDispatchEngine(
     };
   }
 
+  if (booking.dispatchState === 'en_espera_pago' || (booking.paymentStatus !== 'pagado' && booking.total > 0 && !booking.paid)) {
+    return {
+      stepped: false,
+      dispatchState: 'en_espera_pago',
+      currentLevel: booking.currentDispatchLevel || 10,
+      offersSent: 0,
+      message: 'Despacho en espera de pago confirmado por Stripe'
+    };
+  }
+
   if (booking.dispatchState === 'asignada' || booking.dispatchState === 'sin_disponibilidad' || booking.dispatchState === 'cancelada') {
     return {
       stepped: false,

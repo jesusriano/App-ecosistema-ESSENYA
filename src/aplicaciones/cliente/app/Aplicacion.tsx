@@ -155,7 +155,26 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       const newUrl = window.location.pathname;
       window.history.replaceState({}, document.title, newUrl);
     } else if (paymentStatus === 'cancelled') {
-      showToast('Pago Cancelado', 'El proceso de pago con Stripe fue cancelado. Puedes reintentarlo cuando gustes.', 'info');
+      showToast('Pago Cancelado', 'El proceso de pago con Stripe fue cancelado. La reserva ha sido cancelada.', 'info');
+      if (bookingId) {
+        const cancelBooking = async () => {
+          try {
+            if (auth.authStateReady) await auth.authStateReady();
+            const token = await auth.currentUser?.getIdToken();
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            await fetch('/api/bookings/cancel', {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ bookingId, reason: 'Checkout de Stripe cancelado por el usuario' })
+            });
+          } catch (e) {
+            console.warn('Error cancelling abandoned booking:', e);
+          }
+        };
+        cancelBooking();
+      }
       const newUrl = window.location.pathname;
       window.history.replaceState({}, document.title, newUrl);
     }
