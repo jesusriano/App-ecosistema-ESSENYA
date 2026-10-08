@@ -26,6 +26,7 @@ export const AdminAppModule: React.FC = () => {
       '/pagos',
       '/finanzas',
       '/reportes',
+      '/monitoreo',
       '/configuracion',
       '/developer'
     ];
