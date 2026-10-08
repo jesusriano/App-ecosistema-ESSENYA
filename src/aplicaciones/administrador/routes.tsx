@@ -10,6 +10,7 @@ const ServiciosPage = lazy(() => import('./pages/ServiciosPage').then(m => ({ de
 const PagosPage = lazy(() => import('./pages/PagosPage').then(m => ({ default: m.PagosPage })));
 const FinanzasDashboard = lazy(() => import('./components/finanzas/FinanzasDashboard').then(m => ({ default: m.FinanzasDashboard })));
 const ReportesPage = lazy(() => import('./pages/ReportesPage').then(m => ({ default: m.ReportesPage })));
+const MonitoreoPage = lazy(() => import('./pages/MonitoreoPage').then(m => ({ default: m.MonitoreoPage })));
 const ConfiguracionPage = lazy(() => import('./pages/ConfiguracionPage').then(m => ({ default: m.ConfiguracionPage })));
 const DeveloperPage = lazy(() => import('./pages/DeveloperPage').then(m => ({ default: m.DeveloperPage })));
 
@@ -85,6 +86,12 @@ export const AdminRoutes: React.FC<AdminRoutesProps> = ({ currentRoute }) => {
             return (
               <ErrorBoundary fallbackTitle="Error en Módulo de Reportes" onReset={() => console.log('[ErrorBoundary] Reset Reportes')}>
                 <ReportesPage />
+              </ErrorBoundary>
+            );
+          case '/monitoreo':
+            return (
+              <ErrorBoundary fallbackTitle="Error en Módulo de Monitoreo" onReset={() => console.log('[ErrorBoundary] Reset Monitoreo')}>
+                <MonitoreoPage />
               </ErrorBoundary>
             );
           case '/configuracion':

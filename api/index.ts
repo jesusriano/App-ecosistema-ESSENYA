@@ -4891,6 +4891,219 @@ app.post("/api/test/stripe-webhook-meta-simulation", requireTestAndAdmin, async 
   }
 });
 
+// =========================================================================
+// SYSTEM MONITORING & ALERTS BACKEND SUBSYSTEM
+// =========================================================================
+async function reportSystemError(db: adminFirestore.Firestore, data: {
+  service: string;
+  title: string;
+  technicalMessage: string;
+  plainExplanation: string;
+  severity: 'critica' | 'alta' | 'media' | 'baja';
+}) {
+  try {
+    const nowIso = new Date().toISOString();
+    const alertId = `${data.service}_${data.title.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 40)}`;
+    const alertRef = db.collection('system_monitoring').doc(alertId);
+    const snap = await alertRef.get();
+
+    if (snap.exists) {
+      const current = snap.data()!;
+      const newCount = (current.count || 1) + 1;
+      await alertRef.update({
+        count: newCount,
+        lastSeenAt: nowIso,
+        status: 'activo',
+        technicalMessage: data.technicalMessage,
+        plainExplanation: data.plainExplanation,
+        severity: data.severity
+      });
+    } else {
+      await alertRef.set({
+        id: alertId,
+        service: data.service,
+        title: data.title,
+        technicalMessage: data.technicalMessage,
+        plainExplanation: data.plainExplanation,
+        severity: data.severity,
+        status: 'activo',
+        count: 1,
+        timestamp: nowIso,
+        lastSeenAt: nowIso
+      });
+
+      // Dispatch emergency push notification to admins if severity is high or critical
+      if (data.severity === 'critica' || data.severity === 'alta') {
+        const adminUsersSnap = await db.collection('users').where('role', '==', 'administrador').get();
+        const notificationPayload = {
+          title: '🚨 ESSENYA — PROBLEMA DETECTADO',
+          body: `Servicio: ${data.service}\\nProblema: ${data.plainExplanation}\\nDetectado: ${new Date().toLocaleTimeString()}\\nSeveridad: ${data.severity.toUpperCase()}`,
+          url: '/admin',
+          tag: `alert-${alertId}`,
+          soundPreset: 'alarm',
+          data: { type: 'system_alert', service: data.service, severity: data.severity }
+        };
+
+        for (const adminDoc of adminUsersSnap.docs) {
+          await sendPushNotificationToUser(db, adminDoc.id, notificationPayload).catch(() => {});
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Monitoring] Failed to record system error:', err);
+  }
+}
+
+app.get("/api/admin/system/status", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const adminCheck = await verifyAdminStatus(user?.uid, user?.email);
+    if (!adminCheck.isAdmin) {
+      return res.status(403).json({ success: false, error: "No autorizado." });
+    }
+
+    const db = getAdminFirestore();
+    const alertsSnap = await db.collection('system_monitoring').orderBy('lastSeenAt', 'desc').get();
+    const alerts = alertsSnap.docs.map(doc => doc.data());
+
+    const serviceKeys = [
+      { id: 'plataforma', name: 'Plataforma Principal', category: 'Frontend' },
+      { id: 'auth', name: 'Autenticación / Firebase Auth', category: 'Seguridad' },
+      { id: 'firestore', name: 'Base de Datos (Firestore)', category: 'Backend' },
+      { id: 'reservas', name: 'Gestión de Reservas & IA', category: 'Operación' },
+      { id: 'stripe', name: 'Pasarela de Pagos (Stripe)', category: 'Finanzas' },
+      { id: 'stripe_confirm', name: 'Confirmación de Pagos', category: 'Finanzas' },
+      { id: 'notificaciones', name: 'Notificaciones Push (FCM/Web)', category: 'Alertas' },
+      { id: 'chat', name: 'Chat en Vivo & Asistencia', category: 'Comunicación' },
+      { id: 'backend', name: 'Funciones Backend / API', category: 'Servidor' }
+    ];
+
+    const activeAlerts = alerts.filter((a: any) => a.status === 'activo');
+
+    const services = serviceKeys.map(svc => {
+      const svcAlerts = activeAlerts.filter((a: any) => a.service.toLowerCase().includes(svc.id) || svc.name.toLowerCase().includes(a.service.toLowerCase()));
+      const hasErrors = svcAlerts.some((a: any) => a.severity === 'critica' || a.severity === 'alta');
+      const hasWarnings = svcAlerts.some((a: any) => a.severity === 'media' || a.severity === 'baja');
+
+      return {
+        id: svc.id,
+        name: svc.name,
+        category: svc.category,
+        status: hasErrors ? 'error' : (hasWarnings ? 'warning' : 'ok'),
+        statusText: hasErrors ? 'Requiere Atención' : (hasWarnings ? 'Advertencia Menor' : 'Funcionando Perfectamente'),
+        lastCheck: new Date().toISOString(),
+        activeErrorCount: svcAlerts.length
+      };
+    });
+
+    res.json({ success: true, services, alerts });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/admin/system/health-ping", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const adminCheck = await verifyAdminStatus(user?.uid, user?.email);
+    if (!adminCheck.isAdmin) {
+      return res.status(403).json({ success: false, error: "No autorizado." });
+    }
+
+    const db = getAdminFirestore();
+    const testRef = db.collection('system_monitoring').doc('health_ping_test');
+    await testRef.set({ lastPing: new Date().toISOString() });
+    await testRef.get();
+
+    res.json({ success: true, message: "Diagnóstico de salud ejecutado exitosamente. Firestore y Backend operando sin errores." });
+  } catch (err: any) {
+    const db = getAdminFirestore();
+    await reportSystemError(db, {
+      service: 'firestore',
+      title: 'Fallo en prueba de salud de Firestore',
+      technicalMessage: err.message,
+      plainExplanation: 'La base de datos de Firestore no respondió correctamente durante el diagnóstico automático.',
+      severity: 'alta'
+    });
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/admin/system/resolve-alert", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const adminCheck = await verifyAdminStatus(user?.uid, user?.email);
+    if (!adminCheck.isAdmin) {
+      return res.status(403).json({ success: false, error: "No autorizado." });
+    }
+
+    const { alertId } = req.body || {};
+    if (!alertId) return res.status(400).json({ success: false, error: "alertId requerido." });
+
+    const db = getAdminFirestore();
+    await db.collection('system_monitoring').doc(alertId).update({
+      status: 'resuelto',
+      resolvedAt: new Date().toISOString(),
+      resolvedBy: user?.email || 'admin'
+    });
+
+    res.json({ success: true, message: "Incidencia marcada como resuelta." });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/admin/system/test-alert", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const adminCheck = await verifyAdminStatus(user?.uid, user?.email);
+    if (!adminCheck.isAdmin) {
+      return res.status(403).json({ success: false, error: "No autorizado." });
+    }
+
+    const { service = 'stripe' } = req.body || {};
+    const db = getAdminFirestore();
+
+    const testErrors: Record<string, any> = {
+      stripe: {
+        service: 'stripe',
+        title: 'Error de Pasarela — Falta token Bearer o Credenciales',
+        technicalMessage: 'Stripe API Error: Missing Bearer authorization token or invalid API key signature.',
+        plainExplanation: 'La pasarela de pago de Stripe no pudo autenticar la petición porque el token de seguridad o la clave secreta no se enviaron correctamente.',
+        severity: 'alta'
+      },
+      reservas: {
+        service: 'reservas',
+        title: 'Error de Asignación Automática de Despacho',
+        technicalMessage: 'DispatchEngine timeout: No available therapists matched radius requirement.',
+        plainExplanation: 'El motor de despacho automático no encontró terapeutas disponibles en la zona para confirmar la reserva a tiempo.',
+        severity: 'media'
+      },
+      notificaciones: {
+        service: 'notificaciones',
+        title: 'Fallo en Envío de Web Push Notification',
+        technicalMessage: 'WebPush Error: Push subscription has unsubscribed or expired (410 Gone).',
+        plainExplanation: 'El navegador del usuario canceló la suscripción de notificaciones push o el token FCM expiró.',
+        severity: 'media'
+      }
+    };
+
+    const errData = testErrors[service] || {
+      service,
+      title: 'Simulación de Problema Técnico en ESSENYA',
+      technicalMessage: 'Simulated system error triggered from Admin Diagnostic Panel.',
+      plainExplanation: 'Este es un error simulado para verificar que el sistema de monitoreo y alertas push funciona correctamente.',
+      severity: 'alta'
+    };
+
+    await reportSystemError(db, errData);
+
+    res.json({ success: true, message: `Alerta de prueba simulada para ${service} ejecutada y notificada.` });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Start ticker and triggers
 initDispatchTicker();
 initFirestoreBookingsTrigger();

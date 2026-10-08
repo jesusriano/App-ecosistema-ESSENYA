@@ -352,9 +352,15 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       showToast('Conectando con Stripe', 'Generando sesión segura de Checkout...', 'info');
       const targetBookingId = b.id;
       const metaTracking = getMetaTrackingData();
+
+      if (auth.authStateReady) await auth.authStateReady();
+      const token = await auth.currentUser?.getIdToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch('/api/create-stripe-checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           bookingId: targetBookingId,
           serviceName: b.serviceName,
@@ -723,9 +729,14 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       if (paymentMethodType === 'stripe' && totalPrice > 0) {
         try {
           const metaTracking = getMetaTrackingData();
+          if (auth.authStateReady) await auth.authStateReady();
+          const token = await auth.currentUser?.getIdToken();
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+
           const res = await fetch('/api/create-stripe-checkout', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({
               bookingId: actualBookingId,
               serviceName: newBk.serviceName,
