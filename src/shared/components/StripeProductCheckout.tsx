@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { auth } from '../../lib/firebase';
 import { 
   CreditCard, 
   ExternalLink, 
@@ -84,9 +85,14 @@ export const StripeProductCheckout: React.FC = () => {
     });
 
     try {
+      if (auth.authStateReady) await auth.authStateReady();
+      const token = await auth.currentUser?.getIdToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const response = await fetch('/api/create-stripe-checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(requestPayload)
       });
 
