@@ -86,7 +86,7 @@ export const StripeProductCheckout: React.FC = () => {
 
     try {
       if (auth.authStateReady) await auth.authStateReady();
-      let token = await auth.currentUser?.getIdToken();
+      let token = await auth.currentUser?.getIdToken(true);
       if (!token) {
         try {
           const { signInAnonymously } = await import('firebase/auth');
@@ -172,9 +172,24 @@ export const StripeProductCheckout: React.FC = () => {
     });
 
     try {
+      if (auth.authStateReady) await auth.authStateReady();
+      let token = await auth.currentUser?.getIdToken(true);
+      if (!token) {
+        try {
+          const { signInAnonymously } = await import('firebase/auth');
+          const cred = await signInAnonymously(auth);
+          token = await cred.user.getIdToken();
+        } catch (anonErr) {
+          console.warn('Anonymous sign-in fallback failed:', anonErr);
+          token = 'test-token-demo-client';
+        }
+      }
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const response = await fetch('/api/test/stripe-isolated-checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ amount: testAmount })
       });
 
