@@ -4895,6 +4895,74 @@ app.post("/api/test/stripe-webhook-meta-simulation", requireTestAndAdmin, async 
 // =========================================================================
 // SYSTEM MONITORING & ALERTS BACKEND SUBSYSTEM
 // =========================================================================
+
+// Automated Critical Endpoint Error & Latency Monitoring Middleware
+const errorCountsTracker: Record<string, { count: number; lastReset: number }> = {};
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const start = Date.now();
+  const originalUrl = req.originalUrl || req.url;
+
+  const isCriticalApi = originalUrl.startsWith('/api/') && !originalUrl.startsWith('/api/admin/system/status');
+
+  if (!isCriticalApi) {
+    return next();
+  }
+
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const statusCode = res.statusCode;
+    const isError = statusCode >= 400;
+    const isHighLatency = duration > 4000; // > 4 seconds
+
+    if (isError || isHighLatency) {
+      const db = getAdminFirestore();
+      if (!db) return;
+
+      const serviceKey = originalUrl.includes('stripe') ? 'stripe'
+        : originalUrl.includes('booking') || originalUrl.includes('atomic') ? 'reservas'
+        : originalUrl.includes('auth') ? 'auth'
+        : originalUrl.includes('dispatch') ? 'reservas'
+        : 'backend';
+
+      const keyString = `${serviceKey}_${statusCode}_${originalUrl.split('?')[0]}`;
+      const now = Date.now();
+
+      if (!errorCountsTracker[keyString]) {
+        errorCountsTracker[keyString] = { count: 0, lastReset: now };
+      }
+
+      if (now - errorCountsTracker[keyString].lastReset > 15 * 60 * 1000) {
+        errorCountsTracker[keyString] = { count: 1, lastReset: now };
+      } else {
+        errorCountsTracker[keyString].count++;
+      }
+
+      const occurrenceCount = errorCountsTracker[keyString].count;
+
+      if (isError || isHighLatency) {
+        const title = isHighLatency && !isError 
+          ? `Latencia Alta en ${serviceKey.toUpperCase()}`
+          : `Error HTTP ${statusCode} en Endpoint Crítico`;
+
+        const plainExplanation = isHighLatency && !isError
+          ? `El endpoint ${originalUrl.split('?')[0]} tardó más de 4 segundos en responder (${duration}ms), lo que puede afectar la experiencia del usuario.`
+          : `El servicio ${serviceKey} devolvió un error (${statusCode}) al procesar una solicitud en ${originalUrl.split('?')[0]}. Ocurrencias recientes: ${occurrenceCount}.`;
+
+        reportSystemError(db, {
+          service: serviceKey,
+          title,
+          technicalMessage: `Endpoint: ${originalUrl} | Method: ${req.method} | Status: ${statusCode} | Duration: ${duration}ms | Occurrences: ${occurrenceCount}`,
+          plainExplanation,
+          severity: (occurrenceCount >= 3 || statusCode >= 500 || serviceKey === 'stripe') ? 'alta' : 'media'
+        }).catch(() => {});
+      }
+    }
+  });
+
+  next();
+});
+
 async function reportSystemError(db: adminFirestore.Firestore, data: {
   service: string;
   title: string;
@@ -5105,8 +5173,49 @@ app.post("/api/admin/system/test-alert", requireAuth, async (req: Request, res: 
   }
 });
 
-// Start ticker and triggers
+// Start ticker, triggers and proactive monitoring watcher
+let proactiveWatcherStarted = false;
+function startProactiveHealthWatcher() {
+  if (proactiveWatcherStarted) return;
+  proactiveWatcherStarted = true;
+
+  setInterval(async () => {
+    try {
+      const db = getAdminFirestore();
+      if (!db) return;
+
+      // 1. Check Firestore connectivity
+      try {
+        await db.collection('reservas').limit(1).get();
+      } catch (fsErr: any) {
+        await reportSystemError(db, {
+          service: 'firestore',
+          title: 'Fallo de Conectividad con Firestore',
+          technicalMessage: fsErr.message || 'Firestore read failure',
+          plainExplanation: 'La base de datos de Firestore no responde correctamente a las consultas del servidor.',
+          severity: 'critica'
+        });
+      }
+
+      // 2. Check Stripe configuration
+      const hasKey = Boolean(process.env.STRIPE_SECRET_KEY || process.env.STRIPE_TEST_SECRET_KEY);
+      if (!hasKey) {
+        await reportSystemError(db, {
+          service: 'stripe',
+          title: 'Falta Configuración de Stripe Secret Key',
+          technicalMessage: 'STRIPE_SECRET_KEY is missing in environment variables.',
+          plainExplanation: 'Las credenciales de Stripe no están configuradas en el servidor.',
+          severity: 'alta'
+        });
+      }
+    } catch (err) {
+      console.warn('[Proactive Watcher] Error:', err);
+    }
+  }, 45 * 1000);
+}
+
 initDispatchTicker();
 initFirestoreBookingsTrigger();
+startProactiveHealthWatcher();
 
 export default app;
