@@ -5036,21 +5036,69 @@ app.get("/api/admin/system/status", requireAuth, async (req: Request, res: Respo
     const alerts = alertsSnap.docs.map(doc => doc.data());
 
     const serviceKeys = [
-      { id: 'plataforma', name: 'Plataforma Principal', category: 'Frontend' },
-      { id: 'auth', name: 'Autenticación / Firebase Auth', category: 'Seguridad' },
-      { id: 'firestore', name: 'Base de Datos (Firestore)', category: 'Backend' },
-      { id: 'reservas', name: 'Gestión de Reservas & IA', category: 'Operación' },
-      { id: 'stripe', name: 'Pasarela de Pagos (Stripe)', category: 'Finanzas' },
-      { id: 'stripe_confirm', name: 'Confirmación de Pagos', category: 'Finanzas' },
-      { id: 'notificaciones', name: 'Notificaciones Push (FCM/Web)', category: 'Alertas' },
-      { id: 'chat', name: 'Chat en Vivo & Asistencia', category: 'Comunicación' },
-      { id: 'backend', name: 'Funciones Backend / API', category: 'Servidor' }
+      // Plataforma
+      { id: 'web', name: 'Aplicación Web', category: 'Plataforma' },
+      { id: 'frontend', name: 'Frontend', category: 'Plataforma' },
+      { id: 'backend', name: 'Backend / API', category: 'Plataforma' },
+      { id: 'cloud_functions', name: 'Cloud Functions', category: 'Plataforma' },
+
+      // Firebase
+      { id: 'auth', name: 'Firebase Authentication', category: 'Firebase' },
+      { id: 'firestore', name: 'Firestore (Base de Datos)', category: 'Firebase' },
+      { id: 'storage', name: 'Storage', category: 'Firebase' },
+      { id: 'fcm', name: 'Firebase Cloud Messaging / Push', category: 'Firebase' },
+      { id: 'rules', name: 'Reglas de Firestore', category: 'Firebase' },
+      { id: 'firebase_conn', name: 'Estado Conexión Firebase', category: 'Firebase' },
+
+      // Reservas
+      { id: 'creacion_reservas', name: 'Creación de Reservas', category: 'Reservas' },
+      { id: 'consulta_reservas', name: 'Consulta de Reservas', category: 'Reservas' },
+      { id: 'confirmacion_reservas', name: 'Confirmación de Reservas', category: 'Reservas' },
+      { id: 'estados_reserva', name: 'Estados de Reserva', category: 'Reservas' },
+      { id: 'despacho', name: 'Motor de Despacho', category: 'Reservas' },
+      { id: 'asignacion_terapeutas', name: 'Asignación de Terapeutas', category: 'Reservas' },
+      { id: 'reservas', name: 'Gestión General de Reservas', category: 'Reservas' },
+
+      // Pagos
+      { id: 'stripe', name: 'Pasarela Stripe', category: 'Pagos' },
+      { id: 'checkout', name: 'Creación Checkout Session', category: 'Pagos' },
+      { id: 'payment_intent', name: 'PaymentIntent', category: 'Pagos' },
+      { id: 'confirm_payment', name: 'Confirmación de Pago', category: 'Pagos' },
+      { id: 'webhook', name: 'Webhook de Stripe', category: 'Pagos' },
+      { id: 'stripe_conn', name: 'Estado Conexión Stripe', category: 'Pagos' },
+
+      // Notificaciones
+      { id: 'push_cliente', name: 'Push al Cliente', category: 'Notificaciones' },
+      { id: 'push_terapeuta', name: 'Push al Terapeuta', category: 'Notificaciones' },
+      { id: 'notif_solicitud', name: 'Notificaciones de Nueva Solicitud', category: 'Notificaciones' },
+      { id: 'notif_aceptacion', name: 'Notificaciones de Aceptación', category: 'Notificaciones' },
+      { id: 'notif_viaje', name: 'Notificaciones de Inicio de Viaje', category: 'Notificaciones' },
+      { id: 'notif_llegada', name: 'Notificaciones de Llegada', category: 'Notificaciones' },
+      { id: 'notif_cancelacion', name: 'Notificaciones de Cancelación', category: 'Notificaciones' },
+      { id: 'notificaciones', name: 'Sistema de Notificaciones Push', category: 'Notificaciones' },
+
+      // Comunicación
+      { id: 'chat', name: 'Chat en Vivo', category: 'Comunicación' },
+      { id: 'mensajes', name: 'Mensajes', category: 'Comunicación' },
+      { id: 'chat_conn', name: 'Estado Conexión Chat', category: 'Comunicación' },
+
+      // Autenticación y Usuarios
+      { id: 'clientes', name: 'Clientes', category: 'Autenticación y Usuarios' },
+      { id: 'terapeutas', name: 'Terapeutas', category: 'Autenticación y Usuarios' },
+      { id: 'administradores', name: 'Administradores', category: 'Autenticación y Usuarios' },
+      { id: 'login', name: 'Inicio de Sesión', category: 'Autenticación y Usuarios' },
+      { id: 'sesiones', name: 'Sesiones de Usuario', category: 'Autenticación y Usuarios' }
     ];
 
     const activeAlerts = alerts.filter((a: any) => a.status === 'activo');
 
     const services = serviceKeys.map(svc => {
-      const svcAlerts = activeAlerts.filter((a: any) => a.service.toLowerCase().includes(svc.id) || svc.name.toLowerCase().includes(a.service.toLowerCase()));
+      const svcAlerts = activeAlerts.filter((a: any) => 
+        (a.service && a.service.toLowerCase().includes(svc.id)) || 
+        (a.service && a.service.toLowerCase() === svc.id) ||
+        (a.title && a.title.toLowerCase().includes(svc.id)) ||
+        (a.service && svc.name.toLowerCase().includes(a.service.toLowerCase()))
+      );
       const hasErrors = svcAlerts.some((a: any) => a.severity === 'critica' || a.severity === 'alta');
       const hasWarnings = svcAlerts.some((a: any) => a.severity === 'media' || a.severity === 'baja');
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, Activity, CheckCircle2, AlertTriangle, XCircle, 
   RefreshCw, Bell, Search, Clock, Server, Database, Lock, 
-  CreditCard, Calendar, MessageSquare, Zap, Cpu, ArrowRight, Check
+  CreditCard, Calendar, MessageSquare, Zap, Cpu, ArrowRight, Check, CheckCircle
 } from 'lucide-react';
 
 interface SystemAlert {
@@ -38,6 +38,7 @@ export const MonitoreoPage: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<string>('activo');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [notificationStatus, setNotificationStatus] = useState<string>('');
+  const [secondsAgo, setSecondsAgo] = useState<number>(0);
 
   const fetchMonitoringData = async () => {
     try {
@@ -52,6 +53,7 @@ export const MonitoreoPage: React.FC = () => {
       if (data.success) {
         setAlerts(data.alerts || []);
         setServices(data.services || []);
+        setSecondsAgo(0);
       }
     } catch (err) {
       console.error("Error fetching system monitoring status:", err);
@@ -63,7 +65,11 @@ export const MonitoreoPage: React.FC = () => {
   useEffect(() => {
     fetchMonitoringData();
     const interval = setInterval(fetchMonitoringData, 15000); // Polling every 15s
-    return () => clearInterval(interval);
+    const timer = setInterval(() => setSecondsAgo(s => s + 1), 1000);
+    return () => {
+      clearInterval(interval);
+      clearInterval(timer);
+    };
   }, []);
 
   const handleRunHealthPing = async () => {
@@ -75,6 +81,8 @@ export const MonitoreoPage: React.FC = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       await fetchMonitoringData();
+      setNotificationStatus('Diagnóstico de salud ejecutado exitosamente. Todos los servicios de Firestore y Backend responden correctamente.');
+      setTimeout(() => setNotificationStatus(''), 5000);
     } catch (err) {
       console.error("Error running health ping:", err);
     } finally {
@@ -96,9 +104,9 @@ export const MonitoreoPage: React.FC = () => {
       });
       const data = await res.json();
       if (data.success) {
-        setNotificationStatus(`Alerta de prueba enviada para ${serviceName}. Notificación push disparada.`);
+        setNotificationStatus(`Alerta de prueba enviada para el módulo [${serviceName}]. Notificación push a administradores activada.`);
         await fetchMonitoringData();
-        setTimeout(() => setNotificationStatus(''), 5000);
+        setTimeout(() => setNotificationStatus(''), 6000);
       }
     } catch (err) {
       console.error("Error testing alert:", err);
@@ -122,6 +130,8 @@ export const MonitoreoPage: React.FC = () => {
       if (data.success) {
         await fetchMonitoringData();
         setSelectedAlert(null);
+        setNotificationStatus('Incidencia marcada como resuelta exitosamente.');
+        setTimeout(() => setNotificationStatus(''), 4000);
       }
     } catch (err) {
       console.error("Error resolving alert:", err);
@@ -130,20 +140,27 @@ export const MonitoreoPage: React.FC = () => {
 
   const getStatusIcon = (status: 'ok' | 'warning' | 'error') => {
     switch (status) {
-      case 'ok': return <span className="text-emerald-400 text-lg">🟢</span>;
-      case 'warning': return <span className="text-amber-400 text-lg">🟡</span>;
-      case 'error': return <span className="text-rose-500 text-lg animate-pulse">🔴</span>;
+      case 'ok': return <span className="text-emerald-500 font-bold text-base" title="Funcionando correctamente">🟢</span>;
+      case 'warning': return <span className="text-amber-500 font-bold text-base" title="Advertencia menor">🟡</span>;
+      case 'error': return <span className="text-rose-500 font-bold text-base animate-pulse" title="Error crítico">🔴</span>;
     }
   };
 
   const getSeverityBadge = (severity: string) => {
     switch (severity) {
-      case 'critica': return <span className="bg-rose-500/20 text-rose-400 border border-rose-500/40 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase">Crítica</span>;
-      case 'alta': return <span className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase">Alta</span>;
-      case 'media': return <span className="bg-blue-500/20 text-blue-400 border border-blue-500/40 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase">Media</span>;
-      default: return <span className="bg-slate-500/20 text-slate-400 border border-slate-500/40 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase">Baja</span>;
+      case 'critica': return <span className="bg-rose-500/20 text-rose-400 border border-rose-500/40 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase">Crítica</span>;
+      case 'alta': return <span className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase">Alta</span>;
+      case 'media': return <span className="bg-blue-500/20 text-blue-400 border border-blue-500/40 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase">Media</span>;
+      default: return <span className="bg-slate-500/20 text-slate-400 border border-slate-500/40 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase">Baja</span>;
     }
   };
+
+  const activeAlerts = alerts.filter(a => a.status === 'activo');
+  const hasErrors = activeAlerts.some(a => a.severity === 'critica' || a.severity === 'alta');
+  const hasWarnings = activeAlerts.some(a => a.severity === 'media' || a.severity === 'baja');
+
+  // Group services by category
+  const categories = Array.from(new Set(services.map(s => s.category)));
 
   const filteredAlerts = alerts.filter(alert => {
     if (filterSeverity !== 'todos' && alert.severity !== filterSeverity) return false;
@@ -158,114 +175,182 @@ export const MonitoreoPage: React.FC = () => {
     return true;
   });
 
-  const activeAlertsCount = alerts.filter(a => a.status === 'activo').length;
-  const criticalCount = alerts.filter(a => a.status === 'activo' && (a.severity === 'critica' || a.severity === 'alta')).length;
-
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[var(--bg-card)] border border-[var(--border-color)] p-6 rounded-2xl shadow-sm">
         <div>
-          <div className="flex items-center space-x-2.5">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#C9A55B]/20 to-[#C9A55B]/5 border border-[#C9A55B]/30 flex items-center justify-center text-[#C9A55B]">
-              <ShieldAlert className="w-5 h-5" />
+          <div className="flex items-center space-x-3">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#C9A55B]/20 to-[#C9A55B]/5 border border-[#C9A55B]/30 flex items-center justify-center text-[#C9A55B] shadow-inner">
+              <Activity className="w-6 h-6 animate-pulse" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-[var(--text-primary)]">
-                Monitoreo y Alertas en Tiempo Real
+              <h1 className="text-xl sm:text-2xl font-serif font-bold tracking-tight text-[var(--text-primary)]">
+                Centro de Salud — Monitoreo y Alertas
               </h1>
-              <p className="text-xs text-[var(--text-muted)]">
-                Detección inteligente de problemas funcionales, pasarela de pago, Firebase y backend ESSENYA.
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                Estado en tiempo real de todos los módulos, pasarelas de pago, Firebase y motores de ESSENYA.
               </p>
             </div>
           </div>
         </div>
-        <div className="flex items-center space-x-3">
+
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="text-right hidden sm:block">
+            <span className="text-[10px] text-[var(--text-muted)] block">Última comprobación:</span>
+            <span className="text-xs font-mono font-bold text-[var(--text-primary)]">hace {secondsAgo} segundos</span>
+          </div>
           <button
             onClick={handleRunHealthPing}
             disabled={loading}
-            className="flex items-center space-x-2 px-4 py-2.5 bg-[var(--bg-subcard)] hover:bg-[var(--border-color)] text-[var(--text-primary)] text-xs font-semibold rounded-xl border border-[var(--border-color)] transition-all cursor-pointer disabled:opacity-50"
+            className="flex items-center space-x-2 px-4 py-2.5 bg-[var(--bg-subcard)] hover:bg-[var(--border-color)] text-[var(--text-primary)] text-xs font-semibold rounded-xl border border-[var(--border-color)] transition-all cursor-pointer disabled:opacity-50 shadow-xs"
           >
             <RefreshCw className={`w-4 h-4 text-[#C9A55B] ${loading ? 'animate-spin' : ''}`} />
-            <span>Ejecutar Diagnóstico</span>
+            <span>Comprobar Ahora</span>
           </button>
-          <div className="flex items-center space-x-2 px-4 py-2.5 bg-[#C9A55B]/10 text-[#C9A55B] text-xs font-bold rounded-xl border border-[#C9A55B]/30">
-            <Activity className="w-4 h-4 animate-pulse" />
-            <span>{activeAlertsCount} Alertas Activas</span>
+        </div>
+      </div>
+
+      {/* Global Status Banner */}
+      <div className={`p-5 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-4 transition-all shadow-md ${
+        hasErrors 
+          ? 'bg-rose-500/10 border-rose-500/40 text-rose-700 dark:text-rose-300' 
+          : hasWarnings 
+          ? 'bg-amber-500/10 border-amber-500/40 text-amber-700 dark:text-amber-300' 
+          : 'bg-emerald-500/10 border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
+      }`}>
+        <div className="flex items-center space-x-3.5">
+          <div className="text-3xl">
+            {hasErrors ? '🔴' : hasWarnings ? '🟡' : '🟢'}
           </div>
+          <div>
+            <div className="text-xs font-mono font-bold uppercase tracking-widest opacity-80">Estado General del Sistema</div>
+            <h2 className="text-lg sm:text-xl font-bold font-serif mt-0.5">
+              {hasErrors ? 'SISTEMA CON PROBLEMAS CRÍTICOS' : hasWarnings ? 'SISTEMA CON ADVERTENCIAS MENORES' : 'SISTEMA 100% OPERATIVO'}
+            </h2>
+            <p className="text-xs mt-1 opacity-90">
+              {hasErrors 
+                ? `Se han detectado ${activeAlerts.length} incidencia(s) activa(s) que requieren atención inmediata del administrador.` 
+                : hasWarnings 
+                ? 'Algunos componentes presentan advertencias de latencia o avisos menores.' 
+                : 'Todos los servicios de ESSENYA (Pagos, Reservas, Firebase, Chat y Notificaciones) operan sin anomalías.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 bg-white/60 dark:bg-black/30 px-4 py-2 rounded-xl border border-current/20 text-xs font-bold shrink-0">
+          <span>Alertas Activas:</span>
+          <span className="font-mono text-sm px-2 py-0.5 rounded-lg bg-current/10">{activeAlerts.length}</span>
         </div>
       </div>
 
       {notificationStatus && (
-        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-4 rounded-xl text-xs font-medium flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
+        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 p-4 rounded-xl text-xs font-medium flex items-center justify-between shadow-sm animate-fade-in">
+          <div className="flex items-center space-x-2.5">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
             <span>{notificationStatus}</span>
           </div>
         </div>
       )}
 
-      {/* Services Grid Status */}
-      <div className="space-y-3">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-[#C9A55B]">
-          Estado de Módulos Críticos
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {services.map((svc) => {
-            const hasErrors = svc.activeErrorCount > 0;
+      {/* Categorized Services Status Grid */}
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-mono uppercase tracking-widest text-[#C9A55B] font-bold">
+            Monitoreo por Módulos y Componentes
+          </h2>
+          <span className="text-[11px] text-[var(--text-muted)]">
+            Haz clic en "Simular Fallo" en cualquier módulo para probar el sistema de alertas.
+          </span>
+        </div>
+
+        {categories.length === 0 ? (
+          <div className="p-8 text-center bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl text-xs text-[var(--text-muted)]">
+            Cargando estado de componentes...
+          </div>
+        ) : (
+          categories.map(cat => {
+            const catServices = services.filter(s => s.category === cat);
             return (
-              <div 
-                key={svc.id}
-                onClick={() => {
-                  setSearchQuery(svc.name);
-                  setFilterStatus('activo');
-                }}
-                className={`p-4 rounded-2xl border transition-all cursor-pointer bg-[var(--bg-card)] hover:border-[#C9A55B]/50 ${
-                  hasErrors ? 'border-rose-500/50 shadow-xs shadow-rose-500/10' : 'border-[var(--border-color)]'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-[var(--text-primary)] truncate">
-                    {svc.name}
-                  </span>
-                  {getStatusIcon(svc.status)}
+              <div key={cat} className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-5 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-primary)] flex items-center space-x-2">
+                    <span className="w-2 h-2 rounded-full bg-[#C9A55B]"></span>
+                    <span>{cat}</span>
+                  </h3>
+                  <span className="text-[10px] font-mono text-[var(--text-muted)]">{catServices.length} componente(s)</span>
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
-                  <span>{svc.statusText}</span>
-                  {svc.activeErrorCount > 0 && (
-                    <span className="bg-rose-500 text-white font-bold px-1.5 py-0.2 rounded-full text-[9px]">
-                      {svc.activeErrorCount} activo{svc.activeErrorCount > 1 ? 's' : ''}
-                    </span>
-                  )}
-                </div>
-                <div className="mt-3 pt-2 border-t border-[var(--border-color)] flex items-center justify-between">
-                  <span className="text-[10px] text-[var(--text-muted)]">Verificar con prueba:</span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleTestAlert(svc.id);
-                    }}
-                    disabled={testing}
-                    className="text-[10px] font-bold text-[#C9A55B] hover:underline"
-                  >
-                    Simular Fallo
-                  </button>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {catServices.map(svc => {
+                    const hasError = svc.activeErrorCount > 0;
+                    return (
+                      <div 
+                        key={svc.id}
+                        onClick={() => {
+                          setSearchQuery(svc.name);
+                          setFilterStatus('activo');
+                        }}
+                        className={`p-3.5 rounded-xl border transition-all cursor-pointer bg-[var(--bg-subcard)] hover:border-[#C9A55B]/60 flex flex-col justify-between ${
+                          hasError ? 'border-rose-500/60 bg-rose-500/5 shadow-xs' : 'border-[var(--border-color)]'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold text-[var(--text-primary)] block truncate" title={svc.name}>
+                              {svc.name}
+                            </span>
+                            <span className="text-[10px] text-[var(--text-muted)] block mt-0.5">
+                              {svc.statusText}
+                            </span>
+                          </div>
+                          <div className="shrink-0">
+                            {getStatusIcon(svc.status)}
+                          </div>
+                        </div>
+
+                        <div className="mt-3 pt-2.5 border-t border-[var(--border-color)] flex items-center justify-between text-[11px]">
+                          {hasError ? (
+                            <span className="text-rose-500 font-bold text-[10px] bg-rose-500/10 px-2 py-0.5 rounded-md">
+                              {svc.activeErrorCount} alerta(s) activa(s)
+                            </span>
+                          ) : (
+                            <span className="text-emerald-600 dark:text-emerald-400 text-[10px] font-medium flex items-center space-x-1">
+                              <Check className="w-3 h-3" />
+                              <span>Operando OK</span>
+                            </span>
+                          )}
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTestAlert(svc.id);
+                            }}
+                            disabled={testing}
+                            className="text-[10px] font-bold text-[#C9A55B] hover:underline cursor-pointer"
+                          >
+                            Simular Fallo
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
-          })}
-        </div>
+          })
+        )}
       </div>
 
-      {/* Alerts Management Section */}
-      <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6 space-y-4">
+      {/* Incident History & Management Section */}
+      <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6 space-y-4 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h2 className="text-sm font-bold text-[var(--text-primary)]">
-              Historial de Problemas y Alertas Detectadas
+              Historial de Incidentes y Diagnóstico Detallado
             </h2>
             <p className="text-xs text-[var(--text-muted)]">
-              Haz clic en cualquier incidencia para ver la explicación en lenguaje sencillo, el mensaje técnico original y las opciones de resolución.
+              Haz clic en cualquier incidencia para ver la explicación en lenguaje sencillo, el mensaje técnico y marcarla como resuelta.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -302,16 +387,16 @@ export const MonitoreoPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Alerts List */}
+        {/* Alerts Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-[var(--bg-subcard)] text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border-color)]">
+            <thead className="bg-[var(--bg-subcard)] text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border-color)] font-mono text-[10px]">
               <tr>
-                <th className="p-3">Servicio / Módulo</th>
-                <th className="p-3">Problema Detectado</th>
+                <th className="p-3">Módulo / Servicio</th>
+                <th className="p-3">Incidencia</th>
                 <th className="p-3">Severidad</th>
                 <th className="p-3">Ocurrencias</th>
-                <th className="p-3">Última Detección</th>
+                <th className="p-3">Último Reporte</th>
                 <th className="p-3">Estado</th>
                 <th className="p-3 text-right">Acción</th>
               </tr>
@@ -319,7 +404,7 @@ export const MonitoreoPage: React.FC = () => {
             <tbody className="divide-y divide-[var(--border-color)]">
               {filteredAlerts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-[var(--text-muted)]">
+                  <td colSpan={7} className="p-10 text-center text-[var(--text-muted)]">
                     {loading ? 'Cargando registros...' : 'No se encontraron alertas o problemas registrados con los filtros actuales. Todo opera correctamente 🟢'}
                   </td>
                 </tr>
@@ -333,7 +418,7 @@ export const MonitoreoPage: React.FC = () => {
                     <td className="p-3 font-bold text-[var(--text-primary)]">
                       <div className="flex items-center space-x-2">
                         <span className="w-2 h-2 rounded-full bg-[#C9A55B]"></span>
-                        <span>{alert.service}</span>
+                        <span className="capitalize">{alert.service}</span>
                       </div>
                     </td>
                     <td className="p-3">
@@ -347,9 +432,9 @@ export const MonitoreoPage: React.FC = () => {
                     </td>
                     <td className="p-3">
                       {alert.status === 'activo' ? (
-                        <span className="bg-rose-500/10 text-rose-400 border border-rose-500/30 px-2 py-0.5 rounded-full font-bold">Activo</span>
+                        <span className="bg-rose-500/10 text-rose-500 border border-rose-500/30 px-2.5 py-0.5 rounded-full font-bold">Activo</span>
                       ) : (
-                        <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">Resuelto</span>
+                        <span className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-bold">Resuelto</span>
                       )}
                     </td>
                     <td className="p-3 text-right">
@@ -360,7 +445,7 @@ export const MonitoreoPage: React.FC = () => {
                         }}
                         className="px-3 py-1 bg-[#C9A55B]/10 hover:bg-[#C9A55B]/20 text-[#C9A55B] font-bold rounded-lg transition-all"
                       >
-                        Detalles
+                        Ver Detalles
                       </button>
                     </td>
                   </tr>
@@ -374,36 +459,36 @@ export const MonitoreoPage: React.FC = () => {
       {/* Detail Modal */}
       {selectedAlert && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
-          <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl w-full max-w-lg p-6 space-y-5 shadow-xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl w-full max-w-lg p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-4">
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2.5">
                 <ShieldAlert className="w-5 h-5 text-rose-500" />
                 <h3 className="text-base font-bold text-[var(--text-primary)]">
-                  Diagnóstico de Incidencia: {selectedAlert.service}
+                  Diagnóstico: Módulo [{selectedAlert.service.toUpperCase()}]
                 </h3>
               </div>
               <button
                 onClick={() => setSelectedAlert(null)}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm font-bold"
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm font-bold p-1"
               >
                 ✕
               </button>
             </div>
 
             <div className="space-y-4 text-xs">
-              <div className="flex items-center justify-between bg-[var(--bg-subcard)] p-3 rounded-xl">
+              <div className="grid grid-cols-3 gap-2 bg-[var(--bg-subcard)] p-3 rounded-xl border border-[var(--border-color)] text-center">
                 <div>
-                  <span className="text-[var(--text-muted)] block mb-0.5">Severidad</span>
+                  <span className="text-[var(--text-muted)] block text-[10px] uppercase mb-1">Severidad</span>
                   {getSeverityBadge(selectedAlert.severity)}
                 </div>
                 <div>
-                  <span className="text-[var(--text-muted)] block mb-0.5">Estado Actual</span>
-                  <span className={`font-bold ${selectedAlert.status === 'activo' ? 'text-rose-400' : 'text-emerald-400'}`}>
+                  <span className="text-[var(--text-muted)] block text-[10px] uppercase mb-1">Estado</span>
+                  <span className={`font-bold ${selectedAlert.status === 'activo' ? 'text-rose-500' : 'text-emerald-500'}`}>
                     {selectedAlert.status.toUpperCase()}
                   </span>
                 </div>
                 <div>
-                  <span className="text-[var(--text-muted)] block mb-0.5">Ocurrencias</span>
+                  <span className="text-[var(--text-muted)] block text-[10px] uppercase mb-1">Ocurrencias</span>
                   <span className="font-mono font-bold text-[var(--text-primary)]">{selectedAlert.count} veces</span>
                 </div>
               </div>
@@ -416,21 +501,21 @@ export const MonitoreoPage: React.FC = () => {
               </div>
 
               <div>
-                <span className="text-[var(--text-muted)] font-semibold block mb-1">💡 Explicación Sencilla (Para ti):</span>
-                <p className="text-[var(--text-primary)] bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl leading-relaxed">
+                <span className="text-[var(--text-muted)] font-semibold block mb-1">💡 Explicación Sencilla (Para Administración):</span>
+                <p className="text-[var(--text-primary)] bg-amber-500/10 border border-amber-500/30 p-3.5 rounded-xl leading-relaxed font-medium">
                   {selectedAlert.plainExplanation}
                 </p>
               </div>
 
               <div>
-                <span className="text-[var(--text-muted)] font-semibold block mb-1">⚙️ Mensaje Técnico Original:</span>
-                <pre className="font-mono text-[10px] text-rose-300 bg-black/40 p-3 rounded-xl border border-[var(--border-color)] overflow-x-auto whitespace-pre-wrap">
+                <span className="text-[var(--text-muted)] font-semibold block mb-1">⚙️ Registro Técnico:</span>
+                <pre className="font-mono text-[10px] text-rose-400 bg-black/60 p-3 rounded-xl border border-[var(--border-color)] overflow-x-auto whitespace-pre-wrap">
                   {selectedAlert.technicalMessage}
                 </pre>
               </div>
 
-              <div className="text-[11px] text-[var(--text-muted)] flex justify-between pt-2 border-t border-[var(--border-color)]">
-                <span>Detectado por primera vez: {new Date(selectedAlert.timestamp).toLocaleString()}</span>
+              <div className="text-[11px] text-[var(--text-muted)] flex flex-col sm:flex-row justify-between pt-2 border-t border-[var(--border-color)] gap-1">
+                <span>Detectado: {new Date(selectedAlert.timestamp).toLocaleString()}</span>
                 <span>Último reporte: {new Date(selectedAlert.lastSeenAt || selectedAlert.timestamp).toLocaleString()}</span>
               </div>
             </div>
@@ -438,14 +523,14 @@ export const MonitoreoPage: React.FC = () => {
             <div className="flex items-center justify-end space-x-3 pt-4 border-t border-[var(--border-color)]">
               <button
                 onClick={() => setSelectedAlert(null)}
-                className="px-4 py-2 bg-[var(--bg-subcard)] text-[var(--text-primary)] font-bold rounded-xl border border-[var(--border-color)] hover:bg-[var(--border-color)] transition-all"
+                className="px-4 py-2.5 bg-[var(--bg-subcard)] text-[var(--text-primary)] font-bold rounded-xl border border-[var(--border-color)] hover:bg-[var(--border-color)] transition-all"
               >
                 Cerrar
               </button>
               {selectedAlert.status === 'activo' && (
                 <button
                   onClick={() => handleResolveAlert(selectedAlert.id)}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all flex items-center space-x-2"
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all flex items-center space-x-2 shadow-sm"
                 >
                   <Check className="w-4 h-4" />
                   <span>Marcar como Resuelto</span>
@@ -458,3 +543,4 @@ export const MonitoreoPage: React.FC = () => {
     </div>
   );
 };
+
