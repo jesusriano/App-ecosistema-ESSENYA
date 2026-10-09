@@ -748,6 +748,13 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       const actualBookingId = finalizedBooking?.id || newBk.id;
       const actualBookingCode = finalizedBooking?.code || newBk.code;
 
+      trackConversion('begin_checkout', {
+        transaction_id: actualBookingId,
+        value: totalPrice,
+        currency: 'MXN',
+        items: [{ item_id: selectedService.id, item_name: newBk.serviceName, price: totalPrice, quantity: 1 }]
+      });
+
       if (paymentMethodType === 'stripe' && totalPrice > 0) {
         try {
           const metaTracking = getMetaTrackingData();
