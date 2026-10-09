@@ -95,172 +95,153 @@ export interface ConversionEventParams {
     price?: number;
     quantity?: number;
   }>;
+  /** Same event id as the server-side Meta Conversions API, so Meta counts the sale once. */
+  meta_event_id?: string;
   [key: string]: any;
 }
 
+/** Returns true the first time a key is seen in this browser (avoids counting a purchase twice on reload). */
+function markOnce(key: string): boolean {
+  try {
+    const storageKey = `ess_tracked_${key}`;
+    if (window.localStorage.getItem(storageKey)) return false;
+    window.localStorage.setItem(storageKey, String(Date.now()));
+    return true;
+  } catch {
+    return true; // Storage unavailable: GA4 (transaction_id) and Meta (eventID) still deduplicate
+  }
+}
+
+const metaStandardEvents: Record<string, string> = {
+  purchase: 'Purchase',
+  begin_checkout: 'InitiateCheckout',
+  generate_lead: 'Lead',
+  sign_up: 'CompleteRegistration',
+  contact: 'Contact',
+};
+
 export function trackConversion(eventName: string, params: ConversionEventParams = {}) {
   if (typeof window === 'undefined') return;
+
+  const { meta_event_id, ...gaParams } = params;
+  const currency = gaParams.currency || 'MXN';
+  const normalized = eventName.toLowerCase();
+
+  // A purchase is counted only once per transaction in this browser
+  if (normalized === 'purchase' && gaParams.transaction_id && !markOnce(`purchase_${gaParams.transaction_id}`)) {
+    return;
+  }
 
   // Standard Google Tag Manager (GTM) dataLayer push with both root & ecommerce schemas
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push({
     event: eventName,
-    value: params.value,
-    currency: params.currency || 'MXN',
-    transaction_id: params.transaction_id,
-    items: params.items,
+    value: gaParams.value,
+    currency,
+    transaction_id: gaParams.transaction_id,
+    items: gaParams.items,
     ecommerce: {
-      transaction_id: params.transaction_id,
-      value: params.value,
-      currency: params.currency || 'MXN',
-      items: params.items,
+      transaction_id: gaParams.transaction_id,
+      value: gaParams.value,
+      currency,
+      items: gaParams.items,
     },
-    ...params,
   });
 
   if (window.gtag) {
     window.gtag('event', eventName, {
-      ...params,
+      ...gaParams,
+      currency,
       send_to: GA_MEASUREMENT_ID,
     });
   } else {
-    // Fallback console log for development debugging
-    console.log(`[GA4 Conversion Event]: ${eventName}`, params);
+    console.log(`[GA4 Conversion Event]: ${eventName}`, gaParams);
   }
 
-  // Meta Pixel Conversion Tracking
+  // Meta Pixel. The eventID lets Meta merge this browser event with the server (CAPI) event.
   if (window.fbq) {
-    const metaStandardEvents: Record<string, string> = {
-      purchase: 'Purchase',
-      begin_checkout: 'InitiateCheckout',
-      generate_lead: 'Lead',
-      sign_up: 'CompleteRegistration',
-      contact: 'Contact',
-    };
-    const standardEvent = metaStandardEvents[eventName.toLowerCase()];
+    const standardEvent = metaStandardEvents[normalized];
+    const options = meta_event_id ? { eventID: meta_event_id } : undefined;
     if (standardEvent) {
-      window.fbq('track', standardEvent, {
-        value: params.value,
-        currency: params.currency || 'MXN',
-        content_name: params.items?.[0]?.item_name,
-        content_ids: params.items?.map(i => i.item_id),
-      });
+      const metaData: Record<string, any> = { currency, content_type: 'product' };
+      if (typeof gaParams.value === 'number') metaData.value = gaParams.value;
+      if (gaParams.items?.length) {
+        metaData.content_name = gaParams.items[0].item_name;
+        metaData.content_ids = gaParams.items.map(i => i.item_id);
+        metaData.num_items = gaParams.items.reduce((acc, i) => acc + (i.quantity || 1), 0);
+      }
+      if (options) window.fbq('track', standardEvent, metaData, options);
+      else window.fbq('track', standardEvent, metaData);
     } else {
-      window.fbq('trackCustom', eventName, params);
+      if (options) window.fbq('trackCustom', eventName, gaParams, options);
+      else window.fbq('trackCustom', eventName, gaParams);
     }
   }
 }
 
-/**
- * Tracks a successful Push notification subscription
+/*
+ * Push notification events are technical diagnostics: they go only to Google Analytics,
+ * without personal identifiers, and are NOT sent to the Meta pixel (they would add noise
+ * to the ad audiences).
  */
+
 export function trackPushSubscriptionSuccess(
   platform: 'web' | 'android' | 'ios',
-  userId: string = 'anonymous',
+  _userId: string = 'anonymous',
   method: 'vapid' | 'fcm' = 'vapid'
 ) {
   if (typeof window === 'undefined' || isInternalPortalPath()) return;
-  
-  const params = {
-    platform,
-    user_id: userId,
-    method,
-    timestamp: new Date().toISOString()
-  };
-
+  const params = { platform, method };
   if (window.gtag) {
-    window.gtag('event', 'push_subscription_success', params);
+    window.gtag('event', 'push_subscription_success', { ...params, send_to: GA_MEASUREMENT_ID });
   } else {
     console.log('[Analytics] Event: push_subscription_success', params);
   }
-
-  if (window.fbq) {
-    window.fbq('trackCustom', 'PushSubscriptionSuccess', params);
-  }
 }
 
-/**
- * Tracks a failed Push notification subscription attempt
- */
 export function trackPushSubscriptionError(
   platform: 'web' | 'android' | 'ios',
-  userId: string = 'anonymous',
+  _userId: string = 'anonymous',
   errorMessage: string = 'Unknown Error'
 ) {
   if (typeof window === 'undefined' || isInternalPortalPath()) return;
-
-  const params = {
-    platform,
-    user_id: userId,
-    error_message: errorMessage.substring(0, 100), // Limit parameter size
-    timestamp: new Date().toISOString()
-  };
-
+  const params = { platform, error_message: String(errorMessage || '').substring(0, 100) };
   if (window.gtag) {
-    window.gtag('event', 'push_subscription_failed', params);
+    window.gtag('event', 'push_subscription_failed', { ...params, send_to: GA_MEASUREMENT_ID });
   } else {
     console.log('[Analytics] Event: push_subscription_failed', params);
   }
-
-  if (window.fbq) {
-    window.fbq('trackCustom', 'PushSubscriptionFailed', params);
-  }
 }
 
-/**
- * Tracks the successful delivery (receipt) of a push notification on the client
- */
 export function trackPushNotificationReceived(
   platform: 'web' | 'android' | 'ios',
   title: string,
-  bookingId?: string
+  _bookingId?: string
 ) {
   if (typeof window === 'undefined' || isInternalPortalPath()) return;
-
-  const params = {
-    platform,
-    notification_title: title,
-    booking_id: bookingId || 'none',
-    timestamp: new Date().toISOString()
-  };
-
+  const params = { platform, notification_title: String(title || '').substring(0, 100) };
   if (window.gtag) {
-    window.gtag('event', 'push_notification_received', params);
+    window.gtag('event', 'push_notification_received', { ...params, send_to: GA_MEASUREMENT_ID });
   } else {
     console.log('[Analytics] Event: push_notification_received', params);
   }
-
-  if (window.fbq) {
-    window.fbq('trackCustom', 'PushNotificationReceived', params);
-  }
 }
 
-/**
- * Tracks when a user clicks on a received push notification
- */
 export function trackPushNotificationClicked(
   platform: 'web' | 'android' | 'ios',
   title: string,
-  bookingId?: string,
+  _bookingId?: string,
   action?: string
 ) {
   if (typeof window === 'undefined' || isInternalPortalPath()) return;
-
   const params = {
     platform,
-    notification_title: title,
-    booking_id: bookingId || 'none',
+    notification_title: String(title || '').substring(0, 100),
     action_clicked: action || 'open_app',
-    timestamp: new Date().toISOString()
   };
-
   if (window.gtag) {
-    window.gtag('event', 'push_notification_clicked', params);
+    window.gtag('event', 'push_notification_clicked', { ...params, send_to: GA_MEASUREMENT_ID });
   } else {
     console.log('[Analytics] Event: push_notification_clicked', params);
-  }
-
-  if (window.fbq) {
-    window.fbq('trackCustom', 'PushNotificationClicked', params);
   }
 }

@@ -141,6 +141,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Datos del navegador del cliente para atribución en Meta (IP, navegador).
+    // Solo el servidor (Admin SDK) los lee y escribe.
+    match /meta_attribution/{docId} {
+      allow read, write: if false;
+    }
+
     // ========================================================
     // 4. PUBLIC CATALOGS (Read: Public, Write: Admin)
     // ========================================================
@@ -270,16 +276,38 @@ service cloud.firestore {
     // 7. BUSINESS OPERATIONS (Bookings, Invoices, Payments)
     // ========================================================
     
+    // Terapeuta aprobada (no pendiente, rechazada, bloqueada ni inactiva)
+    function isApprovedTherapist() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/terapeutas/$(request.auth.uid)) &&
+        !(get(/databases/$(database)/documents/terapeutas/$(request.auth.uid)).data.get('estado', 'pendiente')
+            in ['pendiente', 'rechazado', 'bloqueado', 'inactivo']);
+    }
+
+    // Participante de la reserva: el cliente dueño o una terapeuta asignada
+    function isBookingParticipant(data) {
+      return data.clientId == request.auth.uid ||
+        data.get('therapistId', '') == request.auth.uid ||
+        data.get('therapistId2', '') == request.auth.uid ||
+        (data.get('therapistIds', []) is list && request.auth.uid in data.get('therapistIds', []));
+    }
+
     match /reservas/{reservaId} {
-      allow get, list: if isSignedIn();
-      allow create: if isSignedIn();
+      // Solo el cliente dueño, las terapeutas asignadas o un admin ven la reserva.
+      // Las terapeutas aprobadas además ven las reservas pendientes (ofertas de servicio).
+      allow get, list: if isSignedIn() && (
+        isAdmin() ||
+        isBookingParticipant(resource.data) ||
+        (resource.data.state == 'pendiente' && isApprovedTherapist())
+      );
+      // Un cliente solo puede crear reservas a su propio nombre
+      allow create: if isSignedIn() && (isAdmin() || incoming().clientId == request.auth.uid);
+      // Ya no basta con que la reserva esté "activa": hay que ser participante, admin,
+      // o terapeuta aprobada tomando una reserva pendiente
       allow update: if isSignedIn() && (
-        resource.data.clientId == request.auth.uid || 
-        resource.data.therapistId == request.auth.uid || 
-        (resource.data.keys().hasAny(['therapistId2']) && resource.data.therapistId2 == request.auth.uid) ||
-        (resource.data.keys().hasAny(['therapistIds']) && request.auth.uid in resource.data.therapistIds) ||
-        resource.data.state in ['pendiente', 'aceptada', 'en_camino', 'llegue', 'servicio_iniciado'] ||
-        isAdmin()
+        isAdmin() ||
+        isBookingParticipant(resource.data) ||
+        (resource.data.state == 'pendiente' && isApprovedTherapist())
       );
       allow delete: if isAdmin();
     }

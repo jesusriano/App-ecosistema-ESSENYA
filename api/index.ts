@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import webPush from "web-push";
 import Stripe from "stripe";
+import crypto from "crypto";
 import { stripeService } from "./stripe-service.js";
 import { metaConversionsService } from "./meta-conversions-service.js";
 import {
@@ -313,22 +314,13 @@ function rateLimiter(req: Request, res: Response, next: NextFunction): void {
     return next();
   }
 
-  let identifier = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown_ip";
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    try {
-      const token = authHeader.split(" ")[1];
-      const parts = token.split(".");
-      if (parts.length === 3) {
-        const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
-        if (payload.user_id || payload.sub) {
-          identifier = payload.user_id || payload.sub;
-        }
-      }
-    } catch {
-      // Fallback to IP address
-    }
-  }
+  // Identify by the real client IP (first value of x-forwarded-for, set by Vercel).
+  // The token is NOT decoded here: an unverified token can be forged to get a fresh quota on every request.
+  const forwardedFor = req.headers["x-forwarded-for"];
+  const identifier =
+    (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor || "").split(",")[0].trim() ||
+    req.socket.remoteAddress ||
+    "unknown_ip";
 
   const now = Date.now();
   const cleanKey = identifier.replace(/[/\\?%*:|"<>]/g, "-");
@@ -351,6 +343,68 @@ function rateLimiter(req: Request, res: Response, next: NextFunction): void {
 }
 
 app.use(rateLimiter);
+
+/**
+ * Shared, durable attempt counter stored in Firestore (works across all Vercel instances, unlike
+ * memory). Used for sensitive endpoints such as gift-card codes. Returns true when allowed.
+ */
+async function checkDurableRateLimit(key: string, limit: number, windowMs: number): Promise<boolean> {
+  try {
+    const db = getAdminFirestore();
+    const safeKey = key.replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 300);
+    const ref = db.collection("security_rate_limits").doc(safeKey);
+    return await db.runTransaction(async (t: any) => {
+      const snap = await t.get(ref);
+      const now = Date.now();
+      const data = snap.exists ? snap.data() : null;
+      if (!data || now > Number(data.resetAt || 0)) {
+        t.set(ref, { count: 1, resetAt: now + windowMs, updatedAt: new Date(now).toISOString() });
+        return true;
+      }
+      if (Number(data.count || 0) >= limit) return false;
+      t.update(ref, { count: Number(data.count || 0) + 1, updatedAt: new Date(now).toISOString() });
+      return true;
+    });
+  } catch (err: any) {
+    // If Firestore is unavailable, do not block real customers
+    console.warn("[RateLimit] Contador no disponible:", err?.message || err);
+    return true;
+  }
+}
+
+/** Max 5 gift-card code attempts per minute and 20 per hour, per user and per IP. */
+async function giftCodeAttemptsAllowed(req: Request): Promise<boolean> {
+  const uid = (req as any).user?.uid || "anon";
+  const forwardedFor = req.headers["x-forwarded-for"];
+  const ip = (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor || "").split(",")[0].trim() || req.socket.remoteAddress || "unknown_ip";
+  const checks = await Promise.all([
+    checkDurableRateLimit(`giftcode:min:uid:${uid}`, 5, 60 * 1000),
+    checkDurableRateLimit(`giftcode:min:ip:${ip}`, 10, 60 * 1000),
+    checkDurableRateLimit(`giftcode:hour:uid:${uid}`, 20, 60 * 60 * 1000),
+  ]);
+  return checks.every(Boolean);
+}
+
+/** Unpredictable gift-card code, e.g. ESS-7KQ9-M2XD-4HTP (no 0/O/1/I to avoid confusion). */
+function generateGiftCardCode(): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const pick = () => alphabet[crypto.randomInt(alphabet.length)];
+  const block = () => Array.from({ length: 4 }, pick).join("");
+  return `ESS-${block()}-${block()}-${block()}`;
+}
+
+/** Strong temporary password (upper, lower, digit and symbol guaranteed). */
+function generateTempPassword(): string {
+  return `Ess${crypto.randomBytes(9).toString("base64url")}#7a`;
+}
+
+/** Booking code shown to customers, e.g. ESS-482913. Not used as a credential. */
+function generateBookingCode(): string {
+  return `ESS-${crypto.randomInt(100000, 1000000)}`;
+}
+
+/** The demo card REGALO-ESS-1400 is only allowed outside production and if explicitly enabled. */
+const DEMO_GIFT_CARD_ENABLED = process.env.NODE_ENV !== "production" && process.env.ENABLE_DEMO_GIFT_CARD === "true";
 
 // Firebase Admin Verify Token Middleware
 async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void | any> {
@@ -815,8 +869,7 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
     let isUnique = false;
     let attempts = 0;
     while (!isUnique && attempts < 10) {
-      const codeNum = Math.floor(1000 + Math.random() * 9000);
-      code = `ESS-${codeNum}`;
+      code = generateBookingCode();
       const existing = await getAdminFirestore().collection("reservas").where("code", "==", code).limit(1).get();
       if (existing.empty) {
         isUnique = true;
@@ -1518,7 +1571,7 @@ app.post("/api/admin/therapist/status", requireAdmin, async (req: Request, res: 
     let generatedPassword: string | undefined = undefined;
     if (!authUserRecord && targetEmail) {
       try {
-        generatedPassword = `Essenya${Math.floor(1000 + Math.random() * 9000)}!`;
+        generatedPassword = generateTempPassword();
         authUserRecord = await auth.createUser({
           email: targetEmail,
           password: generatedPassword,
@@ -2180,8 +2233,7 @@ app.post("/api/wallet/purchase", requireAuth, async (req, res) => {
       }
     }
 
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const code = `REGALO-ESS-${randomSuffix}`;
+    const code = generateGiftCardCode();
 
     const newGiftCard = {
       code,
@@ -2207,6 +2259,8 @@ app.post("/api/wallet/purchase", requireAuth, async (req, res) => {
     // Store in centralized gift_cards collection
     const docRef = getAdminFirestore().collection('gift_cards').doc();
     await docRef.set(newGiftCard);
+    // Customer's browser data, used to report the purchase to Meta when an admin activates the card
+    await saveMetaAttribution(getAdminFirestore(), `giftcard_${docRef.id}`, req, req.body?.metaTracking, { giftCardId: docRef.id, clientId: uid });
 
     res.json({
       success: true,
@@ -2260,6 +2314,13 @@ app.post("/api/admin/gift-cards/activate", requireAdmin, async (req, res) => {
       return { id: cardDoc.id, ...cardData, ...activatedData };
     });
 
+    // Report the paid gift card to Meta (not blocking). Uses the buyer's data saved at purchase time.
+    try {
+      await sendGiftCardPurchaseToMeta(getAdminFirestore(), result as any);
+    } catch (metaErr: any) {
+      console.warn('[Meta CAPI] No se pudo reportar la tarjeta de regalo:', metaErr?.message || metaErr);
+    }
+
     res.json({ success: true, message: "Tarjeta de regalo activada exitosamente tras verificación de pago.", card: result });
   } catch (err: any) {
     res.status(400).json({ success: false, error: err.message || "Error al activar tarjeta." });
@@ -2285,7 +2346,7 @@ app.post("/api/admin/gift-cards/generate", requireAdmin, async (req, res) => {
     const uid = (req as any).user?.uid;
     const { customCode, recipientName, amount, senderName, customMessage } = req.body;
     
-    const code = (customCode || `REGALO-ESS-${Math.floor(1000 + Math.random() * 9000)}`).trim().toUpperCase();
+    const code = (customCode || generateGiftCardCode()).trim().toUpperCase();
     const balance = typeof amount === 'number' && amount > 0 ? amount : 1400;
 
     // Check if code already exists
@@ -2335,6 +2396,9 @@ app.post("/api/wallet/validate-code", requireAuth, async (req, res) => {
     const uid = (req as any).user?.uid;
     const cleanCode = (code || '').trim().toUpperCase();
     if (!cleanCode) return res.status(400).json({ valid: false, message: "Código no proporcionado." });
+    if (!(await giftCodeAttemptsAllowed(req))) {
+      return res.status(429).json({ valid: false, message: "Demasiados intentos. Espera unos minutos e inténtalo de nuevo." });
+    }
 
     // 1. Check user's personal wallet first
     const userCards = await getAdminFirestore().collection('clientes').doc(uid).collection('billetera')
@@ -2362,7 +2426,7 @@ app.post("/api/wallet/validate-code", requireAuth, async (req, res) => {
       .get();
 
     if (globalCards.empty) {
-      if (cleanCode === 'REGALO-ESS-1400') {
+      if (DEMO_GIFT_CARD_ENABLED && cleanCode === 'REGALO-ESS-1400') {
         const demoCard = {
           code: 'REGALO-ESS-1400',
           title: 'Tarjeta de Regalo ESSENYA Oficial ($1,400 MXN)',
@@ -2420,13 +2484,16 @@ app.post("/api/wallet/redeem", requireAuth, async (req, res) => {
 
     const cleanCode = (code || '').trim().toUpperCase();
     if (!cleanCode) return res.status(400).json({ error: "Código vacío" });
+    if (!(await giftCodeAttemptsAllowed(req))) {
+      return res.status(429).json({ success: false, error: "Demasiados intentos. Espera unos minutos e inténtalo de nuevo." });
+    }
 
     // Transactional redeem
     const result = await getAdminFirestore().runTransaction(async (t) => {
       const cardsQuery = await t.get(getAdminFirestore().collection('gift_cards').where('code', '==', cleanCode).limit(1));
       let cardDoc: any = !cardsQuery.empty ? cardsQuery.docs[0] : null;
 
-      if (!cardDoc && cleanCode === 'REGALO-ESS-1400') {
+      if (!cardDoc && DEMO_GIFT_CARD_ENABLED && cleanCode === 'REGALO-ESS-1400') {
         const demoRef = getAdminFirestore().collection('gift_cards').doc('gift-card-demo-1400');
         const demoCard = {
           code: 'REGALO-ESS-1400',
@@ -2751,7 +2818,7 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
           let gcDoc = gcQuery && !gcQuery.empty ? gcQuery.docs[0] : null;
 
           // Support system demo card if not present yet
-          if (!gcDoc && cleanCode === 'REGALO-ESS-1400') {
+          if (!gcDoc && DEMO_GIFT_CARD_ENABLED && cleanCode === 'REGALO-ESS-1400') {
             const demoRef = getAdminFirestore().collection('gift_cards').doc('gift-card-demo-1400');
             const demoCard = {
               code: 'REGALO-ESS-1400',
@@ -2858,8 +2925,7 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
       }
 
       // Booking parameters
-      const codeNum = Math.floor(1000 + Math.random() * 9000);
-      const code = `ESS-${codeNum}`;
+      const code = generateBookingCode();
       const newBookingRef = getAdminFirestore().collection('reservas').doc();
       const bookingId = newBookingRef.id;
 
@@ -2958,6 +3024,12 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
 
       // 5. Create Booking in Firestore
       t.set(newBookingRef, newBooking);
+
+      // 6. Customer's browser data for Meta attribution (server-only collection, see firestore.rules)
+      t.set(getAdminFirestore().collection('meta_attribution').doc(bookingId), Object.fromEntries(
+        Object.entries({ ...buildMetaAttribution(req, req.body?.metaTracking), bookingId, clientId: uid })
+          .filter(([, v]) => v !== null && v !== undefined && v !== "")
+      ));
 
       return { bookingId, booking: newBooking, calculatedFinalTotal, isAuthorizedForDispatch };
     });
@@ -3475,8 +3547,7 @@ app.post("/api/admin/bookings/manual", requireAuth, async (req: Request, res: Re
     const db = getAdminFirestore();
     const newDocRef = db.collection('reservas').doc();
     const bookingId = newDocRef.id;
-    const codeNum = Math.floor(1000 + Math.random() * 9000);
-    const code = `ESS-${codeNum}`;
+    const code = generateBookingCode();
     const nowIso = new Date().toISOString();
 
     let assignedTherapistData: any = null;
@@ -3717,6 +3788,25 @@ app.get("/api/recordings/:serviceId", requireAuth, async (req: Request, res: Res
     if (!serviceId) return res.status(400).json({ success: false, error: "serviceId es requerido" });
 
     const db = getAdminFirestore();
+
+    // Only an admin, or the client / therapists of that same booking, can listen to its recordings
+    const callerUid = (req as any).user?.uid;
+    const callerEmail = (req as any).user?.email || '';
+    const { isAdmin } = await verifyAdminStatus(callerUid, callerEmail);
+    if (!isAdmin) {
+      const bookingSnap = await db.collection('reservas').doc(String(serviceId)).get();
+      const b = bookingSnap.exists ? bookingSnap.data() || {} : null;
+      const isParticipant = !!b && (
+        b.clientId === callerUid ||
+        b.therapistId === callerUid ||
+        b.therapistId2 === callerUid ||
+        (Array.isArray(b.therapistIds) && b.therapistIds.includes(callerUid))
+      );
+      if (!isParticipant) {
+        return res.status(403).json({ success: false, error: "No autorizado para consultar estas grabaciones." });
+      }
+    }
+
     const snap = await db.collection('grabaciones_servicio')
       .where('serviceId', '==', serviceId)
       .get();
@@ -3833,6 +3923,69 @@ async function verifyAndConfirmStripePayment(
 // ========================================================
 // Helper Centralizado: Envío Seguro de Evento Purchase a Meta CAPI
 // ========================================================
+/**
+ * Reports a paid gift card to Meta once (idempotent through gift_cards.metaPurchaseSent).
+ * Only cards bought by customers are reported (not cards generated by the admin as courtesy).
+ */
+async function sendGiftCardPurchaseToMeta(db: any, card: { id: string; [key: string]: any }) {
+  if (!card?.id) return;
+  const cardRef = db.collection('gift_cards').doc(card.id);
+  const snap = await cardRef.get();
+  if (!snap.exists) return;
+  const data = snap.data() || {};
+  if (data.metaPurchaseSent === true) return;
+  if (['administracion', 'cortesia'].includes(String(data.paymentMethod || ''))) return;
+  const value = Number(data.purchasePrice || data.initialAmount) || 0;
+  if (value <= 0) return;
+
+  let stored: Record<string, any> = {};
+  try {
+    const attrSnap = await db.collection('meta_attribution').doc(`giftcard_${card.id}`).get();
+    if (attrSnap.exists) stored = attrSnap.data() || {};
+  } catch {}
+
+  let email: string | undefined = stored.clientEmail || undefined;
+  let fullName: string | undefined;
+  let phone: string | undefined;
+  if (data.purchaserId) {
+    try {
+      const clientSnap = await db.collection('clientes').doc(String(data.purchaserId)).get();
+      if (clientSnap.exists) {
+        const c = clientSnap.data() || {};
+        email = email || c.email || undefined;
+        fullName = c.name || undefined;
+        phone = c.phone || undefined;
+      }
+    } catch {}
+  }
+
+  const eventId = `giftcard_${card.id}`;
+  const capiResult = await metaConversionsService.sendPurchaseEvent({
+    eventId,
+    value,
+    currency: 'MXN',
+    fbp: stored.fbp || undefined,
+    fbc: stored.fbc || undefined,
+    email,
+    phone,
+    clientIp: stored.clientIp || undefined,
+    userAgent: stored.userAgent || undefined,
+    eventSourceUrl: stored.eventSourceUrl || undefined,
+    externalId: data.purchaserId || undefined,
+    fullName,
+    serviceId: 'gift-card',
+    serviceName: data.title || 'Tarjeta de Regalo ESSENYA',
+    bookingId: card.id
+  });
+
+  const nowIso = new Date().toISOString();
+  if (capiResult.success && (capiResult.eventsReceived || 0) > 0) {
+    await cardRef.update({ metaPurchaseSent: true, metaPurchaseEventId: eventId, metaPurchaseSentAt: nowIso });
+  } else {
+    await cardRef.update({ metaPurchaseSent: false, metaPurchaseLastError: capiResult.error || capiResult.reason || 'Meta no confirmó', metaPurchaseLastAttemptAt: nowIso });
+  }
+}
+
 interface SendMetaPurchaseOptions {
   session?: Stripe.Checkout.Session | null;
   req?: Request | null;
@@ -3841,6 +3994,64 @@ interface SendMetaPurchaseOptions {
   clientIp?: string;
   userAgent?: string;
   eventId?: string;
+  /**
+   * true ONLY when `req` comes from the customer's own browser (e.g. confirm-stripe-payment called
+   * by the booking owner). The Stripe webhook and admin endpoints must NOT use their own IP/UA,
+   * because that would attribute the sale to Stripe's servers or to the admin.
+   */
+  requestIsFromCustomer?: boolean;
+  /** Unix seconds when the payment happened (e.g. Stripe event.created). */
+  eventTime?: number;
+}
+
+/** Real IP of the browser that made this request (first value of x-forwarded-for on Vercel). */
+function getRequestClientIp(req: Request): string | undefined {
+  const forwarded = req.headers["x-forwarded-for"];
+  const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded || "").split(",")[0].trim();
+  const ip = first || req.socket?.remoteAddress || "";
+  return ip ? ip.replace(/^::ffff:/, "").slice(0, 64) : undefined;
+}
+
+function getRequestUserAgent(req: Request): string | undefined {
+  const ua = req.headers["user-agent"];
+  return typeof ua === "string" && ua ? ua.slice(0, 400) : undefined;
+}
+
+function cleanMetaCookie(value: any): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const v = value.trim();
+  return /^fb\.\d\.\d+\.[A-Za-z0-9_\-.]+$/.test(v) && v.length <= 300 ? v : undefined;
+}
+
+/**
+ * Snapshot of the CUSTOMER's browser data, taken when the customer creates the booking or the
+ * gift card. It is stored in the server-only collection `meta_attribution` (denied to clients by
+ * firestore.rules) and used later to attribute the purchase in Meta, even if the payment is
+ * confirmed by Stripe's webhook or by an admin days later.
+ */
+function buildMetaAttribution(req: Request, metaTracking?: any): Record<string, any> {
+  const referer = typeof req.headers.referer === "string" ? req.headers.referer : "";
+  return {
+    clientIp: getRequestClientIp(req) || null,
+    userAgent: getRequestUserAgent(req) || null,
+    fbp: cleanMetaCookie(metaTracking?.fbp) || null,
+    fbc: cleanMetaCookie(metaTracking?.fbc) || null,
+    eventSourceUrl: /^https:\/\/\S+$/.test(referer) ? referer.split("?")[0].slice(0, 300) : null,
+    clientEmail: (req as any).user?.email || null,
+    capturedAt: new Date().toISOString()
+  };
+}
+
+async function saveMetaAttribution(db: any, docId: string, req: Request, metaTracking?: any, extra: Record<string, any> = {}) {
+  try {
+    // Empty values are dropped so a later save never erases data captured earlier
+    const data = Object.fromEntries(
+      Object.entries({ ...buildMetaAttribution(req, metaTracking), ...extra }).filter(([, v]) => v !== null && v !== undefined && v !== "")
+    );
+    await db.collection("meta_attribution").doc(docId).set(data, { merge: true });
+  } catch (err: any) {
+    console.warn(`[Meta Attribution] No se pudo guardar la atribución de ${docId}:`, err?.message || err);
+  }
 }
 
 async function sendMetaPurchaseForBooking(
@@ -3886,17 +4097,38 @@ async function sendMetaPurchaseForBooking(
       return { success: false, skipped: true, reason: 'zero_or_negative_total' };
     }
 
+    // Only paid bookings are purchases (a Stripe session passed here was already verified as paid)
+    if (!session && bData.paymentStatus !== 'pagado') {
+      return { success: false, skipped: true, reason: 'not_paid' };
+    }
+
     const nowIso = new Date().toISOString();
-    const capiEventId = options?.eventId || session?.metadata?.eventId || `purchase_${targetBookingId}`;
+    // Always the same id the browser uses, so Meta counts the sale once (browser + server deduplication)
+    const capiEventId = `purchase_${targetBookingId}`;
     const currencyVal = (session?.currency || bData.currency || 'mxn').toUpperCase();
 
-    const clientIp = options?.clientIp || (req ? ((req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress) : undefined);
-    const userAgent = options?.userAgent || (req ? (req.headers['user-agent'] as string) : undefined);
+    // Customer data captured when the customer created the booking (server-only collection)
+    let stored: Record<string, any> = {};
+    try {
+      const attrSnap = await db.collection('meta_attribution').doc(targetBookingId).get();
+      if (attrSnap.exists) stored = attrSnap.data() || {};
+    } catch {}
+    const meta: Record<string, any> = session?.metadata || {};
+    const customerReq = options?.requestIsFromCustomer && req ? req : null;
 
-    const fbp = options?.fbp || session?.metadata?.fbp;
-    const fbc = options?.fbc || session?.metadata?.fbc;
+    const clientIp = options?.clientIp || meta.client_ip || stored.clientIp || (customerReq ? getRequestClientIp(customerReq) : undefined);
+    const userAgent = options?.userAgent || meta.client_ua || stored.userAgent || (customerReq ? getRequestUserAgent(customerReq) : undefined);
 
-    const email = session?.customer_details?.email || session?.customer_email || bData.clientEmail;
+    const fbp = cleanMetaCookie(options?.fbp) || cleanMetaCookie(meta.fbp) || stored.fbp || undefined;
+    const fbc = cleanMetaCookie(options?.fbc) || cleanMetaCookie(meta.fbc) || stored.fbc || undefined;
+
+    let email: string | undefined = session?.customer_details?.email || session?.customer_email || stored.clientEmail || bData.clientEmail || undefined;
+    if (!email && bData.clientId) {
+      try {
+        const clientSnap = await db.collection('clientes').doc(String(bData.clientId)).get();
+        if (clientSnap.exists) email = clientSnap.data()?.email || undefined;
+      } catch {}
+    }
     const phone = session?.customer_details?.phone || bData.clientPhone;
 
     const capiResult = await metaConversionsService.sendPurchaseEvent({
@@ -3907,8 +4139,13 @@ async function sendMetaPurchaseForBooking(
       fbc,
       email,
       phone,
-      clientIp,
-      userAgent,
+      clientIp: clientIp || undefined,
+      userAgent: userAgent || undefined,
+      eventSourceUrl: stored.eventSourceUrl || undefined,
+      externalId: bData.clientId || undefined,
+      fullName: bData.clientName || undefined,
+      eventTime: options?.eventTime,
+      serviceId: bData.serviceId || undefined,
       serviceName: bData.serviceName || 'Servicio de Masaje VIP ESSENYA',
       bookingId: targetBookingId
     });
@@ -3984,13 +4221,32 @@ app.post("/api/bookings/confirm-stripe-payment", requireAuth, async (req: Reques
     try {
       await sendMetaPurchaseForBooking(db, verificationResult.realBookingId, {
         session: verificationResult.session,
-        req
+        req,
+        // This request comes from the customer's own browser only when the owner confirms
+        requestIsFromCustomer: isOwner
       });
     } catch (metaErr: any) {
       console.warn(`[Confirm Stripe Payment -> Meta CAPI] Error no bloqueante al enviar evento Purchase para reserva ${verificationResult.realBookingId}:`, metaErr?.message || metaErr);
     }
 
-    res.json({ success: true, bookingId: verificationResult.realBookingId, verified: true });
+    // Data for the browser's purchase event (GA4 / Meta Pixel). Same event id as the server event.
+    let purchase: Record<string, any> | null = null;
+    try {
+      const paidSnap = await db.collection('reservas').doc(verificationResult.realBookingId).get();
+      const paid = paidSnap.exists ? paidSnap.data() || {} : {};
+      const sessionTotal = verificationResult.session?.amount_total ? verificationResult.session.amount_total / 100 : 0;
+      purchase = {
+        paid: paid.paymentStatus === 'pagado',
+        bookingId: verificationResult.realBookingId,
+        eventId: `purchase_${verificationResult.realBookingId}`,
+        total: sessionTotal || Number(paid.total) || 0,
+        currency: (verificationResult.session?.currency || 'mxn').toUpperCase(),
+        serviceId: paid.serviceId || null,
+        serviceName: paid.serviceName || null
+      };
+    } catch {}
+
+    res.json({ success: true, bookingId: verificationResult.realBookingId, verified: true, purchase });
   } catch (err: any) {
     console.error("Error al confirmar pago de Stripe:", err);
     const db = getAdminFirestore();
@@ -4015,7 +4271,8 @@ app.post("/api/admin/bookings/:bookingId/meta-purchase", requireAdmin, async (re
       return res.status(400).json({ success: false, error: "bookingId es requerido en los parámetros" });
     }
     const db = getAdminFirestore();
-    const result = await sendMetaPurchaseForBooking(db, bookingId, { req });
+    // The admin's own IP/browser must not be sent: the stored customer data is used instead
+    const result = await sendMetaPurchaseForBooking(db, bookingId);
     return res.json({ success: true, result });
   } catch (err: any) {
     console.error(`[Admin Meta Purchase Endpoint] Error al procesar evento para reserva ${req.params.bookingId}:`, err);
@@ -4745,9 +5002,14 @@ async function processSecureCheckout(req: Request, res: Response) {
     const successUrl = validateSafeRedirectUrl(req.body?.successUrl || req.query?.successUrl, defaultSuccessUrl, req);
     const cancelUrl = validateSafeRedirectUrl(req.body?.cancelUrl || req.query?.cancelUrl, defaultCancelUrl, req);
 
-    const fbp = req.body?.fbp || req.query?.fbp;
-    const fbc = req.body?.fbc || req.query?.fbc;
-    const eventId = req.body?.eventId || req.query?.eventId;
+    const fbp = cleanMetaCookie(req.body?.fbp || req.query?.fbp);
+    const fbc = cleanMetaCookie(req.body?.fbc || req.query?.fbc);
+    // When the owner starts the payment, this request comes from the customer's own browser
+    const customerIp = isOwner ? getRequestClientIp(req) : undefined;
+    const customerUa = isOwner ? getRequestUserAgent(req) : undefined;
+    if (isOwner) {
+      await saveMetaAttribution(db, realBookingId, req, { fbp, fbc }, { bookingId: realBookingId, clientId: uid });
+    }
 
     const result = await stripeService.createCheckoutSession({
       bookingId: realBookingId,
@@ -4756,7 +5018,8 @@ async function processSecureCheckout(req: Request, res: Response) {
       customerEmail,
       fbp,
       fbc,
-      eventId,
+      clientIp: customerIp,
+      clientUserAgent: customerUa,
       successUrl,
       cancelUrl
     });
@@ -4923,7 +5186,8 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
         await verifyAndConfirmStripePayment(db, bookingId, session.id, session);
 
         // Envío seguro de Meta CAPI
-        await sendMetaPurchaseForBooking(db, bookingId, { session, req });
+        // Stripe's servers make this request: use the customer data saved at checkout, never req's IP
+        await sendMetaPurchaseForBooking(db, bookingId, { session, eventTime: event.created });
       } catch (webhookErr: any) {
         console.error(`[Stripe Webhook] Error processing booking ${bookingId}:`, webhookErr);
       }

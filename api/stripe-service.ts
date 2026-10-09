@@ -58,10 +58,15 @@ export class StripeService {
     fbp?: string;
     fbc?: string;
     eventId?: string;
+    /** Customer's browser IP / user agent, so Meta can match the purchase to the person who saw the ad. */
+    clientIp?: string;
+    clientUserAgent?: string;
     successUrl: string;
     cancelUrl: string;
   }): Promise<{ success: boolean; url: string; sessionId: string; mode: 'test' | 'live' }> {
-    const { bookingId, serviceName, total, priceId, customerEmail, fbp, fbc, eventId, successUrl, cancelUrl } = params;
+    const { bookingId, serviceName, total, priceId, customerEmail, fbp, fbc, clientIp, clientUserAgent, successUrl, cancelUrl } = params;
+    // The purchase event id is always derived from the booking, so browser and server events match in Meta
+    const eventId = bookingId ? `purchase_${bookingId}` : (params.eventId || `purchase_${Date.now()}`);
 
     if (!total && !priceId) {
       throw new Error("Faltan datos requeridos de la reserva (total o priceId).");
@@ -112,9 +117,11 @@ export class StripeService {
       metadata: {
         bookingId: bookingId || '',
         stripe_mode: mode,
-        fbp: fbp || '',
-        fbc: fbc || '',
-        eventId: eventId || `purchase_${bookingId}`,
+        fbp: (fbp || '').slice(0, 300),
+        fbc: (fbc || '').slice(0, 300),
+        client_ip: (clientIp || '').slice(0, 64),
+        client_ua: (clientUserAgent || '').slice(0, 450),
+        eventId,
         integration_identifier: 'hosted_mobile_app_0001',
         origin_context: 'mobile_app'
       }

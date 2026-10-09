@@ -25,6 +25,7 @@ import {
 } from '../utils/authValidations';
 import { handleFirestoreError, OperationType } from '../utils/firestoreDebug';
 import { checkIsAdminInFirestore, AdminVerificationResult } from '../services/adminAuthService';
+import { trackConversion } from '../utils/analytics';
 
 interface AuthSessions {
   cliente: UserAuthProfile | null;
@@ -495,6 +496,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // 4. Update session
       updateSession(role, newProfile);
       clearFailedAttempts(role, correo);
+
+      // Medición: nuevo cliente registrado (GA4 sign_up / Meta CompleteRegistration).
+      // Las postulaciones de terapeutas no se miden para no mezclarlas con clientes.
+      if (role === 'cliente') {
+        trackConversion('sign_up', { method: 'email' });
+      }
 
       setLoading(false);
       return { success: true, uid };

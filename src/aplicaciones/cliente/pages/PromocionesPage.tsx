@@ -61,7 +61,7 @@ export const PromocionesPage: React.FC<PromocionesPageProps> = ({ onStartBooking
     fetchSecurityData();
   }, [client?.id, completedCount]);
 
-  const primaryGiftCard = giftCards[0] || { code: 'REGALO-ESS-1400', currentBalance: 1400 };
+  const primaryGiftCard = giftCards[0] || { code: '', currentBalance: 0 };
 
   const handleCopyCode = (code: string) => {
     navigator.clipboard.writeText(code);

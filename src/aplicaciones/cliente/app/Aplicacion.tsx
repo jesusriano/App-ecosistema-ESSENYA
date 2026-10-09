@@ -56,6 +56,32 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { validateProfilePhoto } from '../../../shared/utils/fileValidation';
 
 
+/**
+ * Medición de compra confirmada (GA4 purchase / Meta Purchase).
+ * El monto y el identificador vienen del servidor (ya verificados con Stripe), y el identificador
+ * es el mismo que usa el servidor con Meta, así la venta se cuenta una sola vez.
+ */
+function trackPaidBookingPurchase(purchase?: {
+  paid?: boolean; bookingId?: string; eventId?: string; total?: number;
+  currency?: string; serviceId?: string | null; serviceName?: string | null;
+} | null) {
+  if (!purchase || !purchase.paid || !purchase.bookingId) return;
+  const value = Number(purchase.total) || 0;
+  if (value <= 0) return;
+  trackConversion('purchase', {
+    transaction_id: purchase.bookingId,
+    value,
+    currency: (purchase.currency || 'MXN').toUpperCase(),
+    items: [{
+      item_id: purchase.serviceId || purchase.bookingId,
+      item_name: purchase.serviceName || 'Servicio de Masaje ESSENYA',
+      price: value,
+      quantity: 1
+    }],
+    meta_event_id: purchase.eventId || `purchase_${purchase.bookingId}`
+  });
+}
+
 interface ClientAppProps {
   client: ClientUser;
   services: ServiceItem[];
@@ -144,19 +170,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
           const data = await res.json().catch(() => null);
           if (data && data.success) {
             console.log('[Stripe Return] Reserva confirmada y en despacho:', bookingId);
-            const targetBooking = bookings.find(b => b.id === bookingId || b.code === bookingId);
-            const bookingVal = targetBooking?.total || 0;
-            trackConversion('purchase', {
-              transaction_id: data.bookingId || bookingId,
-              value: bookingVal,
-              currency: 'MXN',
-              items: [{
-                item_id: targetBooking?.serviceId || bookingId,
-                item_name: targetBooking?.serviceName || 'Servicio de Masaje ESSENYA',
-                price: bookingVal,
-                quantity: 1
-              }]
-            });
+            trackPaidBookingPurchase(data.purchase);
           }
         } catch (err) {
           console.warn('Error verifying Stripe return payment:', err);
@@ -454,19 +468,7 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       const data = await res.json();
       if (data.success) {
         showToast('¡Pago Acreditado con Éxito!', 'La reserva ha sido marcada como pagada y enviada a despacho automático.', 'success');
-        const targetBooking = bookings.find(b => b.id === bookingId || b.code === bookingId);
-        const bookingVal = stripeModal?.total || targetBooking?.total || 0;
-        trackConversion('purchase', {
-          transaction_id: data.bookingId || bookingId,
-          value: bookingVal,
-          currency: 'MXN',
-          items: [{
-            item_id: targetBooking?.serviceId || bookingId,
-            item_name: stripeModal?.serviceName || targetBooking?.serviceName || 'Servicio de Masaje ESSENYA',
-            price: bookingVal,
-            quantity: 1
-          }]
-        });
+        trackPaidBookingPurchase(data.purchase);
         setStripeModal(null);
         setActiveTab('tracking');
       } else {

@@ -119,7 +119,7 @@ export const BilleteraPage: React.FC<BilleteraPageProps> = ({ onGoToReservas }) 
               Canjear Tarjeta de Regalo
             </h4>
             <p className="text-[11px] text-[var(--text-muted)] mb-3 leading-relaxed">
-              Introduce el código de regalo que te obsequiaron (ej. <strong className="text-[#C9A55B] font-mono">REGALO-ESS-1400</strong>) para abonar su saldo a tu cuenta.
+              Introduce el código de regalo que te obsequiaron (ej. <strong className="text-[#C9A55B] font-mono">ESS-7KQ9-M2XD-4HTP</strong>) para abonar su saldo a tu cuenta.
             </p>
             <div className="space-y-3">
               <input 

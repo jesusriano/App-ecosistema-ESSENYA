@@ -23,6 +23,7 @@ import { ErrorBoundary } from './shared/components/ErrorBoundary';
 import { OfflineNotice } from './shared/components/OfflineNotice';
 import { InstallPrompt } from './components/InstallPrompt';
 import { initGA, trackPageView } from './shared/utils/analytics';
+import { captureMetaClickId } from './shared/utils/metaTracking';
 import { StripeProductCheckout } from './shared/components/StripeProductCheckout';
 import { PaymentSuccessOrder } from './shared/components/PaymentSuccessOrder';
 
@@ -58,6 +59,8 @@ function MainAppContent() {
   // Initialize Google Analytics 4
   React.useEffect(() => {
     initGA();
+    // Si la persona llegó desde un anuncio de Meta, guardar el clic para atribuir su compra
+    captureMetaClickId();
   }, []);
 
   // Track SPA page views on route changes (debounced with 300ms cleanup to avoid duplicate redirect hits)

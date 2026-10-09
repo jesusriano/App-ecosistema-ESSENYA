@@ -14,6 +14,7 @@ import {
 import { OFFICIAL_SERVICES } from '../data/catalog';
 import { getServiceImage } from '../utils/serviceImage';
 import { sendChatMessage } from '../services/chatService';
+import { getMetaTrackingData } from '../utils/metaTracking';
 
 interface EcosystemContextType {
   currentPortal: PortalType;
@@ -820,7 +821,9 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
           clientName: resolvedClientName,
           clientPhone: resolvedClientPhone,
           expectedWalletDeduction: (newBooking as any).expectedWalletDeduction ?? (newBooking.applyGiftCard ? (newBooking as any).walletDeduction || 0 : 0),
-          expectedFinalTotal: (newBooking as any).expectedFinalTotal ?? newBooking.total
+          expectedFinalTotal: (newBooking as any).expectedFinalTotal ?? newBooking.total,
+          // Identificadores del anuncio de Meta, para atribuir la compra aunque se pague por transferencia
+          metaTracking: getMetaTrackingData()
         })
       });
       

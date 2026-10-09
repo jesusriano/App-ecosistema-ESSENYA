@@ -1,6 +1,7 @@
 import { auth } from '../../../lib/firebase';
 import { db } from '../../../lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { getMetaTrackingData } from '../../../shared/utils/metaTracking';
 
 export interface GiftCardTransaction {
   id: string;
@@ -125,7 +126,8 @@ export async function purchaseGiftCard(clientId: string, params: PurchaseGiftCar
   const response = await fetch('/api/wallet/purchase', {
     method: 'POST',
     headers: await getAuthHeaders(),
-    body: JSON.stringify(params)
+    // Identificadores del anuncio de Meta, para atribuir la compra cuando se active la tarjeta
+    body: JSON.stringify({ ...params, metaTracking: getMetaTrackingData() })
   });
   const data = await response.json();
   if (!data.success) throw new Error(data.error);
