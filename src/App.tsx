@@ -60,9 +60,12 @@ function MainAppContent() {
     initGA();
   }, []);
 
-  // Track SPA page views on route changes
+  // Track SPA page views on route changes (debounced with 300ms cleanup to avoid duplicate redirect hits)
   React.useEffect(() => {
-    trackPageView(location.pathname + location.search);
+    const timer = setTimeout(() => {
+      trackPageView(location.pathname + location.search);
+    }, 300);
+    return () => clearTimeout(timer);
   }, [location]);
 
   const { unreadCount, handleIncomingPush } = usePush();

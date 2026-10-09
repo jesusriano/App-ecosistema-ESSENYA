@@ -144,6 +144,19 @@ export const ClientApp: React.FC<ClientAppProps> = ({
           const data = await res.json().catch(() => null);
           if (data && data.success) {
             console.log('[Stripe Return] Reserva confirmada y en despacho:', bookingId);
+            const targetBooking = bookings.find(b => b.id === bookingId || b.code === bookingId);
+            const bookingVal = targetBooking?.total || 0;
+            trackConversion('purchase', {
+              transaction_id: data.bookingId || bookingId,
+              value: bookingVal,
+              currency: 'MXN',
+              items: [{
+                item_id: targetBooking?.serviceId || bookingId,
+                item_name: targetBooking?.serviceName || 'Servicio de Masaje ESSENYA',
+                price: bookingVal,
+                quantity: 1
+              }]
+            });
           }
         } catch (err) {
           console.warn('Error verifying Stripe return payment:', err);
@@ -377,6 +390,18 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
+      trackConversion('begin_checkout', {
+        transaction_id: targetBookingId,
+        value: b.total,
+        currency: 'MXN',
+        items: [{
+          item_id: b.serviceId || targetBookingId,
+          item_name: b.serviceName,
+          price: b.total,
+          quantity: 1
+        }]
+      });
+
       const res = await fetch('/api/create-stripe-checkout', {
         method: 'POST',
         headers,
@@ -429,6 +454,19 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       const data = await res.json();
       if (data.success) {
         showToast('¡Pago Acreditado con Éxito!', 'La reserva ha sido marcada como pagada y enviada a despacho automático.', 'success');
+        const targetBooking = bookings.find(b => b.id === bookingId || b.code === bookingId);
+        const bookingVal = stripeModal?.total || targetBooking?.total || 0;
+        trackConversion('purchase', {
+          transaction_id: data.bookingId || bookingId,
+          value: bookingVal,
+          currency: 'MXN',
+          items: [{
+            item_id: targetBooking?.serviceId || bookingId,
+            item_name: stripeModal?.serviceName || targetBooking?.serviceName || 'Servicio de Masaje ESSENYA',
+            price: bookingVal,
+            quantity: 1
+          }]
+        });
         setStripeModal(null);
         setActiveTab('tracking');
       } else {
@@ -748,13 +786,6 @@ export const ClientApp: React.FC<ClientAppProps> = ({
       const actualBookingId = finalizedBooking?.id || newBk.id;
       const actualBookingCode = finalizedBooking?.code || newBk.code;
 
-      trackConversion('begin_checkout', {
-        transaction_id: actualBookingId,
-        value: totalPrice,
-        currency: 'MXN',
-        items: [{ item_id: selectedService.id, item_name: newBk.serviceName, price: totalPrice, quantity: 1 }]
-      });
-
       if (paymentMethodType === 'stripe' && totalPrice > 0) {
         try {
           const metaTracking = getMetaTrackingData();
@@ -762,6 +793,13 @@ export const ClientApp: React.FC<ClientAppProps> = ({
           const token = await auth.currentUser?.getIdToken();
           const headers: Record<string, string> = { 'Content-Type': 'application/json' };
           if (token) headers['Authorization'] = `Bearer ${token}`;
+
+          trackConversion('begin_checkout', {
+            transaction_id: actualBookingId,
+            value: totalPrice,
+            currency: 'MXN',
+            items: [{ item_id: selectedService?.id || actualBookingId, item_name: newBk.serviceName, price: totalPrice, quantity: 1 }]
+          });
 
           const res = await fetch('/api/create-stripe-checkout', {
             method: 'POST',

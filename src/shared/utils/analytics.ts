@@ -13,6 +13,29 @@ export const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID || 'G-CT
 export const META_PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID || '1591130989374283';
 
 /**
+ * Prefijos de rutas pertenecientes a portales internos que no deben medirse en analítica pública
+ */
+export const INTERNAL_PORTAL_PREFIXES = [
+  '/admin',
+  '/administrador',
+  '/administracion',
+  '/panel-admin',
+  '/terapeuta',
+  '/terapeutas',
+  '/app-terapeuta',
+  '/checkout-demo',
+];
+
+/**
+ * Determina si la ruta actual o indicada corresponde a un portal interno
+ */
+export function isInternalPortalPath(path?: string): boolean {
+  const currentPath = path || (typeof window !== 'undefined' ? window.location.pathname : '');
+  const normalized = currentPath.toLowerCase();
+  return INTERNAL_PORTAL_PREFIXES.some(prefix => normalized.startsWith(prefix.toLowerCase()));
+}
+
+/**
  * Initialize Google Analytics 4 script dynamically in index.html or at runtime.
  */
 export function initGA(measurementId: string = GA_MEASUREMENT_ID) {
@@ -26,14 +49,14 @@ export function initGA(measurementId: string = GA_MEASUREMENT_ID) {
   document.head.appendChild(script1);
 
   window.dataLayer = window.dataLayer || [];
-  function gtag(...args: any[]) {
-    window.dataLayer.push(args);
+  function gtag(..._args: any[]) {
+    window.dataLayer.push(arguments);
   }
   window.gtag = gtag;
 
   gtag('js', new Date());
   gtag('config', measurementId, {
-    send_page_view: true,
+    send_page_view: false,
     transport_type: 'beacon',
   });
 }
@@ -43,6 +66,7 @@ export function initGA(measurementId: string = GA_MEASUREMENT_ID) {
  */
 export function trackPageView(path: string, title?: string) {
   if (typeof window === 'undefined') return;
+  if (isInternalPortalPath(path)) return;
 
   // Google Analytics 4
   if (window.gtag) {
@@ -135,7 +159,7 @@ export function trackPushSubscriptionSuccess(
   userId: string = 'anonymous',
   method: 'vapid' | 'fcm' = 'vapid'
 ) {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || isInternalPortalPath()) return;
   
   const params = {
     platform,
@@ -163,7 +187,7 @@ export function trackPushSubscriptionError(
   userId: string = 'anonymous',
   errorMessage: string = 'Unknown Error'
 ) {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || isInternalPortalPath()) return;
 
   const params = {
     platform,
@@ -191,7 +215,7 @@ export function trackPushNotificationReceived(
   title: string,
   bookingId?: string
 ) {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || isInternalPortalPath()) return;
 
   const params = {
     platform,
@@ -220,7 +244,7 @@ export function trackPushNotificationClicked(
   bookingId?: string,
   action?: string
 ) {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || isInternalPortalPath()) return;
 
   const params = {
     platform,

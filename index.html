@@ -27,7 +27,7 @@
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
 
-      gtag('config', 'G-CTEEJ1427G');
+      gtag('config', 'G-CTEEJ1427G', { send_page_view: false });
     </script>
     <!-- Meta Pixel Code -->
     <script>
@@ -39,8 +39,8 @@
       t.src=v;s=b.getElementsByTagName(e)[0];
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
+      fbq.disablePushState = true;
       fbq('init', '1591130989374283');
-      fbq('track', 'PageView');
     </script>
     <!-- End Meta Pixel Code -->
   </head>
