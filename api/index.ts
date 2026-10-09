@@ -3740,7 +3740,7 @@ async function verifyAndConfirmStripePayment(
   bookingId: string,
   sessionId: string,
   sessionObject?: Stripe.Checkout.Session
-): Promise<{ success: boolean; realBookingId: string; paymentIntentId?: string }> {
+): Promise<{ success: boolean; realBookingId: string; paymentIntentId?: string; session?: Stripe.Checkout.Session }> {
   let bookingRef = db.collection('reservas').doc(bookingId);
   let bookingSnap = await bookingRef.get();
 
@@ -3827,7 +3827,117 @@ async function verifyAndConfirmStripePayment(
     console.log(`[Stripe Payment Verification] Reserva ${realBookingId} ya estaba confirmada previamente (Idempotente).`);
   }
 
-  return { success: true, realBookingId, paymentIntentId: stripePaymentIntent };
+  return { success: true, realBookingId, paymentIntentId: stripePaymentIntent, session };
+}
+
+// ========================================================
+// Helper Centralizado: Envío Seguro de Evento Purchase a Meta CAPI
+// ========================================================
+interface SendMetaPurchaseOptions {
+  session?: Stripe.Checkout.Session | null;
+  req?: Request | null;
+  fbp?: string;
+  fbc?: string;
+  clientIp?: string;
+  userAgent?: string;
+  eventId?: string;
+}
+
+async function sendMetaPurchaseForBooking(
+  db: any,
+  bookingId: string,
+  options?: SendMetaPurchaseOptions
+): Promise<{ success: boolean; skipped?: boolean; error?: string; reason?: string; traceId?: string }> {
+  try {
+    let bookingRef = db.collection('reservas').doc(bookingId);
+    let bookingSnap = await bookingRef.get();
+
+    if (!bookingSnap.exists) {
+      const codeQuery = await db.collection('reservas').where('code', '==', bookingId).limit(1).get();
+      if (!codeQuery.empty) {
+        bookingRef = codeQuery.docs[0].ref;
+        bookingSnap = codeQuery.docs[0];
+      }
+    }
+
+    if (!bookingSnap.exists) {
+      console.warn(`[Meta CAPI] Reserva no encontrada en Firestore: ${bookingId}`);
+      return { success: false, error: `Reserva no encontrada: ${bookingId}` };
+    }
+
+    const bData = bookingSnap.data() || {};
+    const targetBookingId = bookingRef.id;
+
+    // Si metaPurchaseSent ya es true, no hacer nada (idempotente)
+    if (bData.metaPurchaseSent === true) {
+      console.log(`[Meta CAPI] Reserva ${targetBookingId} ya tiene metaPurchaseSent: true. Omitiendo reenvío (Idempotente).`);
+      return { success: true, skipped: true, reason: 'already_sent' };
+    }
+
+    const session = options?.session;
+    const req = options?.req;
+
+    // Calcular monto real de la reserva o sesión de pago
+    const amountVal = session?.amount_total ? session.amount_total / 100 : (Number(bData.total) || 0);
+
+    // Si total <= 0, no enviar
+    if (amountVal <= 0) {
+      console.log(`[Meta CAPI] Reserva ${targetBookingId} tiene total <= 0 ($${amountVal}). No se envía evento Purchase.`);
+      return { success: false, skipped: true, reason: 'zero_or_negative_total' };
+    }
+
+    const nowIso = new Date().toISOString();
+    const capiEventId = options?.eventId || session?.metadata?.eventId || `purchase_${targetBookingId}`;
+    const currencyVal = (session?.currency || bData.currency || 'mxn').toUpperCase();
+
+    const clientIp = options?.clientIp || (req ? ((req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress) : undefined);
+    const userAgent = options?.userAgent || (req ? (req.headers['user-agent'] as string) : undefined);
+
+    const fbp = options?.fbp || session?.metadata?.fbp;
+    const fbc = options?.fbc || session?.metadata?.fbc;
+
+    const email = session?.customer_details?.email || session?.customer_email || bData.clientEmail;
+    const phone = session?.customer_details?.phone || bData.clientPhone;
+
+    const capiResult = await metaConversionsService.sendPurchaseEvent({
+      eventId: capiEventId,
+      value: amountVal,
+      currency: currencyVal,
+      fbp,
+      fbc,
+      email,
+      phone,
+      clientIp,
+      userAgent,
+      serviceName: bData.serviceName || 'Servicio de Masaje VIP ESSENYA',
+      bookingId: targetBookingId
+    });
+
+    if (capiResult.success && typeof capiResult.eventsReceived === 'number' && capiResult.eventsReceived > 0) {
+      await bookingRef.update({
+        metaPurchaseSent: true,
+        metaPurchaseEventId: capiEventId,
+        metaPurchaseSentAt: nowIso,
+        metaPurchaseTrace: capiResult.fbtraceId || null,
+        updatedAt: nowIso
+      });
+      console.log(`[Meta CAPI] Evento Purchase confirmado por Meta para reserva ${targetBookingId} (Trace: ${capiResult.fbtraceId || 'N/A'}).`);
+      return { success: true, traceId: capiResult.fbtraceId };
+    } else {
+      const errorMsg = capiResult.error || capiResult.reason || 'Meta no confirmó eventos recibidos';
+      console.error(`[Meta CAPI] FALLO al enviar Purchase a Meta para reserva ${targetBookingId}: ${errorMsg}`);
+      await bookingRef.update({
+        metaPurchaseSent: false,
+        metaPurchaseLastError: errorMsg,
+        metaPurchaseLastAttemptAt: nowIso,
+        updatedAt: nowIso
+      });
+      return { success: false, error: errorMsg };
+    }
+  } catch (err: any) {
+    console.error(`[Meta CAPI] Excepción al procesar evento Purchase para reserva ${bookingId}:`, err);
+    return { success: false, error: err?.message || 'Error inesperado al enviar evento a Meta' };
+  }
 }
 
 // ========================================================
@@ -3869,6 +3979,17 @@ app.post("/api/bookings/confirm-stripe-payment", requireAuth, async (req: Reques
     }
 
     const verificationResult = await verifyAndConfirmStripePayment(db, targetBookingId, sessionId);
+
+    // Envío de evento Meta CAPI (Purchase) tras confirmar pago en Stripe
+    try {
+      await sendMetaPurchaseForBooking(db, verificationResult.realBookingId, {
+        session: verificationResult.session,
+        req
+      });
+    } catch (metaErr: any) {
+      console.warn(`[Confirm Stripe Payment -> Meta CAPI] Error no bloqueante al enviar evento Purchase para reserva ${verificationResult.realBookingId}:`, metaErr?.message || metaErr);
+    }
+
     res.json({ success: true, bookingId: verificationResult.realBookingId, verified: true });
   } catch (err: any) {
     console.error("Error al confirmar pago de Stripe:", err);
@@ -3881,6 +4002,24 @@ app.post("/api/bookings/confirm-stripe-payment", requireAuth, async (req: Reques
       severity: 'alta'
     });
     res.status(500).json({ success: false, error: err.message || "Error al verificar sesión de pago." });
+  }
+});
+
+// ========================================================
+// POST /api/admin/bookings/:bookingId/meta-purchase - Trigger Meta Purchase from Admin
+// ========================================================
+app.post("/api/admin/bookings/:bookingId/meta-purchase", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { bookingId } = req.params;
+    if (!bookingId) {
+      return res.status(400).json({ success: false, error: "bookingId es requerido en los parámetros" });
+    }
+    const db = getAdminFirestore();
+    const result = await sendMetaPurchaseForBooking(db, bookingId, { req });
+    return res.json({ success: true, result });
+  } catch (err: any) {
+    console.error(`[Admin Meta Purchase Endpoint] Error al procesar evento para reserva ${req.params.bookingId}:`, err);
+    return res.status(500).json({ success: false, error: err?.message || "Error al procesar Meta Purchase" });
   }
 });
 
@@ -4784,52 +4923,7 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
         await verifyAndConfirmStripePayment(db, bookingId, session.id, session);
 
         // Envío seguro de Meta CAPI
-        const bookingRef = db.collection('reservas').doc(bookingId);
-        const bookingSnap = await bookingRef.get();
-        if (bookingSnap.exists) {
-          const bData = bookingSnap.data()!;
-          if (!bData.metaPurchaseSent) {
-            const nowIso = new Date().toISOString();
-            const capiEventId = session.metadata?.eventId || `purchase_${bookingId}`;
-            const amountVal = session.amount_total ? session.amount_total / 100 : (Number(bData.total) || 0);
-            const currencyVal = (session.currency || 'mxn').toUpperCase();
-            const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress;
-            const userAgent = req.headers['user-agent'] as string | undefined;
-
-            const capiResult = await metaConversionsService.sendPurchaseEvent({
-              eventId: capiEventId,
-              value: amountVal,
-              currency: currencyVal,
-              fbp: session.metadata?.fbp,
-              fbc: session.metadata?.fbc,
-              email: session.customer_details?.email || session.customer_email || bData.clientEmail,
-              phone: session.customer_details?.phone || bData.clientPhone,
-              clientIp,
-              userAgent,
-              serviceName: bData.serviceName || 'Servicio de Masaje VIP ESSENYA',
-              bookingId
-            });
-
-            if (capiResult.success && typeof capiResult.eventsReceived === 'number' && capiResult.eventsReceived > 0) {
-              await bookingRef.update({
-                metaPurchaseSent: true,
-                metaPurchaseEventId: capiEventId,
-                metaPurchaseSentAt: nowIso,
-                metaPurchaseTrace: capiResult.fbtraceId || null,
-                updatedAt: nowIso
-              });
-              console.log(`[Stripe Webhook -> Meta CAPI] Evento Purchase confirmado por Meta para reserva ${bookingId}.`);
-            } else {
-              console.error(`[Stripe Webhook -> Meta CAPI] FALLO al enviar Purchase a Meta: ${capiResult.error || capiResult.reason}`);
-              await bookingRef.update({
-                metaPurchaseSent: false,
-                metaPurchaseLastError: capiResult.error || capiResult.reason || 'Meta no confirmó eventos recibidos',
-                metaPurchaseLastAttemptAt: nowIso,
-                updatedAt: nowIso
-              });
-            }
-          }
-        }
+        await sendMetaPurchaseForBooking(db, bookingId, { session, req });
       } catch (webhookErr: any) {
         console.error(`[Stripe Webhook] Error processing booking ${bookingId}:`, webhookErr);
       }

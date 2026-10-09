@@ -2041,6 +2041,28 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     try {
       await updateDoc(doc(db, 'reservas', bookingId), cleanForFirestore(updatePayload));
+
+      // Disparar evento Meta CAPI (Purchase) tras confirmar pago manual / transferencia
+      if (updatePayload.paymentStatus === 'pagado' || targetBooking?.paymentStatus === 'pagado') {
+        try {
+          const authObj = getAuth();
+          const token = await authObj.currentUser?.getIdToken();
+          if (token) {
+            const metaRes = await fetch(`/api/admin/bookings/${bookingId}/meta-purchase`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            if (!metaRes.ok) {
+              console.warn(`[EcosystemContext] Respuesta no exitosa de Meta Purchase (${metaRes.status}):`, await metaRes.text());
+            }
+          }
+        } catch (metaErr) {
+          console.warn(`[EcosystemContext] Error al notificar Meta Purchase para reserva ${bookingId}:`, metaErr);
+        }
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `reservas/${bookingId}`, updatePayload);
     }
