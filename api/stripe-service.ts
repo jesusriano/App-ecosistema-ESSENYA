@@ -14,7 +14,7 @@ export class StripeService {
     if (this.currentKey) {
       this.stripe = new Stripe(this.currentKey);
     }
-    this.webhookSecret = webhookSecret || process.env.STRIPE_WEBHOOK_SECRET || '';
+    this.webhookSecret = webhookSecret || process.env.STRIPE_WEBHOOK_SECRET || process.env.CLAVE_SECRETA_WEBHOOK_STRIPE || '';
   }
 
   /**
@@ -141,7 +141,7 @@ export class StripeService {
   handleWebhook(rawBody: Buffer | string, signature: string | string[] | undefined): Stripe.Event {
     const sig = Array.isArray(signature) ? signature[0] : signature;
     const stripe = this.getStripeInstance();
-    const secret = this.webhookSecret || process.env.STRIPE_WEBHOOK_SECRET || '';
+    const secret = this.webhookSecret || process.env.STRIPE_WEBHOOK_SECRET || process.env.CLAVE_SECRETA_WEBHOOK_STRIPE || '';
 
     if (!secret || !sig) {
       throw new Error("STRIPE_WEBHOOK_SECRET o la firma (stripe-signature) ausentes. Validación criptográfica obligatoria para webhooks de Stripe.");

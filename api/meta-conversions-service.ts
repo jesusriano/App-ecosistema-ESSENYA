@@ -48,7 +48,7 @@ export class MetaConversionsService {
 
   constructor() {
     this.pixelId = process.env.META_PIXEL_ID || process.env.VITE_META_PIXEL_ID || '1591130989374283';
-    this.accessToken = process.env.META_CONVERSIONS_API_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN || '';
+    this.accessToken = process.env.META_CONVERSIONS_API_ACCESS_TOKEN || process.env.META_CONVERSION_TOKEN || process.env.META_ACCESS_TOKEN || '';
     // En producción / modo LIVE, nunca se debe precargar el código de prueba
     const isLive = process.env.STRIPE_MODE === 'live' || (process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_SECRET_KEY.startsWith('sk_test_'));
     this.testEventCode = isLive ? '' : (process.env.META_TEST_EVENT_CODE || '');
@@ -82,7 +82,7 @@ export class MetaConversionsService {
     } = payload;
 
     const currentPixel = this.pixelId;
-    const currentToken = this.accessToken || process.env.META_CONVERSIONS_API_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN || '';
+    const currentToken = this.accessToken || process.env.META_CONVERSIONS_API_ACCESS_TOKEN || process.env.META_CONVERSION_TOKEN || process.env.META_ACCESS_TOKEN || '';
     
     // Regla estricta: en modo LIVE o producción, test_event_code queda estrictamente DESACTIVADO
     const isLive = process.env.STRIPE_MODE === 'live' || 

@@ -886,7 +886,7 @@ app.post("/api/bookings", requireAuth, async (req: Request, res: Response) => {
     
     // Trigger dispatch engine step immediately only if authorized for dispatch (payment confirmed or non-card payment method)
     if (isAuthorizedForDispatch) {
-      stepDispatchEngine(getAdminFirestore(), newDocRef.id, process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY).catch(e => {
+      stepDispatchEngine(getAdminFirestore(), newDocRef.id, process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY).catch(e => {
         console.warn("[Dispatch] Initial step async error:", e);
       });
     }
@@ -2964,7 +2964,7 @@ app.post("/api/bookings/atomic", requireAuth, async (req, res) => {
 
     // Trigger dispatch engine step immediately for bookings authorized for dispatch
     if (result.isAuthorizedForDispatch) {
-      stepDispatchEngine(getAdminFirestore(), result.bookingId, process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY).catch(e => {
+      stepDispatchEngine(getAdminFirestore(), result.bookingId, process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY).catch(e => {
         console.warn("[Dispatch] Initial step async error from atomic booking:", e);
       });
     }
@@ -3581,7 +3581,7 @@ app.post("/api/admin/bookings/manual", requireAuth, async (req: Request, res: Re
       }).catch(err => console.warn('[ManualBooking] Push error to therapist:', err));
     } else {
       // Disparar motor de despacho si no tiene terapeuta asignada
-      const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY;
       stepDispatchEngine(db, bookingId, apiKey).catch(e => {
         console.warn("[ManualBooking] Initial step error for dispatch:", e);
       });
@@ -3810,7 +3810,7 @@ async function verifyAndConfirmStripePayment(
     console.log(`[Stripe Payment Verification] Reserva ${realBookingId} verificada criptográficamente y actualizada de PAYMENT_PENDING a PAID (CONFIRMED).`);
 
     // Activar el motor de despacho SOLO después de la confirmación exitosa
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY;
     await stepDispatchEngine(db, realBookingId, apiKey);
 
     // Sincronizar factura si existe
@@ -4033,7 +4033,7 @@ app.post("/api/dispatch/step", requireAuth, async (req: Request, res: Response) 
     const result = await stepDispatchEngine(
       getAdminFirestore(),
       bookingId,
-      process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY
+      process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY
     );
     res.json({ success: true, ...result });
   } catch (err: any) {
@@ -4175,7 +4175,7 @@ function initDispatchTicker() {
       if (activeSearchingSnap.empty) return;
 
       const now = Date.now();
-      const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY;
 
       for (const doc of activeSearchingSnap.docs) {
         const data = doc.data();
@@ -4275,7 +4275,7 @@ function initFirestoreBookingsTrigger() {
 
         // 3. TRIGGER EN CASO DE RESERVA NUEVA (Sin confirmación manual de administración)
         if (data.state === 'pendiente' && data.dispatchState === 'buscando' && (!data.dispatchStartedAt || (Array.isArray(data.activeOfferTherapistIds) && data.activeOfferTherapistIds.length === 0 && !data.dispatchExpiresAt))) {
-          const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
+          const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY;
           stepDispatchEngine(db, docId, apiKey).catch(e => {
             console.warn(`[Database Trigger] Auto-dispatch error for booking ${docId}:`, e);
           });
