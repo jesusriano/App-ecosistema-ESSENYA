@@ -1,3 +1,4 @@
+import { trackConversion } from '../utils/analytics';
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { collection, onSnapshot, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, limit, orderBy, runTransaction, arrayUnion } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
@@ -841,6 +842,14 @@ export const EcosystemProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
       
       const finalizedBooking = data.booking as Booking;
+
+      // Medición: reserva creada (evento propio "reserva_creada" en GA4 y Meta)
+      trackConversion('reserva_creada', {
+        transaction_id: finalizedBooking.id,
+        value: Number(finalizedBooking.total) || 0,
+        currency: 'MXN',
+        items: [{ item_id: finalizedBooking.id, item_name: 'Servicio de Masaje ESSENYA', price: Number(finalizedBooking.total) || 0, quantity: 1 }]
+      });
       
       // Update local state directly to show it in the UI before snapshot catches up
       setBookings(prev => [finalizedBooking, ...prev.filter(b => b.id !== finalizedBooking.id)]);

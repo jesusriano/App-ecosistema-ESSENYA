@@ -1,3 +1,4 @@
+import { trackConversion } from '../utils/analytics';
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { 
   signInWithEmailAndPassword, 
@@ -923,6 +924,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       clearFailedAttempts(role, trimmedEmail);
       updateSession(role, userProfile);
       setLoading(false);
+      if (role === 'cliente') {
+        trackConversion('inicio_sesion_cliente', { method: 'email' });
+      }
       return { success: true };
     } catch (err: any) {
       setLoading(false);

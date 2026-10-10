@@ -10,6 +10,7 @@ import {
   AlertTriangle, X, Volume2, VolumeX, Vibrate, BellRing, Sparkles, Smartphone, Mic, Square, Bell,
   ChevronDown, ChevronUp
 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { PanicModal } from './PanicModal';
 import { BookingChatDrawer } from '../shared/components/BookingChatDrawer';
 import { WhatsAppButton } from './WhatsAppButton';
@@ -175,6 +176,51 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
     });
     return allCompleted;
   }, [bookings]);
+
+  const [monthlyGoal, setMonthlyGoal] = useState<number>(35000);
+  const [isEditingGoal, setIsEditingGoal] = useState<boolean>(false);
+  const [tempGoalInput, setTempGoalInput] = useState<string>('35000');
+
+  const totalEarnings = React.useMemo(() => {
+    return mergedCompletedBookings.reduce((sum, b) => sum + Math.round(((b.durationMinutes || 60) / 60) * 650), 0) + mergedCompletedBookings.reduce((sum, b) => sum + (b.tip || 0), 0);
+  }, [mergedCompletedBookings]);
+
+  const totalTips = React.useMemo(() => {
+    return mergedCompletedBookings.reduce((sum, b) => sum + (b.tip || 0), 0);
+  }, [mergedCompletedBookings]);
+
+  const goalProgressPercent = Math.min(100, Math.round((totalEarnings / (monthlyGoal || 1)) * 100));
+
+  const dailyEarningsData = React.useMemo(() => {
+    const daysMap: { [key: string]: { dateStr: string; label: string; earnings: number; sessions: number } } = {};
+    const now = new Date();
+    
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+      const label = `${dayNames[d.getDay()]} ${d.getDate()}`;
+      daysMap[dateStr] = { dateStr, label, earnings: 0, sessions: 0 };
+    }
+
+    mergedCompletedBookings.forEach(bk => {
+      if (!bk.date) return;
+      const bDateStr = bk.date.split('T')[0];
+      if (daysMap[bDateStr]) {
+        const amt = Math.round(((bk.durationMinutes || 60) / 60) * 650) + (bk.tip || 0) || bk.total || bk.price || 0;
+        daysMap[bDateStr].earnings += amt;
+        daysMap[bDateStr].sessions += 1;
+      }
+    });
+
+    const list = Object.values(daysMap);
+    const dailyGoal = Math.round(monthlyGoal / 30);
+    return list.map(item => ({
+      ...item,
+      metaDiaria: dailyGoal
+    }));
+  }, [mergedCompletedBookings, monthlyGoal]);
 
   const [historyDateFilter, setHistoryDateFilter] = useState<'all' | 'week' | 'month'>('all');
   const [historyServiceFilter, setHistoryServiceFilter] = useState<string>('all');
@@ -1428,22 +1474,128 @@ export const TherapistApp: React.FC<TherapistAppProps> = ({
             transition={{ duration: 0.22 }}
             className="space-y-6 max-w-4xl mx-auto"
           >
-            <h3 className="text-2xl font-serif font-bold text-white">Reporte de Ganancias y Comisiones</h3>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h3 className="text-2xl font-serif font-bold text-white">Reporte de Ganancias y Metas</h3>
+                <p className="text-xs text-[#AAAAAA] mt-1">
+                  Monitorea tus ingresos diarios, propinas y progreso frente a tu meta mensual configurada.
+                </p>
+              </div>
+              
+              <div className="flex items-center gap-2 bg-[#141414] px-4 py-2 rounded-xl border border-[#C9A55B]/30">
+                <span className="text-xs text-[#888888]">Meta Mensual:</span>
+                {!isEditingGoal ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-[#C9A55B]">${monthlyGoal.toLocaleString()} MXN</span>
+                    <button
+                      onClick={() => {
+                        setTempGoalInput(String(monthlyGoal));
+                        setIsEditingGoal(true);
+                      }}
+                      className="text-[10px] text-zinc-400 hover:text-white underline cursor-pointer"
+                    >
+                      Editar
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={tempGoalInput}
+                      onChange={(e) => setTempGoalInput(e.target.value)}
+                      className="w-24 bg-black border border-[#C9A55B]/50 rounded px-2 py-1 text-xs text-white"
+                    />
+                    <button
+                      onClick={() => {
+                        const val = parseInt(tempGoalInput, 10);
+                        if (!isNaN(val) && val > 0) {
+                          setMonthlyGoal(val);
+                          showToast('Meta Actualizada', `Tu nueva meta mensual es $${val.toLocaleString()} MXN`, 'success');
+                        }
+                        setIsEditingGoal(false);
+                      }}
+                      className="text-[10px] bg-[#C9A55B] text-black font-bold px-2 py-1 rounded cursor-pointer"
+                    >
+                      Guardar
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-[#141414] p-5 rounded-2xl border border-[#C9A55B]/30">
-                <span className="text-xs text-[#888888] uppercase block">Total Ganancias ($650/hr)</span>
-                <span className="text-2xl font-bold text-gold-gradient">${(mergedCompletedBookings.reduce((sum, b) => sum + Math.round(((b.durationMinutes || 60) / 60) * 650), 0) + mergedCompletedBookings.reduce((sum, b) => sum + (b.tip || 0), 0)).toLocaleString()} MXN</span>
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div className="bg-[#141414] p-5 rounded-2xl border border-[#C9A55B]/30 space-y-1">
+                <span className="text-xs text-[#888888] uppercase block">Total Ganancias</span>
+                <span className="text-xl font-bold text-gold-gradient">${totalEarnings.toLocaleString()} MXN</span>
+                <span className="text-[10px] text-zinc-400 block">Tarifa base ($650/hr) + promedios</span>
               </div>
 
-              <div className="bg-[#141414] p-5 rounded-2xl border border-[#C9A55B]/30">
+              <div className="bg-[#141414] p-5 rounded-2xl border border-[#C9A55B]/30 space-y-1">
                 <span className="text-xs text-[#888888] uppercase block">Propinas Acumuladas</span>
-                <span className="text-2xl font-bold text-emerald-400">${mergedCompletedBookings.reduce((sum, b) => sum + (b.tip || 0), 0).toLocaleString()} MXN</span>
+                <span className="text-xl font-bold text-emerald-400">${totalTips.toLocaleString()} MXN</span>
+                <span className="text-[10px] text-zinc-400 block">100% para la terapeuta</span>
               </div>
 
-              <div className="bg-[#141414] p-5 rounded-2xl border border-[#C9A55B]/30">
+              <div className="bg-[#141414] p-5 rounded-2xl border border-[#C9A55B]/30 space-y-1">
                 <span className="text-xs text-[#888888] uppercase block">Servicios Completados</span>
-                <span className="text-2xl font-bold text-white">{mergedCompletedBookings.length} Sesiones</span>
+                <span className="text-xl font-bold text-white">{mergedCompletedBookings.length} Sesiones</span>
+                <span className="text-[10px] text-zinc-400 block">Historial verificado</span>
+              </div>
+
+              <div className="bg-[#141414] p-5 rounded-2xl border border-[#C9A55B]/30 space-y-1">
+                <span className="text-xs text-[#888888] uppercase block">Progreso Meta Mensual</span>
+                <span className="text-xl font-bold text-[#C9A55B]">{goalProgressPercent}%</span>
+                <div className="w-full bg-black/60 rounded-full h-1.5 mt-1 overflow-hidden">
+                  <div className="bg-gradient-to-r from-[#C9A55B] to-[#E6CA65] h-full" style={{ width: `${goalProgressPercent}%` }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Recharts Bar Chart Card */}
+            <div className="bg-[#141414] p-6 rounded-2xl border border-[#C9A55B]/30 space-y-4 shadow-xl">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <div>
+                  <h4 className="text-base font-bold text-white">Ganancias Diarias vs Meta Diaria</h4>
+                  <p className="text-xs text-[#888888]">Comparativa de los últimos 7 días con la meta diaria estimada (${Math.round(monthlyGoal / 30).toLocaleString()} MXN/día)</p>
+                </div>
+                <div className="flex items-center gap-4 text-xs font-semibold">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded bg-[#C9A55B]" />
+                    <span className="text-white">Ganancias Reales</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded bg-zinc-600 border border-dashed border-zinc-400" />
+                    <span className="text-zinc-400">Meta Diaria</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="h-72 w-full pt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dailyEarningsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#222222" vertical={false} />
+                    <XAxis dataKey="label" stroke="#888888" fontSize={11} tickLine={false} />
+                    <YAxis stroke="#888888" fontSize={11} tickLine={false} tickFormatter={(val) => `$${val}`} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#1A1A1A', borderColor: '#C9A55B', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
+                      formatter={(value: any, name: any) => [
+                        `$${Number(value).toLocaleString()} MXN`, 
+                        name === 'earnings' ? 'Ganancias Reales' : 'Meta Diaria'
+                      ]}
+                      labelStyle={{ color: '#C9A55B', fontWeight: 'bold', marginBottom: '4px' }}
+                    />
+                    <Bar dataKey="metaDiaria" name="metaDiaria" fill="#333333" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                    <Bar dataKey="earnings" name="earnings" fill="url(#goldGradient)" radius={[6, 6, 0, 0]} maxBarSize={32} />
+                    <defs>
+                      <linearGradient id="goldGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#E6CA65" />
+                        <stop offset="50%" stopColor="#C9A55B" />
+                        <stop offset="100%" stopColor="#9A7B38" />
+                      </linearGradient>
+                    </defs>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
           </motion.div>
